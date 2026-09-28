@@ -49,7 +49,7 @@ describe("locaux de l'étude", () => {
       id: "piece-001",
       nature: "gaine_technique",
     });
-    expect(otherLocalNatures("non_chauffe")).toEqual(["chauffe", "circulation", "gaine_technique"]);
+    expect(otherLocalNatures("non_chauffe")).toEqual(["chauffe", "circulation", "gaine_technique", "exterieur"]);
   });
 });
 

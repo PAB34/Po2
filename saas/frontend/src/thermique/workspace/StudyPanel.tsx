@@ -7,6 +7,9 @@ import { controleCote } from "./cotes";
 import { LIMIT_COLORS, LIMIT_LABELS, type StudyDraft } from "./edition";
 import { NATURE_COLORS, NATURE_LABELS, sortedStudyRooms, STUDY_LOCAL_NATURES } from "./study";
 
+// Natures qui ne déperdent pas elles-mêmes (même règle que `LOCAUX_HORS_VOLUME` côté serveur).
+const HORS_VOLUME: StudyLocalNature[] = ["non_chauffe", "gaine_technique", "exterieur"];
+
 const meters = (value: number | undefined) => (value == null ? "—" : `${value.toLocaleString("fr-FR")} m`);
 const squareMeters = (value: number | undefined) => (value == null ? "—" : `${value.toLocaleString("fr-FR")} m²`);
 
@@ -393,6 +396,12 @@ function CoteLigne({
       ) : (
         contenu
       )}
+      {side.liaison_exterieur && (
+        <small className="th-muted">
+          Dalle d'un espace extérieur contre ce côté : liaison linéique créée d'office (NF EN ISO 14683, famille B
+          « balcons »).
+        </small>
+      )}
       {/* G1 : la longueur vient du contour, la composition des parois rattachées. On dit quand elles
           manquent ou ne couvrent pas le côté, sans quoi le calcul se trompe en silence. */}
       {controle.etat === "sans_paroi" && (
@@ -503,11 +512,23 @@ export function StudyRoomPanel({
         <p className="th-muted">{squareMeters(sheet.surface_m2)} · périmètre {meters(sheet.perimetre_m)}</p>
         {/* Le linéaire déperditif est ce qu'un recadrage fait varier sans le dire : il est annoncé ici,
             car un local décollé de la façade cesse de déperdre et ses cotes changent de sens. */}
-        <p className={sheet.deperditif_m ? "th-muted" : "th-alert th-alert--warn"}>
-          {sheet.deperditif_m
-            ? `Donne sur l'extérieur : ${meters(sheet.deperditif_m)}`
-            : "Aucun côté ne donne sur l'extérieur : ce local ne déperd pas. Vérifiez son contour s'il longe une façade."}
-        </p>
+        {HORS_VOLUME.includes(room.nature) ? (
+          // Un local non chauffé, une gaine ou un espace extérieur ne déperd pas lui-même : l'alerte des
+          // locaux chauffés le ferait passer pour une erreur de contour.
+          <p className="th-muted">Hors volume chauffé : ce local ne déperd pas lui-même.</p>
+        ) : (
+          <p className={sheet.deperditif_m ? "th-muted" : "th-alert th-alert--warn"}>
+            {sheet.deperditif_m
+              ? `Donne sur l'extérieur : ${meters(sheet.deperditif_m)}`
+              : "Aucun côté ne donne sur l'extérieur : ce local ne déperd pas. Vérifiez son contour s'il longe une façade."}
+          </p>
+        )}
+        {(sheet.liaison_exterieur_m ?? 0) > 0 && (
+          <p className="th-muted">
+            Contre un espace extérieur à plancher (terrasse, balcon…) : {meters(sheet.liaison_exterieur_m)} de liaison
+            linéique.
+          </p>
+        )}
         <span className={`th-badge th-study-badge--${state?.status ?? "a_verifier"}`}>
           {(state?.status ?? "a_verifier").replace(/_/g, " ")}
         </span>

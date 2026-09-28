@@ -3,13 +3,20 @@ import { pointInPolygon } from "./edition";
 
 export const studyQueryKey = (sheetId: number | null) => ["thermique", "etude", sheetId] as const;
 
-export const STUDY_LOCAL_NATURES: StudyLocalNature[] = ["chauffe", "circulation", "non_chauffe", "gaine_technique"];
+export const STUDY_LOCAL_NATURES: StudyLocalNature[] = [
+  "chauffe",
+  "circulation",
+  "non_chauffe",
+  "gaine_technique",
+  "exterieur",
+];
 
 const NATURE_ORDER: Record<StudyLocalNature, number> = {
   chauffe: 0,
   circulation: 1,
   non_chauffe: 2,
   gaine_technique: 3,
+  exterieur: 4,
 };
 
 export const NATURE_LABELS: Record<StudyLocalNature, string> = {
@@ -17,6 +24,8 @@ export const NATURE_LABELS: Record<StudyLocalNature, string> = {
   circulation: "Circulation",
   non_chauffe: "Non chauffé",
   gaine_technique: "Gaine technique",
+  // Terrasse, balcon, loggia, coursive, patio : hors volume, mais sa dalle fait pont (D161).
+  exterieur: "Extérieur (terrasse, balcon…)",
 };
 
 export const NATURE_COLORS: Record<StudyLocalNature, string> = {
@@ -24,6 +33,7 @@ export const NATURE_COLORS: Record<StudyLocalNature, string> = {
   circulation: "#3278ad",
   non_chauffe: "#6b7280",
   gaine_technique: "#7c3aed",
+  exterieur: "#0f9f6e",
 };
 
 export const otherLocalNatures = (current: StudyLocalNature): StudyLocalNature[] =>

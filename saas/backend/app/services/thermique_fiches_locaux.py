@@ -24,7 +24,13 @@ SONDE_DEBUT_CM, SONDE_PAS_CM, SONDE_MAX_CM = 5, 3, 120
 COTE_MIN_M = 0.15
 RATTACHEMENT_M = 0.90
 LOCAUX_NON_CHAUFFES = {"non_chauffe", "gaine_technique"}
+# Un local extérieur (terrasse, balcon, loggia… — D161) n'est pas chauffé : il ne déperd pas lui-même. Pour
+# ses voisins, la sonde reprend sa nature comme adjacence : « exterieur », déjà déperditif.
+LOCAUX_HORS_VOLUME = LOCAUX_NON_CHAUFFES | {"exterieur"}
 DEPERDITIFS = {"exterieur", "vide"} | LOCAUX_NON_CHAUFFES
+# Voisin d'un côté qui donne sur l'air libre, par opposition à un espace extérieur à plancher.
+AIR_LIBRE = "extérieur"
+TERRASSE_OBJET = "terrasse ou balcon"
 ORIENTATIONS = ("N", "NE", "E", "SE", "S", "SO", "O", "NO")
 # Le tracé d'un côté est réduit sous cette flèche : un côté droit de 14 m tient alors en deux points,
 # au lieu des 140 sondages qui l'ont mesuré (D80).
@@ -107,8 +113,12 @@ def _sonder(point: tuple[float, float], normale: tuple[float, float], px_par_m: 
         trouve = locaux.contenant(q, soi)
         if trouve is not None:
             return trouve[0], trouve[1], cm
-        if any(forme.contains(q) for forme in exterieurs) or not batiment.contains(q):
-            return "exterieur", "extérieur", cm
+        # Une terrasse ou un balcon relevé par l'agent est dehors, mais sa dalle touche le mur : on le dit, pour
+        # que la liaison linéique se voie (D161). L'air libre reste « extérieur ».
+        if any(forme.contains(q) for forme in exterieurs):
+            return "exterieur", TERRASSE_OBJET, cm
+        if not batiment.contains(q):
+            return "exterieur", AIR_LIBRE, cm
         if any(forme.contains(q) for forme in vides):
             return "vide", "vide", cm
     return "inconnu", "", float(SONDE_MAX_CM)
@@ -178,7 +188,11 @@ def fiches(analyse: dict[str, Any], manifeste: dict[str, Any], brut: dict[str, A
                 "longueur_m": round(cote["longueur"], 2),
                 "epaisseur_cm": round(sorted(s["epaisseur"] for s in cote["sondages"])[len(cote["sondages"]) // 2]),
                 "orientation": orientation(cote["sondages"][len(cote["sondages"]) // 2]["normale"], nord_deg),
-                "deperditif": cote["adjacence"] in DEPERDITIFS and nature not in LOCAUX_NON_CHAUFFES,
+                "deperditif": cote["adjacence"] in DEPERDITIFS and nature not in LOCAUX_HORS_VOLUME,
+                # Remarque F (D161) : un local chauffé contre un espace extérieur à plancher (terrasse, balcon,
+                # loggia…) porte une liaison linéique le long de ce côté, créée d'office.
+                "liaison_exterieur": cote["adjacence"] == "exterieur" and cote["voisin"] != AIR_LIBRE
+                and nature not in LOCAUX_HORS_VOLUME,
                 "trace": _trace_du_cote(lignes_cotes[rang_cote], largeur, hauteur, px_par_m),
                 "enveloppe": [],
             }
@@ -210,6 +224,7 @@ def fiches(analyse: dict[str, Any], manifeste: dict[str, Any], brut: dict[str, A
             "perimetre_m": round(anneau.length / px_par_m, 2),
             "cotes": details,
             "deperditif_m": round(sum(c["longueur_m"] for c in details if c["deperditif"]), 2),
+            "liaison_exterieur_m": round(sum(c["longueur_m"] for c in details if c["liaison_exterieur"]), 2),
             "par_adjacence": {a: round(sum(c["longueur_m"] for c in details if c["adjacence"] == a), 2)
                               for a in sorted({c["adjacence"] for c in details})},
             "baies": synthese_local.get("menuiseries", []),

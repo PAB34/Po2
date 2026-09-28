@@ -97,7 +97,7 @@ def output_schema() -> dict[str, Any]:
                         "evidence": {"type": "string"},
                         "review_required": {"type": "boolean"},
                         # nature d'une pièce (D24) ; facultatif, sans objet pour les autres catégories
-                        "local": {"type": "string", "enum": ["chauffe", "circulation", "non_chauffe", "gaine_technique"]},
+                        "local": {"type": "string", "enum": ["chauffe", "circulation", "non_chauffe", "gaine_technique", "exterieur"]},
                     },
                     "required": [
                         "category",
@@ -259,10 +259,12 @@ def build_prompt(manifest: dict[str, Any]) -> str:
             "espaces (catégorie piece, polygone au nu intérieur, nom lu dans subtype).",
             "Les pièces couvrent tout l'intérieur du niveau, murs exceptés : circulations, halls, dégagements, "
             "paliers, sanitaires et locaux techniques compris. Pour chaque pièce, indique sa nature dans local : "
-            "chauffe, circulation, gaine_technique (gaine verticale ou horizontale) ou non_chauffe "
-            "(autre local technique, escalier encloisonné).",
-            "Un vide sur l'étage inférieur, une trémie, un patio ou un puits de lumière n'est pas une pièce ; une "
-            "terrasse ou un balcon non plus (catégories terrasse, balcon).",
+            "chauffe, circulation, gaine_technique (gaine verticale ou horizontale), non_chauffe "
+            "(autre local technique, escalier encloisonné) ou exterieur.",
+            "Une terrasse, un balcon, une loggia, une coursive ou un patio accessible est une pièce de nature "
+            "exterieur, avec le nom lu sur le plan : sa dalle crée un pont thermique avec les pièces voisines, il "
+            "faut donc pouvoir la voir et la recadrer. Un vide sur l'étage inférieur, une trémie ou un puits de "
+            "lumière n'est pas une pièce.",
             "Toutes les coordonnées finales doivent être globales et normalisées de 0 à 1000.",
             "Fusionne les doublons entre tuiles et simplifie les portions droites pour éviter les zigzags.",
         ]

@@ -235,7 +235,7 @@ class EtudeOperation(BaseModel):
     contour_pdf: list[list[float]] | None = None
     segment: list[list[float]] | None = None
     segment_pdf: list[list[float]] | None = None
-    nature: Literal["chauffe", "circulation", "non_chauffe", "gaine_technique"] | None = None
+    nature: Literal["chauffe", "circulation", "non_chauffe", "gaine_technique", "exterieur"] | None = None
     nom: str | None = None
     noms: list[str] | None = None
     # Gestes sur un élément d'enveloppe.

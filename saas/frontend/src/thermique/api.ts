@@ -68,7 +68,7 @@ export type Project = {
 
 export type ProjectDetail = Project & { documents: ThermiqueDocument[] };
 
-export type StudyLocalNature = "chauffe" | "circulation" | "non_chauffe" | "gaine_technique";
+export type StudyLocalNature = "chauffe" | "circulation" | "non_chauffe" | "gaine_technique" | "exterieur";
 /** Nature d'un côté de local : sur l'enveloppe, le long d'une paroi lue, ou limite d'usage (D59). */
 export type StudyLimit = "exterieur" | "paroi" | "convention";
 export type StudyLocalState = { status: "a_verifier" | "valide" | "a_revoir"; motif: string | null };
@@ -86,6 +86,8 @@ export type StudySide = {
   epaisseur_cm?: number | null;
   orientation?: string;
   deperditif: boolean;
+  /** Côté d'un local chauffé contre un espace extérieur à plancher : liaison linéique créée d'office (D161). */
+  liaison_exterieur?: boolean;
   /** Polyligne du côté : un côté est un regroupement de sondages, sa position ne se déduit pas
    *  du contour. Sans elle, aucune cote ne peut être posée sur le plan (D80). */
   trace?: PdfPoint[];
@@ -184,6 +186,8 @@ export type StudyRoomSheet = {
   perimetre_m: number;
   cotes: StudySide[];
   deperditif_m?: number;
+  /** Longueur des côtés contre un espace extérieur à plancher (terrasse, balcon…) : liaison linéique (D161). */
+  liaison_exterieur_m?: number;
   par_adjacence?: Record<string, number>;
   baies?: StudyEnvelopeItem[];
   ponts?: Record<string, number>;

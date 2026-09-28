@@ -158,6 +158,24 @@ describe("contrôle d'un côté par ses parois (G1)", () => {
   });
 });
 
+describe("espaces extérieurs à plancher (remarque F, D161)", () => {
+  it("un côté contre une terrasse dit que la liaison linéique est créée d'office, et la fiche en donne la longueur", () => {
+    const room = bureau([cote({ adjacence: "exterieur", voisin: "Terrasse", liaison_exterieur: true, enveloppe: [] })]);
+    room.fiche.liaison_exterieur_m = 10;
+    const html = renderToStaticMarkup(<StudyRoomPanel room={room} />);
+    expect(html).toContain("liaison linéique créée d&#x27;office");
+    expect(html).toContain("10 m de liaison");
+  });
+
+  it("un espace extérieur ne déperd pas lui-même, et on ne le lui reproche pas", () => {
+    const terrasse = { ...bureau([]), nature: "exterieur" } as StudyRoom;
+    terrasse.fiche.deperditif_m = 0;
+    const html = renderToStaticMarkup(<StudyRoomPanel room={terrasse} />);
+    expect(html).toContain("Hors volume chauffé");
+    expect(html).not.toContain("Vérifiez son contour");
+  });
+});
+
 describe("la liste « Côtés et adjacences » (D146)", () => {
   const fiche = (coteVisee: number | null, room = bureau()) =>
     renderToStaticMarkup(<StudyRoomPanel room={room} coteVisee={coteVisee} onCote={() => undefined} />);

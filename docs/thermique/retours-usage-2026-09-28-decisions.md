@@ -246,6 +246,31 @@ existe sous forme de document séparé : la norme elle-même renvoie ces valeurs
 5. **E** (angle porté par chaque pont, minoration) puis **Q10** (valeurs ψ).
 6. **F** (nature terrasse), **G2**, **G3**, **G4**.
 
+## Résultat — F, espaces extérieurs (2026-09-28) — première partie
+
+- **Existant trouvé** : l'agent de lecture rangeait terrasses et balcons dans des catégories à part
+  (`terrasse`, `balcon`), que les fiches traitaient déjà comme de l'extérieur mais qui **n'apparaissent pas
+  comme des locaux** : invisibles au zonage, impossibles à recadrer. Le R+1 en porte 2.
+- **Cinquième nature `exterieur`** (« Extérieur (terrasse, balcon…) », vert) : serveur, schéma, les deux
+  agents (énumération et consigne), le banc d'essai, l'écran. Classable au clic droit comme les autres.
+  Un local extérieur est **hors volume** : il ne déperd pas lui-même (`LOCAUX_HORS_VOLUME`), et ses voisins
+  le voient comme `exterieur`, donc déperditif.
+- **Liaison linéique créée d'office (Q14)** : tout côté d'un local chauffé contre un espace extérieur à
+  plancher — local de nature extérieur, ou terrasse/balcon relevé par l'agent — porte `liaison_exterieur`,
+  et la fiche totalise `liaison_exterieur_m`. L'air libre au-delà d'une façade n'en porte pas. La fiche le
+  dit sous le côté (« liaison linéique créée d'office, famille B »).
+- **Consigne des agents (Q15)** : une terrasse, un balcon, une loggia, une coursive ou un patio accessible
+  est désormais une **pièce de nature exterieur**, nommée, pour être vue et recadrée.
+- **Mesuré sur le vrai R+1** : **170,12 m déperditifs inchangés**. Le nombre de côtés passe de **222 à
+  229** : les côtés contre les deux terrasses sont maintenant distingués de la façade (voisin « terrasse
+  ou balcon » au lieu d'« extérieur »). **12,89 m de liaison** détectés (6.1.1 : 4,05 m ; Pôle
+  multimédia : 8,84 m). Essai : classer « 6.2.2 Vest » en extérieur ne lui laisse aucune déperdition et
+  donne 7,35 m de liaison à ses voisins chauffés ; le local technique voisin, non chauffé, n'en reçoit pas.
+- **Reste (seconde partie)** : juger ces liaisons linéiques dans la passe des ponts (garder, écarter,
+  pont type B1–B4) — il faut un stockage des décisions par côté, qui survive au recalcul.
+- Tests : 2 backend (**149** tests thermiques ciblés au vert, agents compris), 2 frontend (**138**),
+  typecheck, build.
+
 ## Résultat — E, l'angle réel et la minoration de ψ (2026-09-28)
 
 - **Mesure** (`thermique_angles.py`) : l'angle d'un angle sortant ou rentrant est le changement de
