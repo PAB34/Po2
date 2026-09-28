@@ -241,7 +241,9 @@ class EtudeOperation(BaseModel):
 
 
 class EtudeRemodelage(BaseModel):
-    operations: list[EtudeOperation] = Field(default_factory=list, max_length=50)
+    # Une passe sur les ponts juge les 77 liaisons du R+1 en un seul enregistrement : l'ancien plafond de
+    # 50 gestes refusait tout le lot (erreur 422, 2026-09-28). Le plafond garde une borne, pas un frein.
+    operations: list[EtudeOperation] = Field(default_factory=list, max_length=2000)
 
 
 class EtudeEnregistrement(EtudeRemodelage):

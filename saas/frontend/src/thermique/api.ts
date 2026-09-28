@@ -318,6 +318,10 @@ export async function request<T>(token: string, path: string, init: RequestInit 
       const body = (await response.json()) as { detail?: unknown };
       if (typeof body.detail === "string") {
         message = body.detail;
+      } else if (response.status === 422) {
+        // Refus de format côté serveur : « Erreur 422 » seul ne disait rien, et le travail semblait perdu.
+        message =
+          "Le serveur a refusé le format de la demande (erreur 422). Vos modifications sont toujours dans cet onglet : ne le rechargez pas et signalez le problème.";
       }
     } catch {
       // réponse sans corps JSON : on garde le code HTTP

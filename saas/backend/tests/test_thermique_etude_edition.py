@@ -545,6 +545,14 @@ def test_un_geste_sans_element_designe_est_refuse():
         edition.appliquer(contenu, [{"type": "element_confirmer"}])
 
 
+def test_une_passe_sur_les_77_ponts_s_enregistre_en_un_seul_lot():
+    """Erreur 422 du 2026-09-28 : 61 ponts jugés d'un coup dépassaient le plafond de 50 gestes."""
+    from app.schemas.thermique import EtudeEnregistrement
+
+    geste = {"type": "element_confirmer", "element": {"troncon": "T01", "debut_m": 1.0, "fin_m": 1.0}}
+    assert len(EtudeEnregistrement(operations=[geste] * 227).operations) == 227
+
+
 def _etude_a_valider(**drapeaux_mur) -> dict:
     """Un bureau, un mur douteux dessiné chez lui, un angle douteux, et un mur douteux chez le voisin."""
     element = lambda troncon, debut, fin, type_, **reste: {  # noqa: E731
