@@ -191,14 +191,20 @@ def liaisons_localisees(
         if troncon is None or element.get("type") not in LIAISONS:
             continue
         debut, fin = float(element["debut_m"]), float(element["fin_m"])
-        _exterieur, interieur, _exterieur_fin, interieur_fin = env.nus(element)
-        point = env._point(troncon, (debut + fin) / 2, (interieur + interieur_fin) / 2, px_par_m)
-        repere = Point(point)
-        proche, ecart = None, RATTACHEMENT_LIAISON_M * px_par_m
-        for nom, forme in locaux:
-            distance = forme.exterior.distance(repere)
-            if distance <= ecart:
-                proche, ecart = nom, distance
+        pose = pieces_env.point_page(element, manifeste)
+        if pose is not None:
+            # Pont posé par le thermicien : son point fait foi, et son local est celui qui le contient (D157).
+            point = pose
+            proche = pieces_env.piece_du_point(locaux, point, RATTACHEMENT_LIAISON_M * px_par_m)
+        else:
+            _exterieur, interieur, _exterieur_fin, interieur_fin = env.nus(element)
+            point = env._point(troncon, (debut + fin) / 2, (interieur + interieur_fin) / 2, px_par_m)
+            repere = Point(point)
+            proche, ecart = None, RATTACHEMENT_LIAISON_M * px_par_m
+            for nom, forme in locaux:
+                distance = forme.exterior.distance(repere)
+                if distance <= ecart:
+                    proche, ecart = nom, distance
         resultat.append(
             {
                 "type": element["type"],
@@ -211,6 +217,7 @@ def liaisons_localisees(
                 "exclu": bool(element.get("exclu")),
                 "a_verifier": bool(element.get("a_verifier")),
                 "confirme": bool(element.get("confirme")),
+                "ajoute": bool(element.get("ajoute")),
             }
         )
     return resultat

@@ -38,6 +38,8 @@ OPERATIONS = (
     "element_corriger",
     "element_ecarter",
     "element_reactiver",
+    # Un pont que l'agent n'a pas vu, posé par le thermicien là où il le dit (remarque C, D157).
+    "pont_ajouter",
 )
 OPERATIONS_ELEMENT = tuple(nom for nom in OPERATIONS if nom.startswith("element_"))
 # Un contour édité est simplifié sous cette tolérance, en unités du repère 0..1000 (~5 cm).
@@ -237,6 +239,8 @@ def appliquer(contenu: dict[str, Any], operations: list[dict[str, Any]]) -> dict
             raise ThermiqueError("Type de modification inconnu.")
         if operation["type"] in OPERATIONS_ELEMENT:
             _element(resultat, operation)
+        elif operation["type"] == "pont_ajouter":
+            _ajouter_pont(resultat, operation)
         elif operation["type"] == "modifier":
             _modifier(resultat["analyse"], operation)
         elif operation["type"] == "couper":
@@ -269,6 +273,75 @@ def _element(contenu: dict[str, Any], operation: dict[str, Any]) -> None:
         elements_releve.ecarter(contenu, ref, operation.get("motif", ""))
     else:
         elements_releve.reactiver(contenu, ref)
+
+
+def _ajouter_pont(contenu: dict[str, Any], operation: dict[str, Any]) -> dict[str, Any]:
+    """Insère dans le relevé un pont posé par le thermicien (remarque C, D157).
+
+    Le point posé fait foi : il est gardé tel quel (`point_feuille`) et c'est lui qui dessine le pont et
+    désigne son local. Le tronçon le plus proche ne sert qu'à donner au pont son identité dans le relevé
+    (tronçon, début, fin), comme à tout autre élément — sans elle, aucun geste ne pourrait le viser.
+    """
+    type_pont = operation.get("type_pont")
+    if type_pont not in elements_releve.TYPES_PONT:
+        raise ThermiqueError("Le type du pont à ajouter est inconnu.")
+    point = operation.get("point")
+    if not isinstance(point, (list, tuple)) or len(point) != 2:
+        raise ThermiqueError("Le point du pont à ajouter est invalide.")
+    x, y = (float(valeur) for valeur in point)
+    if not 0 <= x <= 1000 or not 0 <= y <= 1000:
+        raise ThermiqueError("Le pont à ajouter est hors de la feuille.")
+    reference = operation.get("reference_pont")
+    if reference is not None and not elements_releve.ponts_catalogue.reference_valide(str(reference)):
+        raise ThermiqueError(f"Pont type inconnu du catalogue NF EN ISO 14683 : « {reference} ».")
+
+    manifeste = contenu["enveloppe"]["manifeste"]
+    largeur, hauteur = (float(valeur) for valeur in manifeste["page_px"])
+    px_par_m = float(manifeste["px_par_m"])
+    px, py = x * largeur / 1000, y * hauteur / 1000
+    meilleur: tuple[float, dict[str, Any], float] | None = None
+    for troncon in manifeste["troncons"]:
+        (ox, oy), (ux, uy) = troncon["origine_px"], troncon["direction"]
+        local = ((px - ox) * ux + (py - oy) * uy) / px_par_m
+        local_fin = troncon.get("local_fin_m", troncon["local_debut_m"] + troncon["fin_m"] - troncon["debut_m"])
+        local = min(max(local, troncon["local_debut_m"]), local_fin)
+        pied = (ox + ux * local * px_par_m, oy + uy * local * px_par_m)
+        distance = ((px - pied[0]) ** 2 + (py - pied[1]) ** 2) ** 0.5
+        if meilleur is None or distance < meilleur[0]:
+            meilleur = (distance, troncon, troncon["debut_m"] + (local - troncon["local_debut_m"]))
+    if meilleur is None:
+        raise ThermiqueError("Ce niveau n'a aucun tronçon d'enveloppe : le pont ne peut pas être situé.")
+    _distance, troncon, abscisse = meilleur
+
+    elements = contenu["enveloppe"]["releve_brut"]["elements"]
+    prises = {(e.get("troncon"), e.get("debut_m"), e.get("fin_m")) for e in elements}
+    abscisse = round(abscisse, 3)
+    # Deux ponts au même endroit restent deux éléments distincts : l'identité ne doit jamais se dédoubler.
+    while (troncon["id"], abscisse, abscisse) in prises:
+        abscisse = round(abscisse + 0.001, 3)
+    element = {
+        "troncon": troncon["id"],
+        "debut_m": abscisse,
+        "fin_m": abscisse,
+        "type": type_pont,
+        "composant": None,
+        "nu_exterieur_cm": 0.0,
+        "nu_interieur_cm": 0.0,
+        "couches": [],
+        "menuiserie_type": "",
+        "cadre_cm": 0,
+        "confiance": 1.0,
+        "indice": "pont ajouté par le thermicien",
+        "a_verifier": False,
+        # Posé par le thermicien, il est jugé du même geste : la passe des ponts ne le lui redemande pas.
+        "confirme": True,
+        "ajoute": True,
+        "point_feuille": [round(x, 3), round(y, 3)],
+    }
+    if reference is not None:
+        element["reference_pont"] = str(reference)
+    elements.append(element)
+    return element
 
 
 def reconstruire(contenu: dict[str, Any]) -> dict[str, Any]:
@@ -367,6 +440,8 @@ def _operations_en_feuille(
             converti["segment"] = [
                 _vers_feuille(transform, largeur, hauteur, point) for point in converti.pop("segment_pdf")
             ]
+        if isinstance(converti.get("point_pdf"), list):
+            converti["point"] = _vers_feuille(transform, largeur, hauteur, converti.pop("point_pdf"))
         resultat.append(converti)
     return resultat
 

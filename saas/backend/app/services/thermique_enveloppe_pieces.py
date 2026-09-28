@@ -127,6 +127,33 @@ def _couper(element: dict[str, Any], debut: float, fin: float, piece: str) -> di
             "nu_exterieur_fin_cm": round(ext_b, 2), "nu_interieur_fin_cm": round(inte_b, 2)}
 
 
+def piece_du_point(pieces: list[tuple[str, Polygon]], point_px: tuple[float, float], portee_px: float) -> str | None:
+    """Le local qui contient le point, sinon le plus proche à moins de `portee_px` (D157)."""
+    repere = Point(point_px)
+    for nom, forme in pieces:
+        if forme.contains(repere):
+            return nom
+    proche, ecart = None, portee_px
+    for nom, forme in pieces:
+        distance = forme.exterior.distance(repere)
+        if distance <= ecart:
+            proche, ecart = nom, distance
+    return proche
+
+
+def point_page(element: dict[str, Any], manifeste: dict[str, Any]) -> tuple[float, float] | None:
+    """Le point posé par le thermicien pour un pont qu'il a ajouté, en pixels de la page, s'il y en a un."""
+    point = element.get("point_feuille")
+    if not isinstance(point, list) or len(point) != 2:
+        return None
+    largeur, hauteur = manifeste["page_px"]
+    return (float(point[0]) * float(largeur) / 1000, float(point[1]) * float(hauteur) / 1000)
+
+
+# Un pont ajouté hors de tout local se rattache au plus proche, jusqu'à cette distance.
+RATTACHEMENT_PONT_AJOUTE_M = 1.0
+
+
 def decouper_par_piece(brut: dict[str, Any], manifeste: dict[str, Any], analyse: dict[str, Any]) -> dict[str, Any]:
     """Relevé résolu (couches de la fiche, doublage présumé) dont chaque élément porte sa pièce."""
     brut = env.resoudre(brut)
@@ -140,6 +167,13 @@ def decouper_par_piece(brut: dict[str, Any], manifeste: dict[str, Any], analyse:
             abouts.setdefault(element["troncon"], []).append((element["debut_m"] + element["fin_m"]) / 2)
     elements = []
     for element in brut["elements"]:
+        # Un pont posé par le thermicien appartient au local sous son point, recalculé à chaque fois : il
+        # suit un recadrage ou un renommage, et ne dépend pas d'un sondage derrière un mur qui peut manquer.
+        pose = point_page(element, manifeste)
+        if pose is not None:
+            nom = piece_du_point(pieces, pose, RATTACHEMENT_PONT_AJOUTE_M * px_par_m)
+            elements.append({**element, "piece": nom, "pieces": [[nom, 1.0]] if nom else []})
+            continue
         troncon = par_id.get(element["troncon"])
         if troncon is None or element["fin_m"] <= element["debut_m"]:
             elements.append(element)

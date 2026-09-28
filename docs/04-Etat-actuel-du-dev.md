@@ -32,8 +32,9 @@ do_not_auto_read:
   **catalogue NF EN ISO 14683 tableau C.2 transcrit** (76 ponts types, ψi retenu) ; minoration
   proportionnelle des angles ; nature « extérieur » avec pont automatique ; G1 à G4 dans l'ordre. **G1
   fait** (contrôle côté ↔ parois dans la fiche). **D fait** (« Réattribuer… » dans la passe des ponts :
-  type, pont type ISO 14683 avec ψi, ou « à modéliser »). **Prochain : C** (créer un pont au clic
-  droit), puis E, F, G2, G3, G4. ⚠️ Licence CSTB nominative de la 14683 à vérifier
+  type, pont type ISO 14683 avec ψi, ou « à modéliser »). **C fait** (clic droit à l'étape des ponts :
+  le pont se pose au point cliqué, rattaché au local qui le contient). **Prochain : E** (angle porté par
+  chaque pont, minoration proportionnelle), puis F, G2, G3, G4. ⚠️ Licence CSTB nominative de la 14683 à vérifier
   avant ouverture à des tiers.
 - **✅ « Valider ce local » rétabli (Q7, D152 à D154).** Depuis le lot Codex D139, plus aucun geste ne
   validait un local. Nouveau bouton sur la fiche et route dédiée sans recalcul ; refus tant qu'un mur ou

@@ -223,8 +223,13 @@ class EtudeOperation(BaseModel):
         "element_corriger",
         "element_ecarter",
         "element_reactiver",
+        "pont_ajouter",
     ]
     id: str | None = None
+    # Pont posé par le thermicien (remarque C) : son point et son type.
+    point_pdf: list[float] | None = None
+    type_pont: Literal["angle_sortant", "angle_rentrant", "about_refend"] | None = None
+    reference_pont: str | None = None
     ids: list[str] | None = None
     contour: list[list[float]] | None = None
     contour_pdf: list[list[float]] | None = None

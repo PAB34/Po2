@@ -60,7 +60,10 @@ function Lecture({
       </p>
       {element.composant && <p className="th-muted">Composant : {element.composant}</p>}
       {reference && <p className="th-ponts__reference">{reference}</p>}
-      {element.indice && (
+      {/* Un pont posé par le thermicien n'a pas de lecture d'agent à montrer : on dit d'où il vient. */}
+      {element.ajoute ? (
+        <p className="th-muted">Pont posé par vous sur le plan.</p>
+      ) : element.indice && (
         <p className="th-element-indice">
           Ce que l'agent a lu : « {element.indice} »
           {element.confiance != null ? ` (confiance ${Math.round(element.confiance * 100)} %)` : ""}

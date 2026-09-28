@@ -21,6 +21,7 @@ import { PontsPanel } from "./PontsPanel";
 import { coteAt, empreinteCote, milieuCote, rangVise, type CoteVisee } from "./cotes";
 import { elementDuPont, paroisATrancher, pontAt, pontDeElement, trouverElement, viserSurLePlan } from "./elements";
 import { etapeCourante, parcours, vueDeLEtape, type EtapeId } from "./parcours";
+import { TYPES_PONT_REATTRIBUABLES } from "./pontsTypes";
 import { useStudyEdition } from "./useStudyEdition";
 import { useStudyElements } from "./useStudyElements";
 import { cibleEditable } from "./elementsHistory";
@@ -690,6 +691,27 @@ export function WorkspacePage() {
                 const actions: PlanAction[] = editionState.draft
                   ? editionState.contextActions(point, pixelsPerPt)
                   : (() => {
+                      // Étape des ponts : le clic droit pose un pont, même sur un local — l'étape ne propose
+                      // que ses propres gestes (D155), et le pont manquant est souvent au milieu d'un local
+                      // pour le zonage, sous le calque de la pièce (remarque C, D157).
+                      if (vue.clic === "ponts") {
+                        if (!shownStudy) return [];
+                        const occupe = elementsState.busy
+                          ? "Un calcul est déjà en cours."
+                          : editionState.pending > 0
+                            ? "Enregistrez ou abandonnez d'abord les modifications de locaux en attente."
+                            : undefined;
+                        return TYPES_PONT_REATTRIBUABLES.map(({ type, label }) => ({
+                          cle: `pont-${type}`,
+                          label: `Ajouter un pont ici : ${label.toLowerCase()}`,
+                          disabled: Boolean(occupe),
+                          title: occupe,
+                          faire: () => {
+                            setParams({ panneau: "fiche" });
+                            elementsState.ajouterPont(point, type);
+                          },
+                        }));
+                      }
                       const room = shownStudy ? roomAt(shownStudy.content.locaux, point) : null;
                       if (!room) {
                         if (!shownStudy) return [];

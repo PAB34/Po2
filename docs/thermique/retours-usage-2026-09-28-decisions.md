@@ -246,6 +246,27 @@ existe sous forme de document séparé : la norme elle-même renvoie ces valeurs
 5. **E** (angle porté par chaque pont, minoration) puis **Q10** (valeurs ψ).
 6. **F** (nature terrasse), **G2**, **G3**, **G4**.
 
+## Résultat — C, créer un pont au clic droit (2026-09-28)
+
+- À l'étape des ponts, le clic droit propose **« Ajouter un pont ici : angle sortant / angle rentrant /
+  about de refend (mur intérieur) »**, y compris sur un local (le zonage est estompé, D156). Rien d'autre
+  n'est proposé à cette étape (D155).
+- **Le point posé fait foi (D157)** : il est gardé dans le relevé (`point_feuille`), le pont se dessine
+  exactement là, et son local est **celui qui contient le point**, recalculé à chaque reconstruction
+  (sinon le plus proche à moins d'un mètre). Le tronçon le plus proche ne donne que l'identité du pont
+  dans le relevé — deux ponts posés au même endroit restent deux éléments.
+- Le pont posé est **jugé d'emblée** et **désigné** : la passe des ponts s'ouvre dessus, avec
+  « Réattribuer… » pour lui donner son pont type. Il s'écarte et se réattribue comme les autres. Sa fiche
+  dit « Pont posé par vous sur le plan ».
+- Seul le serveur sait sur quel tronçon tombe un pont : l'ajout déclenche donc un **recalcul d'aperçu**
+  (quelques secondes), rien n'est enregistré avant « Enregistrer ». Annuler / rétablir un geste relance
+  cet aperçu dès qu'un ajout est dans la liste.
+- **Mesuré sur le vrai R+1** : sans ajout, 227 éléments, 222 côtés, 170,12 m, 289 formes, 77 liaisons —
+  inchangés. Un angle posé au milieu de « 6.1.6 salle de réunion » : 228 éléments, 78 liaisons, il est
+  rattaché à ce local et y compte 1 angle sortant ; le reste du métré est identique.
+- Tests : 5 backend (**122** tests thermiques ciblés au vert), 2 frontend (**131** au vert), typecheck,
+  build. Aucune recette à la souris.
+
 ## Résultat — D, réattribuer un pont (2026-09-28)
 
 - Troisième geste dans la passe des ponts : **« Réattribuer… »** → type de liaison (angle sortant,

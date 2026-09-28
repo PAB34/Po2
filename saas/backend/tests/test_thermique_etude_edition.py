@@ -573,6 +573,66 @@ def test_un_mur_ne_porte_pas_de_pont_type():
         )
 
 
+def _ajout(x: float, y: float, **reste) -> dict:
+    return {"type": "pont_ajouter", "type_pont": "angle_sortant", "point": [x, y], **reste}
+
+
+def test_un_pont_ajoute_garde_son_point_et_prend_le_local_qui_le_contient():
+    """Remarque C, D157 : le point posé fait foi ; le tronçon ne donne que l'identité dans le relevé."""
+    contenu = _etude_avec_deux_elements()
+    apres = edition.appliquer(contenu, [_ajout(420.0, 200.0, reference_pont="C1")])
+    ajoute = next(e for e in apres["enveloppe"]["releve_brut"]["elements"] if e.get("ajoute"))
+    # Projeté sur T01 (100 m sur 1000 px) : 420 px donnent l'abscisse 42 m.
+    assert (ajoute["troncon"], ajoute["debut_m"], ajoute["fin_m"]) == ("T01", 42.0, 42.0)
+    assert ajoute["point_feuille"] == [420.0, 200.0]
+    assert (ajoute["confirme"], ajoute["a_verifier"], ajoute["reference_pont"]) == (True, False, "C1")
+    liaison = next(l for l in apres["enveloppe"]["liaisons"] if l["ajoute"])
+    assert liaison["point"] == [420.0, 200.0], "le pont se dessine là où il a été posé, pas sur le tronçon"
+    assert liaison["piece"] == "Bureau"
+    # Et il compte dans la synthèse du local, comme un angle relevé par l'agent.
+    synthese = next(s for s in apres["enveloppe"]["synthese_pieces"] if s["piece"] == "Bureau")
+    assert synthese["ponts"]["angle_sortant"] == 1.0
+
+
+def test_deux_ponts_poses_au_meme_endroit_restent_deux_elements():
+    contenu = _etude_avec_deux_elements()
+    apres = edition.appliquer(contenu, [_ajout(420.0, 200.0), _ajout(420.0, 200.0)])
+    ajoutes = [e for e in apres["enveloppe"]["releve_brut"]["elements"] if e.get("ajoute")]
+    assert [e["debut_m"] for e in ajoutes] == [42.0, 42.001]
+
+
+def test_un_pont_ajoute_se_reattribue_et_s_ecarte_comme_les_autres():
+    contenu = _etude_avec_deux_elements()
+    ref = {"troncon": "T01", "debut_m": 42.0, "fin_m": 42.0}
+    apres = edition.appliquer(
+        contenu,
+        [_ajout(420.0, 200.0),
+         {"type": "element_corriger", "element": ref, "changes": {"type": "about_refend", "reference_pont": "IW1"}},
+         {"type": "element_ecarter", "element": ref, "motif": "posé par erreur"}],
+    )
+    ajoute = next(e for e in apres["enveloppe"]["releve_brut"]["elements"] if e.get("ajoute"))
+    assert (ajoute["type"], ajoute["reference_pont"], ajoute["exclu"]) == ("about_refend", "IW1", True)
+
+
+def test_un_pont_ajoute_hors_feuille_ou_de_type_inconnu_est_refuse():
+    contenu = _etude_avec_deux_elements()
+    with pytest.raises(ThermiqueError, match="hors de la feuille"):
+        edition.appliquer(contenu, [_ajout(1200.0, 200.0)])
+    with pytest.raises(ThermiqueError, match="type du pont"):
+        edition.appliquer(contenu, [_ajout(420.0, 200.0, type_pont="balcon")])
+    with pytest.raises(ThermiqueError, match="inconnu du catalogue"):
+        edition.appliquer(contenu, [_ajout(420.0, 200.0, reference_pont="Z9")])
+
+
+def test_le_point_pdf_d_un_pont_ajoute_passe_en_repere_de_feuille():
+    """L'écran n'envoie que des points PDF : la conversion se fait une fois, comme pour les contours."""
+    converti = edition._operations_en_feuille(
+        [{"type": "pont_ajouter", "type_pont": "angle_sortant", "point_pdf": [100.0, 50.0]}],
+        [2, 0, 0, 2, 0, 0], 1000.0, 1000.0,
+    )
+    assert converti == [{"type": "pont_ajouter", "type_pont": "angle_sortant", "point": [200.0, 100.0]}]
+
+
 def test_confirmer_un_element_ne_change_aucune_mesure():
     contenu = _etude_avec_deux_elements()
     avant = edition.reconstruire(contenu)

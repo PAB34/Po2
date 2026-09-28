@@ -129,6 +129,8 @@ export type StudyReleveElement = {
   releve_origine?: Record<string, unknown>;
   /** Pont type NF EN ISO 14683 retenu par le thermicien, ou `a_modeliser` (D158). */
   reference_pont?: string;
+  /** Pont posé par le thermicien, et non lu par l'agent (D157). */
+  ajoute?: boolean;
 };
 /** Un pont type du tableau C.2 de la NF EN ISO 14683 (D158). */
 export type PontType = {
@@ -162,6 +164,8 @@ export type StudyBridge = {
   exclu?: boolean;
   a_verifier?: boolean;
   confirme?: boolean;
+  /** Posé par le thermicien (D157). */
+  ajoute?: boolean;
 };
 export type StudyRoomSheet = {
   piece: string;
@@ -262,7 +266,9 @@ export type StudyOperation =
   | { type: "element_confirmer"; element: StudyElementRef }
   | { type: "element_corriger"; element: StudyElementRef; changes: StudyElementChanges; portee?: StudyElementScope }
   | { type: "element_ecarter"; element: StudyElementRef; motif: string }
-  | { type: "element_reactiver"; element: StudyElementRef };
+  | { type: "element_reactiver"; element: StudyElementRef }
+  /** Un pont que l'agent n'a pas vu, posé là où le thermicien clique (remarque C, D157). */
+  | { type: "pont_ajouter"; point_pdf: PdfPoint; type_pont: string; reference_pont?: string };
 export type StudyPreview = {
   content: StudyContent;
   couverture: StudyCoverage;

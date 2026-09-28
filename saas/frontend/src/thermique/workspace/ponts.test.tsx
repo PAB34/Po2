@@ -6,6 +6,7 @@ import { PontsPanel } from "./PontsPanel";
 import { StudyMetrics } from "./StudyMetrics";
 import { refDeElement } from "./elements";
 import { pontsTypesPour } from "./pontsTypes";
+import { appliquerEnLocal } from "./elementsLocal";
 
 const pont = (reste: Partial<StudyReleveElement> = {}): StudyReleveElement => ({
   troncon: "T01",
@@ -132,6 +133,23 @@ const catalogue: PontsCatalogue = {
     { code: "IW3", famille: "IW", page_pdf: 30, psi_e: 0.9, psi_oi: 0.9, psi_i: 1.0 },
   ],
 };
+
+describe("un pont posé par le thermicien (remarque C, D157)", () => {
+  it("sa fiche dit qu'il a été posé à la main, et non ce que l'agent aurait lu", () => {
+    const pose = pont({ ajoute: true, confirme: true, indice: "pont ajouté par le thermicien" });
+    const html = panneau([pose], [liaison({ ajoute: true })], refDeElement(pose));
+    expect(html).toContain("Pont posé par vous sur le plan.");
+    expect(html).not.toContain("Ce que l&#x27;agent a lu");
+    expect(html).toContain("déjà jugé");
+  });
+
+  it("l'ajout ne s'applique pas dans l'écran : seul le serveur sait sur quel tronçon il tombe", () => {
+    const content = etude([pont()], [liaison()]);
+    expect(
+      appliquerEnLocal(content, { type: "pont_ajouter", point_pdf: [10, 10], type_pont: "angle_sortant" }),
+    ).toBe(content);
+  });
+});
 
 describe("ponts types proposés à la réattribution (D158)", () => {
   it("un angle sortant renvoie aux C sortants, un rentrant aux C rentrants, un about aux IW", () => {
