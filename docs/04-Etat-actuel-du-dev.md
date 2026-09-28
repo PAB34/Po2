@@ -19,33 +19,70 @@ do_not_auto_read:
 
 ## 🔜 Reprise prochaine session
 
-> Mise à jour : **2026-09-28** (reprise Claude après les lots Codex du 25 au 28).
+> Mise à jour : **2026-09-28, fin de session Claude** (avant compactage). Tout est **poussé et en
+> production** : `main` = `31ff802f` (migration **0087** `calage_json` appliquée par le déploiement).
+> Dépôt : `C:\Users\pa.borja\Documents\Po2-thermique`, branche `feat/thermique-socle-raster` = `main`.
 
-- **🔥 PRIORITAIRE — superposition des niveaux, coupes et élévations** (`thermique/superposition-niveaux-decisions.md`).
-  Demande urgente de l'utilisateur (Q24) : voir en transparence le niveau du dessus / dessous pour lire
-  les liaisons plancher / mur. Méthode déjà écrite le 2026-09-14 (`metre-plans-decisions.md` §3, règle
-  des quatre quarts), calage décidé (Q10 : deux points communs) — **rien de construit**. Lots S1 niveaux
-  → S2 calage → S3 calque fantôme → S4 quatre quarts → S5 coupes. **En attente des réponses Q25 à Q29.**
-- **✅ EN PRODUCTION `5f133139`, puis LOCAL NON POUSSÉ `383d9064`** : P5, ajout de pont instantané
-  (`thermique/retours-ponts-2026-09-28-decisions.md`, Q19 à Q24 répondues ; P1 à P4 restent à faire).
-- **▶️ retours d'usage du 2026-09-28** (`thermique/retours-usage-2026-09-28-decisions.md`).
-  **LOT LOCAL NON POUSSÉ** (l'utilisateur poussera plus tard) : correctif de l'**erreur 422** (plus de
-  50 gestes refusés à l'enregistrement des ponts), sujet 2, « Valider ce local », puis **A** (chaque
-  étape ne montre que ses objets, D155) et **B** (ponts attrapables, zonage estompé, D156). En attente
-  des réponses **Q8 à Q18** : créer un pont (C), réattribuer / « à modéliser » (D), minoration des angles
-  (E, 27 angles sur 64 très ouverts au R+1), terrasses (F), coller au plan réel (G : 10 côtés
-  déperditifs sans paroi rattachée, 8 écarts ≥ 50 cm).
-  **Réponses reçues → D157 à D162.** Références = normes de `Po2/Thermique/NORMES` (pas Th-Bât) ;
-  **catalogue NF EN ISO 14683 tableau C.2 transcrit** (76 ponts types, ψi retenu) ; minoration
-  proportionnelle des angles ; nature « extérieur » avec pont automatique ; G1 à G4 dans l'ordre. **G1
-  fait** (contrôle côté ↔ parois dans la fiche). **D fait** (« Réattribuer… » dans la passe des ponts :
-  type, pont type ISO 14683 avec ψi, ou « à modéliser »). **C fait** (clic droit à l'étape des ponts :
-  le pont se pose au point cliqué, rattaché au local qui le contient). **E fait** (angle mesuré sur le
-  tracé ou saisi, ψ retenu = ψi × θ/90 affiché ; R+1 : 54,4 « angles droits équivalents » sur 64).
-  **F, première partie faite** (nature « extérieur », liaison linéique détectée d'office : 12,89 m au
-  R+1 ; ⚠️ référence des côtés du R+1 : **229** et non plus 222, déperditif inchangé 170,12 m).
-  **Prochain** : juger ces liaisons dans la passe des ponts (F, seconde partie), puis G2, G3, G4. ⚠️ Licence CSTB nominative de la 14683 à vérifier
-  avant ouverture à des tiers.
+### ▶️ REPRENDRE ICI
+
+**Chiffres de référence du R+1** (`banc.db` du bloc-notes, instantané antérieur à la prod) : 227 éléments,
+**229 côtés** (et non plus 222 : les côtés contre les 2 terrasses sont distingués depuis F), **170,12 m
+déperditifs**, 289 formes, 77 liaisons. Tout lot qui ne touche pas au calcul doit les laisser intacts.
+
+**Fichiers de décisions en cours (lire celui du lot repris) :**
+- `thermique/superposition-niveaux-decisions.md` — 🔥 chantier prioritaire. D168–D173. **S2 calage et S3
+  calque fantôme FAITS et en prod** (cases « Voir niveau inférieur / supérieur », calage 4 clics).
+  Reste **S4** (règle des quatre quarts, `metre-plans-decisions.md` §3 : liaisons plancher / mur déduites,
+  créées d'office, jugées dans la passe) et **S5** (D170, D171 : un agent repère sur le plan les traits
+  de coupe et repères de façade, cliquables pour ouvrir la vue ; pièces de la coupe rattachées aux locaux
+  du plan ; **hauteur sous plafond lue par local** ; hauteur des menuiseries lue en élévation).
+  ⚠️ S4 ne se vérifie qu'avec **deux niveaux étudiés et calés** : seul le R+1 l'est.
+- `thermique/retours-menuiseries-2026-09-28-decisions.md` — M1, M2 (morceaux → élément entier), M3 **faits**.
+  Réponses Q30–Q33 → **D174** fusion d'office de 2 menuiseries contiguës de même composant ; **D175**
+  menuiserie dessinée = composant le plus employé ; **D176** identiques = même composant, largeur ± 1 cm ;
+  **D177** hauteur lue en élévation (S5). **À faire : M4** (clic droit menuiserie : « Supprimer » = écarter ;
+  « Dessiner une menuiserie ici » = 2 clics projetés sur le tronçon, mur coupé de part et d'autre) et
+  **M5** (repère composant · largeur, hauteur à lire en élévation).
+- `thermique/retours-ponts-2026-09-28-decisions.md` — P5 (ajout de pont instantané, D164) **fait**.
+  Réponses Q19–Q23 enregistrées. **À faire** : **P2** (à l'étape des ponts, clic dans un local → seuls
+  ses ponts, partagés marqués ½ ; la passe reste sur tout le niveau, Q21 b), **P3** (D163 : 50/50 des
+  angles à la jonction de deux pièces + « partagé avec… » manuel, Q22 a), **P6/D165** (liaisons linéiques
+  dessinées le long du côté et jugées dans la passe = F seconde partie), **P4** (clic droit : les 5 ponts
+  types les plus employés du niveau puis « Autre… », Q23 a), **P1** (croquis de la norme découpés dans le
+  PDF, Q19 a, + vignette zoomée du plan, Q20 a).
+- `thermique/retours-usage-2026-09-28-decisions.md` — A, B, C, D, E, F (1re partie), G1 faits (D155–D162).
+  Reste **G2** (dessiner l'emprise des angles), **G3** (déplacer les bornes d'un élément, voisin qui suit,
+  Q17 a), **G4** (agent de liaison, sur demande pour le niveau, Q18 b).
+
+**Ordre convenu par l'utilisateur (D172, Q29 a)** : superposition d'abord (S2, S3 faits) ; les autres
+lots ensuite. Proposé à l'utilisateur en fin de session, sans réponse : (1) petits lots décidés (M2 fusion
+d'office, M4, P2+P3, P4, P1), (2) S4, (3) S5. **Lui demander par quoi reprendre.**
+
+**Normes** : `C:\Users\pa.borja\Documents\Po2\Thermique\NORMES` (9 PDF, texte extractible par
+`pdfplumber` ; tableaux en image → rendre les pages par `pypdfium2` et les lire). Catalogue ISO 14683
+C.2 transcrit : `saas/backend/app/data/thermique_ponts_iso14683.json`. ⚠️ PDF sous **licence CSTB
+nominative** : à vérifier avant ouverture de l'outil à d'autres bureaux d'études. Demander à l'utilisateur
+l'annexe nationale française de la NF EN 12831-1 s'il l'a.
+
+**Pièges de cette session** : un `python -c` lancé depuis la racine du dépôt avec `banc.db` en chemin
+relatif **crée un `banc.db` vide dans le dépôt** — toujours passer par un script du bloc-notes ;
+`[IO.File]` en PowerShell résout les chemins relatifs depuis le dossier du processus, pas `cd` ;
+`Set-Content -Encoding utf8` ajoute un BOM (utiliser `UTF8Encoding $false`). Vérifier un déploiement sur le
+bundle **servi** (`/assets/thermique-*.js`) et une route par son code HTTP sans session (401 = existe,
+404 = inconnue, 502 = serveur en redémarrage).
+
+**Règles permanentes** : rien sur GitHub sans « pousse » explicite ; français ; « ce que j'ai fait, en
+clair » ; fichier de décisions avant de coder ; ne jamais saisir d'identifiant (donc pas de recette à la
+souris) ; ne pas modifier `.claude/agents/thermicien-plan.md` ; tests ciblés seulement ; `git commit --
+<chemins>` explicites.
+
+### Historique récent (du plus récent au plus ancien)
+
+- **✅ PROD `31ff802f`** : S2 calage + S3 calque fantôme (migration 0087) ; M1–M3 menuiseries ; P5 ajout de
+  pont instantané ; cadrage superposition ; D174–D177.
+- **✅ PROD `5f133139`** : erreur 422 corrigée (plafond 50 → 2000 gestes) ; A et B (chaque étape ne montre
+  que ses objets, D155–D156) ; catalogue ISO 14683 + G1 ; D réattribuer un pont ; C poser un pont au clic
+  droit ; E angle réel et minoration ψ × θ/90 ; F nature « extérieur » + liaison linéique d'office.
 - **✅ « Valider ce local » rétabli (Q7, D152 à D154).** Depuis le lot Codex D139, plus aucun geste ne
   validait un local. Nouveau bouton sur la fiche et route dédiée sans recalcul ; refus tant qu'un mur ou
   une menuiserie « à vérifier » du local n'est pas tranché ; les ponts ne comptent pas. R+1 : 11 locaux
