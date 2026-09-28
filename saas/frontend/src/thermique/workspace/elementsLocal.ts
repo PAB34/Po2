@@ -25,6 +25,9 @@ export function refusDeCorrection(element: StudyReleveElement, changes: StudyEle
   if (changes.composant != null && !changes.composant.trim()) {
     return "Le composant ne peut pas être vide.";
   }
+  if (futur.reference_pont && !["angle_sortant", "angle_rentrant", "about_refend"].includes(futur.type)) {
+    return "Seul un pont thermique (angle ou about de refend) porte un pont type du catalogue.";
+  }
   const paires: [number | undefined, number | undefined][] = [
     [futur.nu_exterieur_cm, futur.nu_interieur_cm],
     [futur.nu_exterieur_fin_cm, futur.nu_interieur_fin_cm],

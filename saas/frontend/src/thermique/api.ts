@@ -127,6 +127,27 @@ export type StudyReleveElement = {
   motif_exclusion?: string;
   /** Valeurs lues par l'agent, gardées à côté de la correction humaine (Q7). */
   releve_origine?: Record<string, unknown>;
+  /** Pont type NF EN ISO 14683 retenu par le thermicien, ou `a_modeliser` (D158). */
+  reference_pont?: string;
+};
+/** Un pont type du tableau C.2 de la NF EN ISO 14683 (D158). */
+export type PontType = {
+  code: string;
+  famille: string;
+  page_pdf: number;
+  psi_e: number;
+  psi_oi: number;
+  psi_i: number;
+  angle?: "sortant" | "rentrant";
+  isolant?: string;
+  plancher?: string;
+  croquis?: string;
+};
+export type PontsCatalogue = {
+  source: { norme: string; edition: string; tableau: string };
+  emplacement_isolant: Record<string, string>;
+  familles: Record<string, { libelle: string; correspond_a: string[] }>;
+  ponts: PontType[];
 };
 /** Un pont thermique relevé, avec sa position sur la feuille. */
 export type StudyBridge = {
@@ -224,6 +245,8 @@ export type StudyElementRef = { troncon: string; debut_m: number; fin_m: number 
 export type StudyElementChanges = Partial<{
   type: string;
   composant: string;
+  /** Pont type NF EN ISO 14683 (`C1`, `IW3`…) ou `a_modeliser` (D158). */
+  reference_pont: string;
   nu_exterieur_cm: number;
   nu_interieur_cm: number;
   nu_exterieur_fin_cm: number;
@@ -363,6 +386,7 @@ export const thermiqueApi = {
   setNorth: (token: string, sheetId: number, payload: { p1: PdfPoint; p2: PdfPoint; tout_le_projet: boolean }) =>
     request<Sheet[]>(token, `/thermique/sheets/${sheetId}/nord`, { method: "POST", body: JSON.stringify(payload) }),
   getStudy: (token: string, sheetId: number) => request<Study | null>(token, `/thermique/sheets/${sheetId}/etude`),
+  getPontsCatalogue: (token: string) => request<PontsCatalogue>(token, "/thermique/ponts/catalogue"),
   importStudy: (token: string, sheetId: number, file: File, replace = false) => {
     const form = new FormData();
     form.append("fichier", file);

@@ -233,6 +233,13 @@ export function WorkspacePage() {
   }, []);
 
   const rotation = sheet?.rotation_deg ?? 0;
+  // Les ponts types NF EN ISO 14683 : un fichier fixe, chargé une fois (D158).
+  const pontsCatalogue = useQuery({
+    queryKey: ["thermique", "ponts-catalogue"],
+    queryFn: () => thermiqueApi.getPontsCatalogue(token!),
+    enabled: Boolean(token),
+    staleTime: Infinity,
+  });
   const raster = useQuery({
     queryKey: ["thermique", "raster", sheetId, rotation],
     queryFn: () => thermiqueApi.getRaster(token!, sheetId!, rotation),
@@ -852,6 +859,7 @@ export function WorkspacePage() {
                   et la fiche du local n'a rien à y faire. */}
               {etape === "ponts" && shownStudy && !editionState.draft ? (
                 <PontsPanel
+                  catalogue={pontsCatalogue.data ?? null}
                   content={shownStudy.content}
                   selected={elementsState.selected}
                   onSelect={elementsState.select}

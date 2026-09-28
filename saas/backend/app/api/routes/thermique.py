@@ -85,6 +85,7 @@ from app.services.thermique_composants import (
 )
 from app.services import thermique_etude_edition as edition
 from app.services import thermique_nord
+from app.services import thermique_ponts_catalogue as ponts_catalogue
 from app.services import thermique_travaux as travaux
 from app.services.thermique_etudes import (
     MAX_ETUDE_BYTES,
@@ -687,6 +688,12 @@ def valider_local_route(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     etude = enregistrer_etude(db, etude, user, contenu, etats, "validation_local")
     return serialize_etude(db, etude)
+
+
+@router.get("/ponts/catalogue")
+def lire_catalogue_ponts(user: User = Depends(get_authenticated_user)) -> dict:
+    """Les ponts types de la NF EN ISO 14683 (tableau C.2), pour réattribuer un pont (D158)."""
+    return ponts_catalogue.catalogue()
 
 
 @router.get("/sheets/{sheet_id}/etude/versions", response_model=list[EtudeVersionRead])

@@ -528,6 +528,51 @@ def test_un_pont_ecarte_reste_dessine_mais_marque_ecarte():
     assert revenu["enveloppe"]["liaisons"][0]["exclu"] is False
 
 
+def _etude_avec_un_angle() -> tuple[dict, dict]:
+    contenu = _etude_avec_deux_elements()
+    contenu["enveloppe"]["releve_brut"]["elements"].append(
+        {"troncon": "T01", "debut_m": 100.0, "fin_m": 100.0, "type": "angle_sortant", "composant": None,
+         "nu_exterieur_cm": 0, "nu_interieur_cm": -50, "confiance": 0.9, "a_verifier": True, "indice": "angle"}
+    )
+    return contenu, {"troncon": "T01", "debut_m": 100.0, "fin_m": 100.0}
+
+
+def test_reattribuer_un_pont_a_un_pont_type_survit_au_recalcul():
+    """D : un pont mal reconnu change de type et reçoit son pont type NF EN ISO 14683, jugé du même geste."""
+    contenu, ref = _etude_avec_un_angle()
+    apres = edition.appliquer(
+        contenu,
+        [{"type": "element_corriger", "element": ref,
+          "changes": {"type": "about_refend", "reference_pont": "IW3"}}],
+    )
+    pont = next(e for e in apres["enveloppe"]["releve_brut"]["elements"] if e["debut_m"] == 100.0)
+    assert (pont["type"], pont["reference_pont"], pont["corrige"]) == ("about_refend", "IW3", True)
+    assert pont["releve_origine"] == {"type": "angle_sortant", "reference_pont": None}
+    # Et le recalcul suivant ne l'efface pas : le relevé fait foi (D99).
+    pont = next(e for e in edition.reconstruire(apres)["enveloppe"]["releve_brut"]["elements"] if e["debut_m"] == 100.0)
+    assert pont["reference_pont"] == "IW3"
+
+
+def test_un_pont_absent_du_catalogue_est_a_modeliser_et_un_code_invente_est_refuse():
+    contenu, ref = _etude_avec_un_angle()
+    geste = {"type": "element_corriger", "element": ref, "changes": {"reference_pont": "a_modeliser"}}
+    assert next(
+        e for e in edition.appliquer(contenu, [geste])["enveloppe"]["releve_brut"]["elements"] if e["debut_m"] == 100.0
+    )["reference_pont"] == "a_modeliser"
+    with pytest.raises(ThermiqueError, match="inconnu du catalogue"):
+        edition.appliquer(contenu, [{**geste, "changes": {"reference_pont": "C9"}}])
+
+
+def test_un_mur_ne_porte_pas_de_pont_type():
+    contenu, _ = _etude_avec_un_angle()
+    with pytest.raises(ThermiqueError, match="Seul un pont thermique"):
+        edition.appliquer(
+            contenu,
+            [{"type": "element_corriger", "element": {"troncon": "T01", "debut_m": 50.0, "fin_m": 100.0},
+              "changes": {"reference_pont": "C1"}}],
+        )
+
+
 def test_confirmer_un_element_ne_change_aucune_mesure():
     contenu = _etude_avec_deux_elements()
     avant = edition.reconstruire(contenu)

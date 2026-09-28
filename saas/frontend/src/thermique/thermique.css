@@ -2208,6 +2208,21 @@ circle.th-seg--measure {
   border-left-color: #d66f25;
 }
 
+/* Remarque D : le pont type retenu, et le formulaire pour le réattribuer. */
+.th-ponts__reference {
+  margin: 0;
+  font-weight: 600;
+}
+
+.th-ponts__reattribuer {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.th-ponts__reattribuer select {
+  max-width: 100%;
+}
+
 /* G1 : un côté déperditif sans parois, ou qu'elles ne couvrent pas. */
 .th-study-sides article.is-douteux {
   border-left-color: #b45309;

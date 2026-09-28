@@ -13,7 +13,11 @@ from __future__ import annotations
 import copy
 from typing import Any
 
+from app.services import thermique_ponts_catalogue as ponts_catalogue
 from app.services.thermique import ThermiqueError
+
+# Les liaisons du relevé : ce sont elles, les ponts thermiques, et elles seules portent un pont type.
+TYPES_PONT = ("angle_sortant", "angle_rentrant", "about_refend")
 
 # Un élément est désigné par sa position sur l'enveloppe. Sur le R+1, ce triplet distingue les 227
 # éléments sans un seul doublon, et `objets[].source_parcours` le porte déjà : le dessin sait donc
@@ -38,6 +42,8 @@ TYPES_CONNUS = (
 CHAMPS_CORRIGEABLES = (
     "type",
     "composant",
+    # Pont thermique : son pont type dans le catalogue NF EN ISO 14683, ou « a_modeliser » (D158).
+    "reference_pont",
     "nu_exterieur_cm",
     "nu_interieur_cm",
     "nu_exterieur_fin_cm",
@@ -126,12 +132,20 @@ def _controler(element: dict[str, Any], changes: dict[str, Any]) -> dict[str, An
             if not texte:
                 raise ThermiqueError("Le composant ne peut pas être vide.")
             propres[champ] = texte
+        elif champ == "reference_pont":
+            texte = str(valeur or "").strip()
+            if not ponts_catalogue.reference_valide(texte):
+                raise ThermiqueError(f"Pont type inconnu du catalogue NF EN ISO 14683 : « {texte} ».")
+            propres[champ] = texte
         else:
             if isinstance(valeur, bool) or not isinstance(valeur, (int, float)):
                 raise ThermiqueError(f"« {champ} » doit être un nombre de centimètres.")
             propres[champ] = float(valeur)
 
     futur = {**element, **propres}
+    # Un pont type ne s'accroche qu'à un pont : un mur « C1 » ne voudrait rien dire au calcul.
+    if futur.get("reference_pont") and futur.get("type") not in TYPES_PONT:
+        raise ThermiqueError("Seul un pont thermique (angle ou about de refend) porte un pont type du catalogue.")
     # Le nu intérieur est toujours en deçà du nu extérieur : sur les 227 éléments du R+1, pas une
     # exception. Une saisie inversée passerait sinon inaperçue et fausserait toutes les épaisseurs.
     for debut, fin in (("nu_exterieur_cm", "nu_interieur_cm"), ("nu_exterieur_fin_cm", "nu_interieur_fin_cm")):

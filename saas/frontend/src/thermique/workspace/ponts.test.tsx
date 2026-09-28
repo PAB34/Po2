@@ -1,10 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import type { StudyBridge, StudyContent, StudyElementRef, StudyReleveElement, StudyRoom } from "../api";
+import type { PontsCatalogue, StudyBridge, StudyContent, StudyElementRef, StudyReleveElement, StudyRoom } from "../api";
 import { PontsPanel } from "./PontsPanel";
 import { StudyMetrics } from "./StudyMetrics";
 import { refDeElement } from "./elements";
+import { pontsTypesPour } from "./pontsTypes";
 
 const pont = (reste: Partial<StudyReleveElement> = {}): StudyReleveElement => ({
   troncon: "T01",
@@ -95,6 +96,48 @@ describe("étape « ponts thermiques »", () => {
 
   it("un niveau sans liaison le dit, au lieu d'un écran vide", () => {
     expect(panneau([], [], null)).toContain("Aucune liaison relevée");
+  });
+
+  it("propose de réattribuer un pont mal reconnu, à côté de garder et d'écarter (remarque D)", () => {
+    const element = pont();
+    expect(panneau([element], [liaison()], refDeElement(element))).toContain("Réattribuer…");
+  });
+
+  it("affiche le pont type retenu avec sa valeur ψi, ou l'état « à modéliser »", () => {
+    const retenu = pont({ reference_pont: "C1" });
+    const html = renderToStaticMarkup(
+      <PontsPanel
+        content={etude([retenu], [liaison()])}
+        selected={refDeElement(retenu)}
+        onSelect={rien}
+        busy={false}
+        message={null}
+        onOperation={rien}
+        catalogue={catalogue}
+      />,
+    );
+    expect(html).toContain("Pont type C1 — angle sortant, isolant à l&#x27;extérieur · ψi 0,15 W/(m·K)");
+    const modeliser = pont({ reference_pont: "a_modeliser" });
+    expect(panneau([modeliser], [liaison()], refDeElement(modeliser))).toContain("À modéliser");
+  });
+});
+
+const catalogue: PontsCatalogue = {
+  source: { norme: "NF EN ISO 14683", edition: "juillet 2017", tableau: "C.2" },
+  emplacement_isolant: { a: "à l'extérieur", b: "au centre" },
+  familles: { C: { libelle: "Angles", correspond_a: [] }, IW: { libelle: "Murs intérieurs", correspond_a: [] } },
+  ponts: [
+    { code: "C1", famille: "C", page_pdf: 28, angle: "sortant", isolant: "a", psi_e: -0.05, psi_oi: 0.15, psi_i: 0.15 },
+    { code: "C5", famille: "C", page_pdf: 28, angle: "rentrant", isolant: "a", psi_e: 0.05, psi_oi: -0.15, psi_i: -0.15 },
+    { code: "IW3", famille: "IW", page_pdf: 30, psi_e: 0.9, psi_oi: 0.9, psi_i: 1.0 },
+  ],
+};
+
+describe("ponts types proposés à la réattribution (D158)", () => {
+  it("un angle sortant renvoie aux C sortants, un rentrant aux C rentrants, un about aux IW", () => {
+    expect(pontsTypesPour(catalogue, "angle_sortant").map((p) => p.code)).toEqual(["C1"]);
+    expect(pontsTypesPour(catalogue, "angle_rentrant").map((p) => p.code)).toEqual(["C5"]);
+    expect(pontsTypesPour(catalogue, "about_refend").map((p) => p.code)).toEqual(["IW3"]);
   });
 });
 

@@ -246,6 +246,21 @@ existe sous forme de document séparé : la norme elle-même renvoie ces valeurs
 5. **E** (angle porté par chaque pont, minoration) puis **Q10** (valeurs ψ).
 6. **F** (nature terrasse), **G2**, **G3**, **G4**.
 
+## Résultat — D, réattribuer un pont (2026-09-28)
+
+- Troisième geste dans la passe des ponts : **« Réattribuer… »** → type de liaison (angle sortant,
+  rentrant, about de refend), puis **pont type** NF EN ISO 14683 — ceux de la famille d'abord (C1–C4,
+  C5–C8 ou IW1–IW6), toutes les autres familles ensuite —, ou **« À modéliser — absent du catalogue »**.
+  Le croquis de référence (page du PDF) et les trois ψ s'affichent au choix. Le geste vaut jugement.
+- La fiche du pont affiche le pont type retenu et son **ψi**, ou « À modéliser : ψ à calculer
+  (NF EN ISO 10211) ».
+- Serveur : champ corrigeable `reference_pont` (code du catalogue ou `a_modeliser`), refusé sur un mur
+  et pour un code inconnu ; route `GET /thermique/ponts/catalogue` ; service
+  `thermique_ponts_catalogue.py`. La référence survit au recalcul (le relevé fait foi, D99).
+- Pas encore : le **total ψ × longueur** par local — il attend la minoration des angles (E) et les
+  hauteurs d'étage (D159).
+- Tests : 3 backend (45 ciblés au vert), 3 frontend (**129** au vert), typecheck et build.
+
 ## Résultat — G1 et catalogue ISO 14683 (2026-09-28)
 
 - **G1 fait** : chaque côté déperditif de la fiche dit « Aucune paroi rattachée : la composition de ce

@@ -1,8 +1,15 @@
 import { useEffect, useState } from "react";
 
-import type { StudyContent, StudyElementRef, StudyOperation, StudyReleveElement } from "../api";
+import type { PontsCatalogue, StudyContent, StudyElementRef, StudyOperation, StudyReleveElement } from "../api";
 import { LIBELLES_TYPE, memeElement, pontDeElement, refDeElement } from "./elements";
 import { avancement, pontsDuNiveau } from "./parcours";
+import {
+  A_MODELISER,
+  libellePontType,
+  libelleReference,
+  pontsTypesPour,
+  TYPES_PONT_REATTRIBUABLES,
+} from "./pontsTypes";
 
 /**
  * Motifs de refus pré-écrits (Q3).
@@ -33,8 +40,17 @@ function Position({ rang, total, reste }: { rang: number; total: number; reste: 
 }
 
 /** Ce que l'agent a lu du pont, et où il se trouve. Rien de plus : une chose à la fois (D107). */
-function Lecture({ element, content }: { element: StudyReleveElement; content: StudyContent }) {
+function Lecture({
+  element,
+  content,
+  catalogue,
+}: {
+  element: StudyReleveElement;
+  content: StudyContent;
+  catalogue?: PontsCatalogue | null;
+}) {
   const pont = pontDeElement(content, element);
+  const reference = libelleReference(element.reference_pont, catalogue);
   return (
     <>
       <h3 className="th-ponts__titre">{LIBELLES_TYPE[element.type] ?? element.type}</h3>
@@ -43,6 +59,7 @@ function Lecture({ element, content }: { element: StudyReleveElement; content: S
         {((element.debut_m + element.fin_m) / 2).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} m
       </p>
       {element.composant && <p className="th-muted">Composant : {element.composant}</p>}
+      {reference && <p className="th-ponts__reference">{reference}</p>}
       {element.indice && (
         <p className="th-element-indice">
           Ce que l'agent a lu : « {element.indice} »
@@ -50,6 +67,103 @@ function Lecture({ element, content }: { element: StudyReleveElement; content: S
         </p>
       )}
     </>
+  );
+}
+
+/**
+ * Réattribuer un pont mal reconnu (remarque D, D158) : son type, puis son pont type NF EN ISO 14683 —
+ * ceux de sa famille d'abord, les autres ensuite —, ou « à modéliser » s'il n'est pas au catalogue.
+ * Un seul geste `element_corriger`, qui vaut jugement.
+ */
+function Reattribution({
+  element,
+  catalogue,
+  busy,
+  onValider,
+  onRevenir,
+}: {
+  element: StudyReleveElement;
+  catalogue?: PontsCatalogue | null;
+  busy: boolean;
+  onValider: (type: string, reference: string) => void;
+  onRevenir: () => void;
+}) {
+  const [type, setType] = useState(element.type);
+  const proposes = catalogue ? pontsTypesPour(catalogue, type) : [];
+  const [reference, setReference] = useState(element.reference_pont ?? proposes[0]?.code ?? A_MODELISER);
+  const autres = catalogue ? catalogue.ponts.filter((pont) => !proposes.includes(pont)) : [];
+  const choisi = catalogue?.ponts.find((pont) => pont.code === reference);
+
+  return (
+    <div className="th-ponts__reattribuer">
+      <label>
+        Type de liaison
+        <select
+          value={type}
+          disabled={busy}
+          onChange={(event) => {
+            setType(event.target.value);
+            // Le pont type suit le type : un angle sortant ne garde pas un about de refend.
+            const premier = catalogue ? pontsTypesPour(catalogue, event.target.value)[0] : undefined;
+            setReference(premier?.code ?? A_MODELISER);
+          }}
+        >
+          {TYPES_PONT_REATTRIBUABLES.map((item) => (
+            <option key={item.type} value={item.type}>
+              {item.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Pont type (NF EN ISO 14683, tableau C.2)
+        <select value={reference} disabled={busy || !catalogue} onChange={(event) => setReference(event.target.value)}>
+          {catalogue && proposes.length > 0 && (
+            <optgroup label="Pour ce type de liaison">
+              {proposes.map((pont) => (
+                <option key={pont.code} value={pont.code}>
+                  {libellePontType(pont, catalogue)}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {catalogue &&
+            Object.entries(catalogue.familles).map(([famille, { libelle }]) => {
+              const liste = autres.filter((pont) => pont.famille === famille);
+              return liste.length ? (
+                <optgroup key={famille} label={libelle}>
+                  {liste.map((pont) => (
+                    <option key={pont.code} value={pont.code}>
+                      {libellePontType(pont, catalogue)}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null;
+            })}
+          <option value={A_MODELISER}>À modéliser — absent du catalogue</option>
+        </select>
+      </label>
+      {!catalogue && <small className="th-muted">Catalogue des ponts types en cours de chargement…</small>}
+      {choisi && (
+        <small className="th-muted">
+          Croquis : NF EN ISO 14683, page {choisi.page_pdf} du PDF. ψe {choisi.psi_e.toLocaleString("fr-FR")} ·
+          ψoi {choisi.psi_oi.toLocaleString("fr-FR")} · ψi {choisi.psi_i.toLocaleString("fr-FR")} W/(m·K).
+        </small>
+      )}
+      <div className="th-inline">
+        <button
+          type="button"
+          className="po2-button po2-button--primary"
+          disabled={busy}
+          onClick={() => onValider(type, reference)}
+        >
+          Réattribuer
+        </button>
+        <button type="button" className="th-link" onClick={onRevenir}>
+          Revenir
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -70,6 +184,7 @@ export function PontsPanel({
   busy,
   message,
   onOperation,
+  catalogue = null,
 }: {
   content: StudyContent;
   selected: StudyElementRef | null;
@@ -77,11 +192,14 @@ export function PontsPanel({
   busy: boolean;
   message: string | null;
   onOperation: (operation: StudyOperation) => void;
+  /** Ponts types NF EN ISO 14683 : de quoi réattribuer un pont (D158). */
+  catalogue?: PontsCatalogue | null;
 }) {
   const ponts = pontsDuNiveau(content);
   // Régime exigeant : ici, la confiance de l'agent ne vaut pas validation (voir `avancement`).
   const compte = avancement(ponts, true);
   const [refus, setRefus] = useState(false);
+  const [reattribuer, setReattribuer] = useState(false);
   const [libre, setLibre] = useState("");
 
   // Le pont en cours est celui désigné sur le plan : cliquer une pastille déplace la passe, et la
@@ -100,6 +218,7 @@ export function PontsPanel({
 
   useEffect(() => {
     setRefus(false);
+    setReattribuer(false);
     setLibre("");
   }, [rang]);
 
@@ -118,6 +237,17 @@ export function PontsPanel({
   function garder() {
     if (!element) return;
     onOperation({ type: "element_confirmer", element: refDeElement(element) });
+    suivant();
+  }
+
+  function reattribuerA(type: string, reference: string) {
+    if (!element) return;
+    onOperation({
+      type: "element_corriger",
+      element: refDeElement(element),
+      changes: { ...(type !== element.type ? { type } : {}), reference_pont: reference },
+      portee: "cet_element",
+    });
     suivant();
   }
 
@@ -148,7 +278,7 @@ export function PontsPanel({
         <>
           <Position rang={rang} total={ponts.length} reste={compte.restants} />
           <article className="th-ponts__fiche">
-            <Lecture element={element} content={content} />
+            <Lecture element={element} content={content} catalogue={catalogue} />
 
             {element.exclu ? (
               <>
@@ -162,6 +292,16 @@ export function PontsPanel({
                   Remettre dans le calcul
                 </button>
               </>
+            ) : reattribuer ? (
+              // Remonté quand le catalogue arrive, pour proposer d'emblée un pont type de la famille.
+              <Reattribution
+                key={`${rang}-${catalogue ? "catalogue" : "attente"}`}
+                element={element}
+                catalogue={catalogue}
+                busy={busy}
+                onValider={reattribuerA}
+                onRevenir={() => setReattribuer(false)}
+              />
             ) : refus ? (
               <div className="th-ponts__motifs">
                 <p className="th-muted">Écarter ce pont, parce que :</p>
@@ -211,6 +351,14 @@ export function PontsPanel({
                   onClick={() => setRefus(true)}
                 >
                   Écarter…
+                </button>
+                <button
+                  type="button"
+                  className="po2-button po2-button--ghost"
+                  disabled={busy}
+                  onClick={() => setReattribuer(true)}
+                >
+                  Réattribuer…
                 </button>
                 {(element.confirme || element.corrige) && (
                   <span className="th-badge th-element-badge--confirme">déjà jugé</span>
