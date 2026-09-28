@@ -38,6 +38,7 @@ indices qui les distinguent (porte + vitrage fixe), donc légitimes.
 - (a) **fusionnées d'office** au recalcul — elles ne peuvent plus exister séparément ;
 - (b) **signalées**, avec un bouton « Fusionner avec la voisine » ;
 - (c) les deux : fusion d'office si le composant est le même, bouton sinon.
+REPONSE : a
 
 ## M3 — « Nu extérieur / Nu intérieur » : de quoi s'agit-il ? — FAIT
 
@@ -61,6 +62,7 @@ prend le composant choisi.
 
 **Q31 — Le composant d'une menuiserie dessinée :** (a) le plus employé du niveau, modifiable ensuite
 (b) choisi dans la liste avant de dessiner.
+REPONSE : a
 
 ## M5 — Des menuiseries identiques rangées pareil, pour la bibliothèque du projet
 
@@ -75,8 +77,28 @@ dans la bibliothèque du projet.
 
 **Q32 — Deux menuiseries sont « identiques » quand :** (a) même composant et même largeur au cm près
 (b) même composant et largeur à ± 2 cm (c) autre.
+REPONSE : b mais +-1cm
 **Q33 — Tant que la hauteur n'est pas connue :** (a) repère sur la largeur seule, complété plus tard
 (b) hauteur saisie à la main dans la fiche de la menuiserie en attendant S5.
+REPONSE : Elle doivent être identifier depuis les vues d'élévations
+
+---
+
+## Décisions tirées des réponses (2026-09-28)
+
+**D174 — Fusion d'office (Q30 a).** Deux menuiseries du relevé qui se touchent sur le même tronçon, de même
+composant, sans rien entre elles, sont fusionnées au recalcul : elles ne peuvent plus exister séparément.
+La fusion garde la lecture d'origine des deux dans l'élément fusionné, pour qu'on puisse mesurer ce que
+l'agent avait lu.
+
+**D175 — Menuiserie dessinée (Q31 a).** Elle prend le composant de menuiserie le plus employé du niveau,
+modifiable ensuite dans sa fiche.
+
+**D176 — Menuiseries identiques (Q32, « b mais ± 1 cm »).** Même composant et même largeur à ± 1 cm.
+
+**D177 — Hauteur des menuiseries (Q33).** Réponse : « Elles doivent être identifiées depuis les vues
+d'élévations. » Le repère complet (composant · largeur × hauteur) attend donc la lecture des façades (S5) ;
+d'ici là, le repère se fait sur composant et largeur, la hauteur restant « à lire en élévation ».
 
 ---
 
