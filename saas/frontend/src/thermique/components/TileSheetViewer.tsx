@@ -44,7 +44,8 @@ type Props = {
   onGrabEnd?: () => void;
   // Clic droit : point sous le curseur (le menu du navigateur est alors supprimé).
   onContextPick?: (point: PdfPoint, pixelsPerPt: number, ecran: { x: number; y: number }) => void;
-  renderOverlay?: (toScreen: ToScreen) => ReactNode;
+  // `taille` : la fenêtre du plan, pour ne charger que ce qui s'y voit (calque fantôme, S3).
+  renderOverlay?: (toScreen: ToScreen, taille: { width: number; height: number }) => ReactNode;
   // Réglages propres à la planche, rendus dans la barre d'outils (cases d'affichage des métrés…).
   renderTools?: ReactNode;
   // Cadrage à reprendre à l'ouverture de la planche (au lieu de l'ajuster), et suivi du cadrage courant.
@@ -351,7 +352,7 @@ export function TileSheetViewer({
       </div>
 
       <svg className="th-viewer__overlay" width={size.width} height={size.height}>
-        {renderOverlay?.(toScreen)}
+        {renderOverlay?.(toScreen, size)}
         {segments.map((segment, index) => {
           const [x1, y1] = toScreen(segment.p1);
           const [x2, y2] = toScreen(segment.p2);

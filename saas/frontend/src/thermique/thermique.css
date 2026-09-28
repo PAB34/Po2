@@ -1053,6 +1053,94 @@ circle.th-seg--measure {
   white-space: nowrap;
 }
 
+/* Superposition des niveaux (S3, D168, D169) : chaque case porte la couleur de son calque. */
+.th-viewer__fantome {
+  white-space: nowrap;
+}
+
+.th-viewer__fantome--inferieur input {
+  accent-color: #1a59f2;
+}
+
+.th-viewer__fantome--superieur input {
+  accent-color: #f2730d;
+}
+
+/* Le voisin est un fond de lecture : teinté par son filtre, multiplié avec le plan (le blanc disparaît),
+   jamais attrapable. */
+.th-fantome {
+  opacity: 0.6;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+
+/* Calage (S2, D173) : le panneau qui guide les quatre clics, en bas du plan. */
+.th-calage {
+  position: absolute;
+  left: 0.75rem;
+  bottom: 0.75rem;
+  z-index: 5;
+  display: grid;
+  gap: 0.3rem;
+  max-width: min(34rem, calc(100% - 1.5rem));
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--po2-color-line);
+  border-radius: var(--po2-radius-sm);
+  background: var(--po2-color-paper);
+  color: var(--po2-color-ink);
+  font-size: 0.82rem;
+  box-shadow: 0 2px 10px rgb(0 0 0 / 0.18);
+}
+
+.th-calage__ligne {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.th-calage__ligne--inferieur {
+  border-left: 3px solid #1a59f2;
+  padding-left: 0.4rem;
+}
+
+.th-calage__ligne--superieur {
+  border-left: 3px solid #f2730d;
+  padding-left: 0.4rem;
+}
+
+.th-calage__message {
+  font-weight: 600;
+}
+
+/* Les points cliqués : croix de couleur sur le calque, croix noire sur le plan, reliées d'un trait. Le plan
+   est toujours blanc : des couleurs fixes, pas les jetons du thème. */
+.th-calage-points line,
+.th-calage-points circle {
+  stroke-width: 2;
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+
+.th-calage-points__plan line,
+.th-calage-points__plan circle {
+  stroke: #111827;
+}
+
+.th-calage-points--inferieur .th-calage-points__voisin line,
+.th-calage-points--inferieur .th-calage-points__voisin circle {
+  stroke: #1a59f2;
+}
+
+.th-calage-points--superieur .th-calage-points__voisin line,
+.th-calage-points--superieur .th-calage-points__voisin circle {
+  stroke: #f2730d;
+}
+
+.th-calage-points__lien {
+  stroke: #111827;
+  stroke-dasharray: 4 3;
+}
+
 /* Métrés dessinés sur le plan : ils se lisent, ils ne se cliquent pas — le geste va toujours au plan (D79). */
 /* Le plan est une image raster toujours blanche. Ce qu'on dessine dessus ne doit donc PAS suivre le
    thème de l'application : en mode sombre, `--po2-color-ink` devient presque blanc et les cotes, la

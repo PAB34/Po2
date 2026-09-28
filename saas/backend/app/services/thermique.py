@@ -30,7 +30,7 @@ from app.core.roles import THERMIQUE_EXTERNAL_ROLE
 from app.core.security import get_password_hash
 from app.models.thermique import ThermiqueDocument, ThermiqueProject, ThermiqueSheet
 from app.models.user import User
-from app.services import thermique_nord
+from app.services import thermique_calage, thermique_nord
 from app.services.auth import get_user_by_email
 from app.services.thermique_raster import raster_root
 
@@ -416,6 +416,7 @@ def serialize_sheet(sheet: ThermiqueSheet) -> dict[str, Any]:
         "status": sheet_status(sheet),
         "calibration": sheet_calibration(sheet),
         "nord": thermique_nord.charger(sheet),
+        "calage": thermique_calage.charger(sheet),
     }
 
 

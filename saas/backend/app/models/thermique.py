@@ -84,6 +84,9 @@ class ThermiqueSheet(Base):
     # Nord de la planche : flèche tracée par le thermicien, en coordonnées PDF (pt), donc insensible
     # à la rotation d'affichage. {"p1": [x, y], "p2": [x, y]} — p2 est la pointe, du côté du nord.
     north_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Calage sur la planche de référence du projet (S2, D173) : similitude de ses points PDF vers ceux de
+    # la référence, et les deux paires de points qui l'ont donnée. Voir `thermique_calage.py`.
+    calage_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     rotation_deg: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     page_width_pt: Mapped[float] = mapped_column(Float, nullable=False)
     page_height_pt: Mapped[float] = mapped_column(Float, nullable=False)

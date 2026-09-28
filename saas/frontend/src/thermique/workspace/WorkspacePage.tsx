@@ -22,6 +22,8 @@ import { coteAt, empreinteCote, milieuCote, rangVise, type CoteVisee } from "./c
 import { elementDuPont, paroisATrancher, pontAt, pontDeElement, trouverElement, viserSurLePlan } from "./elements";
 import { etapeCourante, parcours, vueDeLEtape, type EtapeId } from "./parcours";
 import { TYPES_PONT_REATTRIBUABLES } from "./pontsTypes";
+import { NiveauFantome, PointsDeCalage } from "./NiveauFantome";
+import { appliquer, calageAEnregistrer, correspondance, inverser, niveauxVoisins } from "./superposition";
 import { useStudyEdition } from "./useStudyEdition";
 import { useStudyElements } from "./useStudyElements";
 import { cibleEditable } from "./elementsHistory";
@@ -160,6 +162,17 @@ export function WorkspacePage() {
   const clicsCote = useRef(0);
   // « Valider ce local » : un geste à part depuis que les recadrages se conservent localement (Q7).
   const [validation, setValidation] = useState<{ busy: boolean; message: string | null }>({ busy: false, message: null });
+  // Superposition des niveaux (S3, D168, D169) : les deux cases « Voir niveau inférieur / supérieur ».
+  const [fantomes, setFantomes] = useState<{ inferieur: boolean; superieur: boolean }>({ inferieur: false, superieur: false });
+  // Calage en cours (S2, D173) : paires [point du voisin, point du plan actif], puis le point du voisin en
+  // attente de son jumeau sur le plan actif.
+  const [calage, setCalage] = useState<{
+    sens: "inferieur" | "superieur";
+    paires: [PdfPoint, PdfPoint][];
+    enAttente: PdfPoint | null;
+    message: string | null;
+    busy: boolean;
+  } | null>(null);
 
   const { data: project, error } = useQuery({
     queryKey: projectQueryKey(projectId),
@@ -228,6 +241,7 @@ export function WorkspacePage() {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setPoints([]);
+        setCalage(null);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -249,6 +263,80 @@ export function WorkspacePage() {
     staleTime: RASTER_STALE_MS,
   });
   const viewKey = `${sheetId}|${rotation}`;
+  // Les niveaux voisins et leurs images, chargées seulement quand leur case est cochée (S3).
+  const voisins = niveauxVoisins(sheets, sheet ?? null);
+  const rasterInferieur = useQuery({
+    queryKey: ["thermique", "raster", voisins.inferieur?.id ?? null, voisins.inferieur?.rotation_deg ?? 0],
+    queryFn: () => thermiqueApi.getRaster(token!, voisins.inferieur!.id, voisins.inferieur!.rotation_deg),
+    enabled: Boolean(token && voisins.inferieur && (fantomes.inferieur || calage?.sens === "inferieur")),
+    staleTime: RASTER_STALE_MS,
+  });
+  const rasterSuperieur = useQuery({
+    queryKey: ["thermique", "raster", voisins.superieur?.id ?? null, voisins.superieur?.rotation_deg ?? 0],
+    queryFn: () => thermiqueApi.getRaster(token!, voisins.superieur!.id, voisins.superieur!.rotation_deg),
+    enabled: Boolean(token && voisins.superieur && (fantomes.superieur || calage?.sens === "superieur")),
+    staleTime: RASTER_STALE_MS,
+  });
+  const referenceProjet = project?.reference_sheet_id ?? null;
+  const fantomesAffiches = (["inferieur", "superieur"] as const).flatMap((sens) => {
+    const voisin = voisins[sens];
+    const image = sens === "inferieur" ? rasterInferieur.data : rasterSuperieur.data;
+    if (!voisin || !image || !sheet || !(fantomes[sens] || calage?.sens === sens)) return [];
+    return [{ sens, voisin, image, ...correspondance(voisin, sheet, referenceProjet) }];
+  });
+  // Changer de planche abandonne un calage commencé : ses points n'ont de sens que sur ce plan-ci.
+  useEffect(() => setCalage(null), [sheetId]);
+
+  const enregistrerCalage = async (sens: "inferieur" | "superieur", paires: [PdfPoint, PdfPoint][]) => {
+    const voisin = voisins[sens];
+    if (!voisin || !sheet || !token) return;
+    const geste = calageAEnregistrer(voisin, sheet, referenceProjet, paires);
+    if ("refus" in geste) {
+      setCalage({ sens, paires: [], enAttente: null, message: geste.refus, busy: false });
+      return;
+    }
+    setCalage({ sens, paires, enAttente: null, message: "Enregistrement du calage…", busy: true });
+    try {
+      const calee = await thermiqueApi.calerPlanche(token, geste.planche, {
+        cible_sheet_id: geste.cible,
+        points: geste.points,
+        points_cible: geste.points_cible,
+      });
+      await queryClient.invalidateQueries({ queryKey: projectQueryKey(projectId) });
+      const ecart = calee.calage?.ecart_echelle_pct;
+      setFantomes((current) => ({ ...current, [sens]: true }));
+      setCalage({
+        sens,
+        paires: [],
+        enAttente: null,
+        busy: false,
+        message:
+          ecart != null && Math.abs(ecart) > 2
+            ? `Calage enregistré, mais l'échelle trouvée s'écarte de ${ecart.toLocaleString("fr-FR")} % des échelles déclarées : un point est sans doute mal placé. Recommencez si le calque ne tombe pas juste.`
+            : "Calage enregistré : le niveau voisin se pose maintenant sur ce plan.",
+      });
+    } catch (echec) {
+      setCalage({ sens, paires: [], enAttente: null, busy: false, message: echec instanceof Error ? echec.message : "Le calage a échoué." });
+    }
+  };
+
+  // Un clic du calage : d'abord un point repérable du calque, puis le même point sur le plan actif (D173).
+  const cliquerCalage = (point: PdfPoint) => {
+    if (!calage || calage.busy) return;
+    const fantome = fantomesAffiches.find((item) => item.sens === calage.sens);
+    if (!fantome) return;
+    if (!calage.enAttente) {
+      setCalage({ ...calage, enAttente: appliquer(inverser(fantome.sim), point), message: null });
+      return;
+    }
+    const paires: [PdfPoint, PdfPoint][] = [...calage.paires, [calage.enAttente, point]];
+    if (paires.length < 2) {
+      setCalage({ ...calage, paires, enAttente: null });
+      return;
+    }
+    void enregistrerCalage(calage.sens, paires);
+  };
+
   const studyQuery = useQuery({
     queryKey: studyQueryKey(sheetId),
     queryFn: () => thermiqueApi.getStudy(token!, sheetId!),
@@ -618,11 +706,15 @@ export function WorkspacePage() {
               key={viewKey}
               manifest={raster.data}
               tileTemplate={thermiqueApi.apiUrl(raster.data.tile_url)}
-              tool={editionState.draft ? "edition" : tool}
+              tool={editionState.draft ? "edition" : calage ? "calage" : tool}
               points={points}
               segments={editionState.draft ? [] : sheetSegments(sheet, tool, points)}
               onAddPoint={(point) => {
                 if (editionState.handlers.onAddPoint(point)) return;
+                if (calage) {
+                  cliquerCalage(point);
+                  return;
+                }
                 setPoints((current) => (current.length >= 2 ? [point] : [...current, point]));
               }}
               onPick={(point, pixelsPerPt) => {
@@ -791,9 +883,28 @@ export function WorkspacePage() {
               onViewChange={(view) => views.current.set(viewKey, view)}
               focus={focusPlan}
               renderTools={
-                shownStudy ? (
-                  <div className="th-viewer__display" role="group" aria-label="Ce qui s'affiche sur le plan">
-                    {METRICS_CASES.map((item) => (
+                <div className="th-viewer__display" role="group" aria-label="Ce qui s'affiche sur le plan">
+                  {/* Superposition des niveaux (S3, D169) : deux cases indépendantes, à toutes les étapes. */}
+                  {(["inferieur", "superieur"] as const).map((sens) => {
+                    const voisin = voisins[sens];
+                    return (
+                      <label
+                        key={sens}
+                        className={`th-viewer__fantome th-viewer__fantome--${sens}`}
+                        title={voisin ? `En transparence : ${sheetTitle(voisin)}` : "Pas de plan de niveau à cet étage"}
+                      >
+                        <input
+                          type="checkbox"
+                          disabled={!voisin}
+                          checked={fantomes[sens]}
+                          onChange={() => setFantomes((current) => ({ ...current, [sens]: !current[sens] }))}
+                        />
+                        {sens === "inferieur" ? "Voir niveau inférieur" : "Voir niveau supérieur"}
+                      </label>
+                    );
+                  })}
+                  {shownStudy &&
+                    METRICS_CASES.map((item) => (
                       <label key={item.cle} title={item.titre}>
                         <input
                           type="checkbox"
@@ -803,13 +914,31 @@ export function WorkspacePage() {
                         {item.label}
                       </label>
                     ))}
-                    {/* Dire qui commande, sinon une case cochée par l'étape passe pour un bug (Q6). */}
-                    {calquesPilotes && <small className="th-viewer__pilote">réglés par l'étape</small>}
-                  </div>
-                ) : undefined
+                  {/* Dire qui commande, sinon une case cochée par l'étape passe pour un bug (Q6). */}
+                  {shownStudy && calquesPilotes && <small className="th-viewer__pilote">réglés par l'étape</small>}
+                </div>
               }
-              renderOverlay={(toScreen) => (
+              renderOverlay={(toScreen, taille) => (
                 <>
+                  {/* Le voisin passe sous tout le reste : c'est un fond de lecture, pas un objet du plan. */}
+                  {fantomesAffiches.map((fantome) => (
+                    <NiveauFantome
+                      key={fantome.sens}
+                      manifest={fantome.image}
+                      tileTemplate={thermiqueApi.apiUrl(fantome.image.tile_url)}
+                      sim={fantome.sim}
+                      toScreen={toScreen}
+                      taille={taille}
+                      sens={fantome.sens}
+                    />
+                  ))}
+                  {calage && (
+                    <PointsDeCalage
+                      calage={calage}
+                      sim={fantomesAffiches.find((item) => item.sens === calage.sens)?.sim ?? null}
+                      toScreen={toScreen}
+                    />
+                  )}
                   <NorthOverlay nord={sheet.nord} enCours={points} toScreen={toScreen} actif={tool === "nord"} />
                   {shownStudy && (
                     <>
@@ -851,6 +980,42 @@ export function WorkspacePage() {
             </div>
           )}
           {menu && <PlanMenu x={menu.x} y={menu.y} actions={menu.actions} onClose={() => setMenu(null)} />}
+          {/* Calage des niveaux (S2, D173) : dit si le calque tombe juste, et guide les quatre clics. */}
+          {(fantomesAffiches.length > 0 || calage) && (
+            <div className="th-calage" role="status">
+              {calage ? (
+                <>
+                  <strong>Calage de {voisins[calage.sens] ? sheetTitle(voisins[calage.sens]!) : "niveau"}</strong>
+                  <span>
+                    {calage.busy
+                      ? "Enregistrement…"
+                      : calage.enAttente
+                        ? `${calage.paires.length * 2 + 2}/4 · Cliquez le même point sur le plan actif.`
+                        : `${calage.paires.length * 2 + 1}/4 · Cliquez un point repérable du calque ${
+                            calage.sens === "inferieur" ? "bleu" : "orange"
+                          } : croisement d'axes, angle de cage d'escalier, poteau.`}
+                  </span>
+                  {calage.message && <span className="th-calage__message">{calage.message}</span>}
+                  <button type="button" className="th-link" onClick={() => setCalage(null)} title="Raccourci : Échap">
+                    {calage.busy || calage.paires.length || calage.enAttente ? "Annuler" : "Fermer"}
+                  </button>
+                </>
+              ) : (
+                fantomesAffiches.map((fantome) => (
+                  <span key={fantome.sens} className={`th-calage__ligne th-calage__ligne--${fantome.sens}`}>
+                    {sheetTitle(fantome.voisin)} : {fantome.calee ? "calé" : "posé provisoirement, non calé"}
+                    <button
+                      type="button"
+                      className="th-link"
+                      onClick={() => setCalage({ sens: fantome.sens, paires: [], enAttente: null, message: null, busy: false })}
+                    >
+                      {fantome.calee ? "Recaler" : "Caler ce niveau"}
+                    </button>
+                  </span>
+                ))
+              )}
+            </div>
+          )}
         </div>
 
         <aside className="th-panel th-ws__panel" aria-label={PANELS.find((item) => item.id === panel)?.label}>

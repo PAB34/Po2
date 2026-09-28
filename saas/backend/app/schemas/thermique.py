@@ -42,6 +42,8 @@ class SheetRead(BaseModel):
     status: str
     calibration: SheetCalibration | None
     nord: SheetNord | None = None
+    # Calage sur la planche de référence (S2, D173) : similitude a, b, tx, ty et ses points d'appui.
+    calage: dict[str, Any] | None = None
 
 
 class DocumentRead(BaseModel):
@@ -100,6 +102,14 @@ class SheetUpdate(BaseModel):
     level_label: str | None = Field(default=None, max_length=80)
     rotation_deg: int | None = None
     scale_denominator: float | None = Field(default=None, gt=0, le=10000)
+
+
+class CalageRequest(BaseModel):
+    """Deux points de la planche et les deux mêmes points sur une planche déjà calée, en points PDF."""
+
+    cible_sheet_id: int
+    points: list[list[float]] = Field(min_length=2, max_length=2)
+    points_cible: list[list[float]] = Field(min_length=2, max_length=2)
 
 
 class NordRequest(BaseModel):

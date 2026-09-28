@@ -40,6 +40,21 @@ export type Sheet = {
   status: SheetStatus;
   calibration: SheetCalibration | null;
   nord: SheetNorth | null;
+  /** Calage sur la planche de référence (S2, D173) : similitude de ses points PDF vers ceux de la référence. */
+  calage?: SheetCalage | null;
+};
+
+export type SheetCalage = {
+  a: number;
+  b: number;
+  tx: number;
+  ty: number;
+  reference_sheet_id: number;
+  cible_sheet_id: number;
+  points: PdfPoint[];
+  points_cible: PdfPoint[];
+  /** Écart entre le rapport d'échelle trouvé et celui des échelles déclarées, en %. */
+  ecart_echelle_pct: number | null;
 };
 
 export type ThermiqueDocument = {
@@ -415,6 +430,12 @@ export const thermiqueApi = {
   /** Pose le nord : p1 la base de la flèche, p2 sa pointe du côté du nord. Renvoie les planches modifiées. */
   setNorth: (token: string, sheetId: number, payload: { p1: PdfPoint; p2: PdfPoint; tout_le_projet: boolean }) =>
     request<Sheet[]>(token, `/thermique/sheets/${sheetId}/nord`, { method: "POST", body: JSON.stringify(payload) }),
+  /** Cale la planche sur la référence par deux points communs avec une planche déjà calée (S2, D173). */
+  calerPlanche: (
+    token: string,
+    sheetId: number,
+    payload: { cible_sheet_id: number; points: PdfPoint[]; points_cible: PdfPoint[] },
+  ) => request<Sheet>(token, `/thermique/sheets/${sheetId}/calage`, { method: "POST", body: JSON.stringify(payload) }),
   getStudy: (token: string, sheetId: number) => request<Study | null>(token, `/thermique/sheets/${sheetId}/etude`),
   getPontsCatalogue: (token: string) => request<PontsCatalogue>(token, "/thermique/ponts/catalogue"),
   importStudy: (token: string, sheetId: number, file: File, replace = false) => {

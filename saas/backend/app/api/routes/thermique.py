@@ -40,6 +40,7 @@ from app.schemas.thermique import (
     ExternalAccountCreate,
     ExternalAccountRead,
     MiseEnFileResult,
+    CalageRequest,
     NordRequest,
     ProjectCreate,
     ProjectDetail,
@@ -84,6 +85,7 @@ from app.services.thermique_composants import (
     update_component,
 )
 from app.services import thermique_etude_edition as edition
+from app.services import thermique_calage
 from app.services import thermique_nord
 from app.services import thermique_ponts_catalogue as ponts_catalogue
 from app.services import thermique_travaux as travaux
@@ -593,6 +595,36 @@ def definir_nord_route(
             continue
     db.commit()
     return [serialize_sheet(cible) for cible in cibles]
+
+
+@router.post("/sheets/{sheet_id}/calage", response_model=SheetRead)
+def caler_planche_route(
+    sheet_id: int,
+    payload: CalageRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Cale la planche sur la référence du projet, par deux points communs avec une planche calée (S2, D173)."""
+    sheet = _sheet_or_404(db, user, sheet_id)
+    cible = _sheet_or_404(db, user, payload.cible_sheet_id)
+    if cible.project_id != sheet.project_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Les deux planches ne sont pas du même projet.")
+    project = db.get(ThermiqueProject, sheet.project_id)
+    if project is None or project.reference_sheet_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Choisissez d'abord la planche de référence du projet : les niveaux se calent sur elle.",
+        )
+    try:
+        calage = thermique_calage.caler(
+            sheet, cible, project.reference_sheet_id, payload.points, payload.points_cible
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    sheet.calage_json = json.dumps(calage, allow_nan=False, separators=(",", ":"))
+    db.commit()
+    db.refresh(sheet)
+    return serialize_sheet(sheet)
 
 
 def _rafraichir_orientations(db: Session, sheet: ThermiqueSheet) -> None:
