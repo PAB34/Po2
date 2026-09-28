@@ -5,6 +5,9 @@ import { LIBELLES_TYPE, memeElement, pontDeElement, refDeElement } from "./eleme
 import { avancement, pontsDuNiveau } from "./parcours";
 import {
   A_MODELISER,
+  alerteAngle,
+  coefficientAngle,
+  TYPES_ANGLE,
   libellePontType,
   libelleReference,
   pontsTypesPour,
@@ -39,6 +42,44 @@ function Position({ rang, total, reste }: { rang: number; total: number; reste: 
   );
 }
 
+const nombre = (valeur: number, decimales = 2) =>
+  valeur.toLocaleString("fr-FR", { minimumFractionDigits: decimales, maximumFractionDigits: decimales });
+
+/**
+ * L'angle réel d'un angle sortant ou rentrant et ce qu'il fait à ψ (remarque E, D160). L'angle saisi
+ * l'emporte sur la mesure du tracé ; il est lu sur l'élément, pour que la saisie se voie tout de suite.
+ */
+function AngleDuPont({
+  element,
+  mesure,
+  catalogue,
+}: {
+  element: StudyReleveElement;
+  mesure: number | null;
+  catalogue?: PontsCatalogue | null;
+}) {
+  if (!TYPES_ANGLE.includes(element.type)) return null;
+  const angle = element.angle_deg ?? mesure;
+  const coefficient = coefficientAngle(angle);
+  const type = catalogue?.ponts.find((item) => item.code === element.reference_pont);
+  const alerte = alerteAngle(angle);
+  return (
+    <>
+      <p className="th-muted">
+        {angle == null
+          ? "Angle non mesurable ici : l'angle droit du catalogue est retenu (ψ × 1)."
+          : `Angle : ${nombre(angle, 0)}° (${element.angle_deg != null ? "saisi par vous" : "mesuré sur le tracé"}) → ψ × ${nombre(coefficient)}`}
+      </p>
+      {type && (
+        <p className="th-ponts__reference">
+          ψ retenu : {nombre(type.psi_i)} × {nombre(coefficient)} = {nombre(type.psi_i * coefficient)} W/(m·K)
+        </p>
+      )}
+      {alerte && <p className="th-alert th-alert--warn">{alerte}</p>}
+    </>
+  );
+}
+
 /** Ce que l'agent a lu du pont, et où il se trouve. Rien de plus : une chose à la fois (D107). */
 function Lecture({
   element,
@@ -60,6 +101,7 @@ function Lecture({
       </p>
       {element.composant && <p className="th-muted">Composant : {element.composant}</p>}
       {reference && <p className="th-ponts__reference">{reference}</p>}
+      <AngleDuPont element={element} mesure={pont?.angle_mesure_deg ?? null} catalogue={catalogue} />
       {/* Un pont posé par le thermicien n'a pas de lecture d'agent à montrer : on dit d'où il vient. */}
       {element.ajoute ? (
         <p className="th-muted">Pont posé par vous sur le plan.</p>
@@ -80,18 +122,25 @@ function Lecture({
  */
 function Reattribution({
   element,
+  mesure,
   catalogue,
   busy,
   onValider,
   onRevenir,
 }: {
   element: StudyReleveElement;
+  /** Angle lu sur le tracé, proposé tel quel ; le changer le saisit (D160). */
+  mesure: number | null;
   catalogue?: PontsCatalogue | null;
   busy: boolean;
-  onValider: (type: string, reference: string) => void;
+  onValider: (type: string, reference: string, angle: number | null) => void;
   onRevenir: () => void;
 }) {
   const [type, setType] = useState(element.type);
+  const depart = element.angle_deg ?? mesure;
+  const [angle, setAngle] = useState(depart == null ? "" : String(Math.round(depart)));
+  const angleSaisi = angle.trim() === "" ? null : Number(angle.replace(",", "."));
+  const angleInvalide = angleSaisi != null && (!Number.isFinite(angleSaisi) || angleSaisi <= 0 || angleSaisi > 180);
   const proposes = catalogue ? pontsTypesPour(catalogue, type) : [];
   const [reference, setReference] = useState(element.reference_pont ?? proposes[0]?.code ?? A_MODELISER);
   const autres = catalogue ? catalogue.ponts.filter((pont) => !proposes.includes(pont)) : [];
@@ -146,6 +195,25 @@ function Reattribution({
           <option value={A_MODELISER}>À modéliser — absent du catalogue</option>
         </select>
       </label>
+      {TYPES_ANGLE.includes(type) && (
+        <label>
+          Angle réel, en degrés (90 = angle droit)
+          <input
+            inputMode="decimal"
+            value={angle}
+            disabled={busy}
+            onChange={(event) => setAngle(event.target.value)}
+            placeholder="non mesuré : 90 retenu"
+          />
+          {angleInvalide ? (
+            <small className="th-alert th-alert--warn">L'angle se donne entre 0 et 180 degrés.</small>
+          ) : (
+            <small className="th-muted">
+              ψ minoré à proportion : × {coefficientAngle(angleSaisi).toLocaleString("fr-FR")}
+            </small>
+          )}
+        </label>
+      )}
       {!catalogue && <small className="th-muted">Catalogue des ponts types en cours de chargement…</small>}
       {choisi && (
         <small className="th-muted">
@@ -157,8 +225,12 @@ function Reattribution({
         <button
           type="button"
           className="po2-button po2-button--primary"
-          disabled={busy}
-          onClick={() => onValider(type, reference)}
+          disabled={busy || angleInvalide}
+          onClick={() => {
+            // L'angle n'est saisi que s'il a changé : la mesure du tracé reste sinon la référence.
+            const change = TYPES_ANGLE.includes(type) && angleSaisi != null && angleSaisi !== (depart == null ? null : Math.round(depart));
+            onValider(type, reference, change ? angleSaisi : null);
+          }}
         >
           Réattribuer
         </button>
@@ -243,12 +315,16 @@ export function PontsPanel({
     suivant();
   }
 
-  function reattribuerA(type: string, reference: string) {
+  function reattribuerA(type: string, reference: string, angle: number | null) {
     if (!element) return;
     onOperation({
       type: "element_corriger",
       element: refDeElement(element),
-      changes: { ...(type !== element.type ? { type } : {}), reference_pont: reference },
+      changes: {
+        ...(type !== element.type ? { type } : {}),
+        reference_pont: reference,
+        ...(angle != null ? { angle_deg: angle } : {}),
+      },
       portee: "cet_element",
     });
     suivant();
@@ -300,6 +376,7 @@ export function PontsPanel({
               <Reattribution
                 key={`${rang}-${catalogue ? "catalogue" : "attente"}`}
                 element={element}
+                mesure={pontDeElement(content, element)?.angle_mesure_deg ?? null}
                 catalogue={catalogue}
                 busy={busy}
                 onValider={reattribuerA}

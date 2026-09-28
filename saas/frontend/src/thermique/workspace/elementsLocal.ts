@@ -28,6 +28,12 @@ export function refusDeCorrection(element: StudyReleveElement, changes: StudyEle
   if (futur.reference_pont && !["angle_sortant", "angle_rentrant", "about_refend"].includes(futur.type)) {
     return "Seul un pont thermique (angle ou about de refend) porte un pont type du catalogue.";
   }
+  if (changes.angle_deg != null) {
+    if (!["angle_sortant", "angle_rentrant"].includes(futur.type)) return "Seul un angle sortant ou rentrant porte un angle.";
+    if (!(changes.angle_deg > 0 && changes.angle_deg <= 180)) {
+      return "L'angle se donne en degrés, entre 0 et 180 (90 pour un angle droit).";
+    }
+  }
   const paires: [number | undefined, number | undefined][] = [
     [futur.nu_exterieur_cm, futur.nu_interieur_cm],
     [futur.nu_exterieur_fin_cm, futur.nu_interieur_fin_cm],

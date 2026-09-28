@@ -27,6 +27,25 @@ export function pontsTypesPour(catalogue: PontsCatalogue, type: string): PontTyp
   );
 }
 
+export const TYPES_ANGLE = ["angle_sortant", "angle_rentrant"];
+
+// Mêmes seuils que le serveur (`thermique_angles.py`).
+export const ANGLE_PLAT_DEG = 15;
+export const ANGLE_FERME_DEG = 135;
+
+/** Minoration proportionnelle (D160) : ψ(θ) = ψ₉₀ × θ / 90 ; sans angle connu, l'angle droit du catalogue. */
+export function coefficientAngle(angle: number | null | undefined): number {
+  return angle == null ? 1 : Math.round((angle / 90) * 1000) / 1000;
+}
+
+/** Ce que l'angle dit du pont, quand il faut le regarder à deux fois. */
+export function alerteAngle(angle: number | null | undefined): string | null {
+  if (angle == null) return null;
+  if (angle < ANGLE_PLAT_DEG) return "Le tracé ne tourne presque pas ici : ce n'est sans doute pas un angle.";
+  if (angle > ANGLE_FERME_DEG) return "Angle très fermé : le tracé est suspect, vérifiez-le sur le plan.";
+  return null;
+}
+
 const psi = (valeur: number) => valeur.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /** « C1 — isolant à l'extérieur · ψi 0,15 W/(m·K) ». ψi : l'outil mesure au nu intérieur (D159). */

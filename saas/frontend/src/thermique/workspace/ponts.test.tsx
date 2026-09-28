@@ -5,7 +5,7 @@ import type { PontsCatalogue, StudyBridge, StudyContent, StudyElementRef, StudyR
 import { PontsPanel } from "./PontsPanel";
 import { StudyMetrics } from "./StudyMetrics";
 import { refDeElement } from "./elements";
-import { pontsTypesPour } from "./pontsTypes";
+import { alerteAngle, pontsTypesPour } from "./pontsTypes";
 import { appliquerEnLocal } from "./elementsLocal";
 
 const pont = (reste: Partial<StudyReleveElement> = {}): StudyReleveElement => ({
@@ -148,6 +148,45 @@ describe("un pont posé par le thermicien (remarque C, D157)", () => {
     expect(
       appliquerEnLocal(content, { type: "pont_ajouter", point_pdf: [10, 10], type_pont: "angle_sortant" }),
     ).toBe(content);
+  });
+});
+
+describe("l'angle réel d'un angle et la minoration de ψ (remarque E, D160)", () => {
+  const fiche = (element: StudyReleveElement, mesure: number | null) =>
+    renderToStaticMarkup(
+      <PontsPanel
+        content={etude([element], [liaison({ angle_mesure_deg: mesure })])}
+        selected={refDeElement(element)}
+        onSelect={rien}
+        busy={false}
+        message={null}
+        onOperation={rien}
+        catalogue={catalogue}
+      />,
+    );
+
+  it("un pan coupé à 45° divise ψ par deux, et le ψ retenu est calculé", () => {
+    const html = fiche(pont({ reference_pont: "C1" }), 45);
+    expect(html).toContain("Angle : 45° (mesuré sur le tracé) → ψ × 0,50");
+    expect(html).toContain("ψ retenu : 0,15 × 0,50 = 0,08 W/(m·K)");
+  });
+
+  it("l'angle saisi l'emporte sur la mesure du tracé", () => {
+    expect(fiche(pont({ angle_deg: 60 }), 45)).toContain("Angle : 60° (saisi par vous) → ψ × 0,67");
+  });
+
+  it("sans mesure, l'angle droit du catalogue est retenu, et on le dit", () => {
+    expect(fiche(pont(), null)).toContain("Angle non mesurable ici");
+  });
+
+  it("un tracé qui ne tourne pas, ou une épingle, est signalé", () => {
+    expect(alerteAngle(5)).toContain("sans doute pas un angle");
+    expect(alerteAngle(170)).toContain("tracé est suspect");
+    expect(alerteAngle(90)).toBeNull();
+  });
+
+  it("un about de refend n'a pas d'angle", () => {
+    expect(fiche(pont({ type: "about_refend" }), 90)).not.toContain("Angle :");
   });
 });
 

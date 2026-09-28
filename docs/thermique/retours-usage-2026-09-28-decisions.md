@@ -246,6 +246,27 @@ existe sous forme de document séparé : la norme elle-même renvoie ces valeurs
 5. **E** (angle porté par chaque pont, minoration) puis **Q10** (valeurs ψ).
 6. **F** (nature terrasse), **G2**, **G3**, **G4**.
 
+## Résultat — E, l'angle réel et la minoration de ψ (2026-09-28)
+
+- **Mesure** (`thermique_angles.py`) : l'angle d'un angle sortant ou rentrant est le changement de
+  direction entre son tronçon et celui qui le prolonge, à l'extrémité la plus proche (moins d'un mètre).
+  La façade se referme en boucle ; un tronçon lu depuis la face intérieure ne se prolonge que là où il
+  touche le suivant. Un pont posé à la main ne se mesure pas : son angle se saisit.
+- **Règle D160** : ψ retenu = ψi × θ / 90. Sans angle connu, 90° (le catalogue). Alertes sous 15° (« ce
+  n'est sans doute pas un angle ») et au-delà de 135° (« tracé suspect »).
+- **Écran** : la fiche du pont affiche « Angle : 45° (mesuré sur le tracé) → ψ × 0,50 » et, s'il a un pont
+  type, « ψ retenu : 0,15 × 0,50 = 0,08 W/(m·K) ». « Réattribuer… » propose l'angle, modifiable : le
+  changer le **saisit** (`angle_deg`, corrigeable sur un angle seulement, entre 0 et 180), et il l'emporte
+  sur la mesure.
+- Chaque liaison porte `angle_mesure_deg`, `angle_deg`, `angle_saisi`, `coefficient_angle`,
+  `reference_pont` (affichage ; aucun métré ne lit `liaisons`).
+- **Mesuré sur le vrai R+1** : métré inchangé (227, 222, 170,12 m, 289, 77). Sur les 64 angles : 23 droits
+  (75–105°), 26 ouverts (15–75°), 3 entre 105 et 135°, **5 au-delà de 135° signalés**, 7 non mesurables
+  (90° retenu). Somme des coefficients : **54,4** au lieu de 64 — les angles du niveau pèsent environ
+  15 % de moins qu'à angle droit partout.
+- Tests : 8 backend (`test_thermique_angles.py`, **130** tests thermiques ciblés au vert), 5 frontend
+  (**136** au vert), typecheck, build.
+
 ## Résultat — C, créer un pont au clic droit (2026-09-28)
 
 - À l'étape des ponts, le clic droit propose **« Ajouter un pont ici : angle sortant / angle rentrant /

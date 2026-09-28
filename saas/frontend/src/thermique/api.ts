@@ -131,6 +131,8 @@ export type StudyReleveElement = {
   reference_pont?: string;
   /** Pont posé par le thermicien, et non lu par l'agent (D157). */
   ajoute?: boolean;
+  /** Angle saisi par le thermicien ; sans lui, c'est la mesure du tracé qui vaut (D160). */
+  angle_deg?: number;
 };
 /** Un pont type du tableau C.2 de la NF EN ISO 14683 (D158). */
 export type PontType = {
@@ -166,6 +168,14 @@ export type StudyBridge = {
   confirme?: boolean;
   /** Posé par le thermicien (D157). */
   ajoute?: boolean;
+  /** Remarque E (D160) : changement de direction lu sur le tracé, `null` s'il ne se lit pas. */
+  angle_mesure_deg?: number | null;
+  /** Angle retenu : celui saisi par le thermicien, sinon la mesure. */
+  angle_deg?: number | null;
+  angle_saisi?: boolean;
+  /** Minoration proportionnelle de ψ : angle / 90 (1 sans angle connu). */
+  coefficient_angle?: number;
+  reference_pont?: string | null;
 };
 export type StudyRoomSheet = {
   piece: string;
@@ -251,6 +261,8 @@ export type StudyElementChanges = Partial<{
   composant: string;
   /** Pont type NF EN ISO 14683 (`C1`, `IW3`…) ou `a_modeliser` (D158). */
   reference_pont: string;
+  /** Angle réel d'un angle sortant ou rentrant, en degrés (D160). */
+  angle_deg: number;
   nu_exterieur_cm: number;
   nu_interieur_cm: number;
   nu_exterieur_fin_cm: number;

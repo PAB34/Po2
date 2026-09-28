@@ -20,6 +20,7 @@ from typing import Any
 from shapely.geometry import MultiPolygon, Point, Polygon
 from shapely.ops import unary_union
 
+from app.services import thermique_angles as angles
 from app.services import thermique_enveloppe_pieces as pieces_env
 from app.services import thermique_parcours_enveloppe as env
 
@@ -218,6 +219,17 @@ def liaisons_localisees(
                 "a_verifier": bool(element.get("a_verifier")),
                 "confirme": bool(element.get("confirme")),
                 "ajoute": bool(element.get("ajoute")),
+                # Remarque E (D160) : l'angle réel et la minoration qu'il vaut à ψ. Affiché, pas encore
+                # multiplié : le total ψ × longueur attend les hauteurs d'étage (D159).
+                "angle_mesure_deg": angles.angle_mesure(element, manifeste),
+                "angle_deg": angles.angle_retenu(element, manifeste),
+                "angle_saisi": isinstance(element.get("angle_deg"), (int, float)),
+                "coefficient_angle": (
+                    angles.coefficient(angles.angle_retenu(element, manifeste))
+                    if element["type"] in angles.ANGLES
+                    else 1.0
+                ),
+                "reference_pont": element.get("reference_pont"),
             }
         )
     return resultat

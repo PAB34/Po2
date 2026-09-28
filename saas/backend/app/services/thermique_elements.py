@@ -44,6 +44,8 @@ CHAMPS_CORRIGEABLES = (
     "composant",
     # Pont thermique : son pont type dans le catalogue NF EN ISO 14683, ou « a_modeliser » (D158).
     "reference_pont",
+    # Angle réel d'un angle sortant ou rentrant, quand la mesure du tracé est fausse ou absente (D160).
+    "angle_deg",
     "nu_exterieur_cm",
     "nu_interieur_cm",
     "nu_exterieur_fin_cm",
@@ -132,6 +134,10 @@ def _controler(element: dict[str, Any], changes: dict[str, Any]) -> dict[str, An
             if not texte:
                 raise ThermiqueError("Le composant ne peut pas être vide.")
             propres[champ] = texte
+        elif champ == "angle_deg":
+            if isinstance(valeur, bool) or not isinstance(valeur, (int, float)) or not 0 < valeur <= 180:
+                raise ThermiqueError("L'angle se donne en degrés, entre 0 et 180 (90 pour un angle droit).")
+            propres[champ] = float(valeur)
         elif champ == "reference_pont":
             texte = str(valeur or "").strip()
             if not ponts_catalogue.reference_valide(texte):
@@ -146,6 +152,8 @@ def _controler(element: dict[str, Any], changes: dict[str, Any]) -> dict[str, An
     # Un pont type ne s'accroche qu'à un pont : un mur « C1 » ne voudrait rien dire au calcul.
     if futur.get("reference_pont") and futur.get("type") not in TYPES_PONT:
         raise ThermiqueError("Seul un pont thermique (angle ou about de refend) porte un pont type du catalogue.")
+    if "angle_deg" in propres and futur.get("type") not in ("angle_sortant", "angle_rentrant"):
+        raise ThermiqueError("Seul un angle sortant ou rentrant porte un angle.")
     # Le nu intérieur est toujours en deçà du nu extérieur : sur les 227 éléments du R+1, pas une
     # exception. Une saisie inversée passerait sinon inaperçue et fausserait toutes les épaisseurs.
     for debut, fin in (("nu_exterieur_cm", "nu_interieur_cm"), ("nu_exterieur_fin_cm", "nu_interieur_fin_cm")):
