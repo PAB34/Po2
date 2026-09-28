@@ -1,0 +1,109 @@
+{
+  "format": "verite-terrain-coupes",
+  "version": 1,
+  "date": "2026-09-28",
+  "repere": "points PDF natifs de chaque page (origine en bas a gauche, y vers le haut), comme le reste de l'application",
+  "releve_par": "Claude, a l'oeil sur des rendus quadrilles ; projet 2 : traits mesures sur les pixels rouges",
+  "projets": {
+    "projet-1-frontignan": {
+      "dossier": "Po2/Thermique/PLAN EXEMPLE PROJET 1",
+      "echelle": 100,
+      "niveaux": {
+        "H00": {"cote_m": 0.00, "role": "sol fini RDC"},
+        "H10": {"cote_m": 4.16, "role": "sol fini R+1", "ngf_m": 7.66},
+        "H11": {"cote_m": 7.04, "role": "plafond fini R+1 (H10 + 2,88)"},
+        "H20": {"cote_m": 8.00, "role": "sol fini R+2"},
+        "H21": {"cote_m": 10.88, "role": "plafond fini R+2 (H20 + 2,88)"},
+        "H30": {"cote_m": 11.84, "role": "toiture"}
+      },
+      "plans": {
+        "PC04-FRONT-NIVEAU1.pdf": {
+          "niveau": "R+1",
+          "traits": [
+            {"nom": "A", "points": [[1144.5, 763.0], [1144.5, 1906.0]], "sens": [-1, 0], "dessin": "deux drapeaux, pas de trait"},
+            {"nom": "B", "points": [[1453.0, 1251.25], [280.5, 1251.25]], "sens": [0, -1], "dessin": "deux drapeaux, pas de trait"},
+            {"nom": "C", "points": [[824.0, 763.0], [824.0, 1906.0]], "sens": [1, 0], "dessin": "deux drapeaux, pas de trait"},
+            {"nom": "D", "points": [[1453.0, 905.75], [249.5, 905.75]], "sens": [0, 1], "dessin": "deux drapeaux, pas de trait"}
+          ]
+        }
+      },
+      "planches": {
+        "PC10-FRONT-COUPESAB.pdf": {
+          "vues": [
+            {"nom": "A", "nature": "coupe", "cadre": [882, 978, 1573, 2003], "haut_de_la_vue": [1, 0], "axes_de_trame": "A a R"},
+            {"nom": "B", "nature": "coupe", "cadre": [72, 1025, 763, 2062], "haut_de_la_vue": [1, 0], "axes_de_trame": "1 a 16"}
+          ]
+        },
+        "PC11-FRONT-COUPESCD.pdf": {
+          "vues": [
+            {"nom": "C", "nature": "coupe", "cadre": [930, 954, 1573, 2098], "haut_de_la_vue": [1, 0], "axes_de_trame": "A a R"},
+            {"nom": "D", "nature": "coupe", "cadre": [72, 1013, 763, 2062], "haut_de_la_vue": [1, 0], "axes_de_trame": "1 a 16"}
+          ]
+        }
+      },
+      "hauteurs_R+1": {
+        "regle": "chaque local coupe du R+1 a son plafond fini sur H11 : hauteur sous plafond fini 2,88 m (cote ecrite H10-H11 sur les quatre coupes)",
+        "traversees": {
+          "A": [
+            {"local": "piece-001", "nom_coupe": "6.1.1 Bureau direction", "hsp_m": 2.88},
+            {"local": "piece-002", "nom_coupe": "6.1.2 Bur.1", "hsp_m": 2.88, "note": "trait dans l'epaisseur du mur, a 5 cm du local"},
+            {"local": "piece-003", "nom_coupe": "6.1.2 Bur.2", "hsp_m": 2.88, "note": "idem"},
+            {"local": "piece-004", "nom_coupe": "6.1.2 Bur.3", "hsp_m": 2.88, "note": "idem"},
+            {"local": "piece-005", "nom_coupe": "6.1.2 Bur.4", "hsp_m": 2.88, "note": "idem"},
+            {"local": "piece-006", "nom_coupe": "6.1.2 Bur.5", "hsp_m": 2.88, "note": "idem"},
+            {"local": "piece-007", "nom_coupe": "6.1.2 Bur.6", "hsp_m": 2.88, "note": "idem, 7 cm"},
+            {"local": "piece-009", "nom_coupe": "6.1.3 Salle d'equipement", "hsp_m": 2.88}
+          ],
+          "B": [
+            {"local": "piece-006", "nom_coupe": "6.1.2 Bureau asst", "hsp_m": 2.88},
+            {"local": "piece-008", "nom_coupe": "(circulation, sans nom)", "hsp_m": 2.88},
+            {"local": "piece-012", "nom_coupe": "6.1.6 Salle de reunion", "hsp_m": 2.88},
+            {"local": "piece-021", "nom_coupe": "(escalier, vide)", "hsp_m": null, "note": "double hauteur : pas de plafond au R+1, a signaler"},
+            {"local": "piece-022", "nom_coupe": "4.2 Pole multimedia", "hsp_m": 2.88}
+          ],
+          "C": [
+            {"local": "piece-019", "nom_coupe": "4.2.4 Espace de formation", "hsp_m": 2.88},
+            {"local": "piece-021", "nom_coupe": "(escalier, vide)", "hsp_m": null, "note": "double hauteur"},
+            {"local": "piece-020", "nom_coupe": "4.3.4 Jeux video", "hsp_m": 2.88, "note": "nom abrege : plan = 4.3.4 et 4.5.2 lecture confort"}
+          ],
+          "D": []
+        },
+        "hors_volume_traverses": {"A": ["coursive"], "B": ["petite terrasse", "boite a vents"], "C": ["coursive"], "D": ["coursive"]}
+      }
+    },
+    "projet-2-balaruc": {
+      "dossier": "Po2/Thermique/PLAN EXEMPLE PROJET 2",
+      "echelle": 50,
+      "plans": {
+        "P03 PLAN R+1.pdf": {
+          "niveau": "R+1",
+          "traits": [
+            {"nom": "A", "points": [[1980.0, 2276.0], [1980.0, 840.0], [1844.0, 840.0], [1844.0, 538.0]], "sens": [-1, 0], "dessin": "trait rouge, un decroche"},
+            {"nom": "B", "points": [[1505.5, 2275.0], [1505.5, 613.0]], "sens": [-1, 0], "dessin": "trait rouge"},
+            {"nom": "C", "points": [[469.5, 1259.7], [1155.8, 1259.7], [1155.8, 1078.2], [1642.2, 1078.2], [1642.2, 841.7], [2389.2, 841.7], [2389.2, 983.7], [3276.5, 983.7]], "sens": [0, 1], "dessin": "trait rouge, quatre decroches"},
+            {"nom": "D", "points": [[377.5, 1170.2], [3275.5, 1186.7]], "sens": [0, 1], "dessin": "reperes aux deux bouts seulement ; les deux bouts different de 16 pt"},
+            {"nom": "E", "points": [[470.0, 1595.2], [3275.5, 1612.2]], "sens": [0, 1], "dessin": "idem"},
+            {"nom": "F", "points": [[470.0, 1789.2], [3275.5, 1805.7]], "sens": [0, 1], "dessin": "idem"}
+          ]
+        }
+      },
+      "planches": {
+        "C01 COUPES AA CC DD.pdf": {
+          "vues": [
+            {"nom": "CC", "nature": "coupe", "cadre": [185, 1592, 2696, 2266], "haut_de_la_vue": [0, 1]},
+            {"nom": "DD", "nature": "coupe", "cadre": [185, 859, 2696, 1525], "haut_de_la_vue": [0, 1]},
+            {"nom": "AA", "nature": "coupe", "cadre": [185, 92, 2106, 817], "haut_de_la_vue": [0, 1]}
+          ]
+        },
+        "C02 COUPES BB EE FF.pdf": {
+          "vues": [
+            {"nom": "FF", "nature": "coupe", "cadre": [202, 1659, 3151, 2317], "haut_de_la_vue": [0, 1]},
+            {"nom": "EE", "nature": "coupe", "cadre": [202, 884, 3151, 1575], "haut_de_la_vue": [0, 1]},
+            {"nom": "BB", "nature": "coupe", "cadre": [202, 126, 1685, 783], "haut_de_la_vue": [0, 1]},
+            {"nom": "Zoom sur menuiserie coupe BB", "nature": "detail", "cadre": [2123, 143, 2696, 733], "note": "piege : detail, ne se rattache a aucun trait"}
+          ]
+        }
+      }
+    }
+  }
+}

@@ -71,7 +71,7 @@ Ce qu'on en tire :
   déperdent, cohérente avec les dimensions intérieures (ψi).
 - (c) **Les deux**, chacune pour son usage : sous dalle pour les surfaces de parois et les ponts verticaux,
   sous plafond fini pour le volume. *Recommandé.*
-REPONSE :
+REPONSE :a
 
 **Q35 — Un local qu'aucune coupe ne traverse** (au R+1 du projet 1, quatre coupes pour une vingtaine de
 locaux : beaucoup ne seront pas traversés) :
@@ -79,47 +79,107 @@ locaux : beaucoup ne seront pas traversés) :
   affichée « déduite, pas lue », modifiable ;
 - (b) il reste sans hauteur tant que le thermicien ne l'a pas saisie ;
 - (c) il prend celle du **local voisin traversé** le plus proche.
-REPONSE :
+REPONSE : (a) mais thermicien peut bien évidemment modifier
 
 **Q36 — Deux lectures différentes pour un même local** (deux coupes qui le traversent, faux plafond partiel,
 rampant) :
 - (a) la plus petite, signalée ;
 - (b) la moyenne pondérée par la longueur traversée, signalée ;
 - (c) aucune retenue d'office : le thermicien choisit dans la fiche.
-REPONSE :
+REPONSE : b
 
 **Q37 — Quand l'agent des coupes travaille-t-il ?**
 - (a) **d'office** : dès qu'une planche est classée « coupe » ou « façade », elle entre dans la file du relais,
   après les niveaux ;
 - (b) **sur demande** : un bouton « Lire les coupes et façades » pour le projet ;
 - (c) d'office, mais les **traits de coupe d'un plan** sont relevés en même temps que l'étude de son niveau.
-REPONSE :
+REPONSE : a
 
 **Q38 — Les élévations n'ont pas de repère sur les plans.** Proposition : l'agent repère la **façade
 concernée** (orientation écrite + nord du projet + silhouette), et la « ligne épaisse » d'une élévation est
 **la façade du plan elle-même**, portant son nom (« Élévation Est ») ; un clic ouvre l'élévation. (a) d'accord
 (b) autre.
-REPONSE :
+REPONSE : a
 
 **Q39 — Où s'ouvre la vue au clic ?**
 - (a) **À côté du plan**, dans un panneau qui remplace la fiche de droite, cadré sur la vue ; survoler une
   pièce de la coupe allume le local sur le plan, et inversement. *Recommandé.*
 - (b) À la place du plan (on revient au plan par un bouton ou Échap).
 - (c) Dans une fenêtre flottante déplaçable au-dessus du plan.
-REPONSE :
+REPONSE : c
 
 **Q40 — Ordre des lots.** Proposition : **S5a + S5b** d'abord (les traits cliquables et l'ouverture de la
 vue : ce que vous avez demandé en premier), puis **S5c + S5d** (hauteurs), puis **S5e** (élévations).
 (a) d'accord (b) hauteurs d'abord, les traits ensuite.
-REPONSE :
+REPONSE : b
 
 **Q41 — Vérité terrain.** Avant d'écrire l'agent, je relève moi-même, à l'œil, sur les deux projets : les
 traits de coupe (position, sens), les vues de chaque planche, et pour le R+1 du projet 1 la hauteur de
 chaque local traversé. L'agent devra retrouver ce relevé ; son écart sera chiffré à chaque lot. (a) d'accord
 (b) seulement le projet 1.
-REPONSE :
+REPONSE : a
 
 ---
+
+## 3 bis. Décisions tirées des réponses (2026-09-28)
+
+**D178 — Une seule hauteur : sous plafond fini (Q34 a).** Du sol fini au plafond fini (sous le faux plafond
+s'il y en a un). Elle sert au volume, aux surfaces de parois et à la longueur des ponts verticaux (D159).
+Conséquence assumée : sous un faux plafond, la bande de mur entre faux plafond et dalle n'est pas comptée.
+
+**D179 — Local non traversé (Q35 a).** Il prend la hauteur **du niveau** — la plus fréquente parmi les locaux
+traversés du même niveau —, affichée « déduite, pas lue », et le thermicien la modifie librement.
+
+**D180 — Deux lectures pour un local (Q36 b).** Moyenne pondérée par la longueur traversée par chaque coupe,
+signalée dans la fiche avec les lectures qui la composent.
+
+**D181 — Agent d'office (Q37 a).** Une planche classée « coupe » ou « façade » entre dans la file du relais,
+après les niveaux, comme un travail d'un nouveau type.
+
+**D182 — Élévation repérée par sa façade (Q38 a).** L'agent désigne la façade du plan (orientation écrite,
+nord, silhouette) ; la ligne épaisse de l'élévation est cette façade.
+
+**D183 — Fenêtre flottante (Q39 c).** Un clic sur un trait ouvre la vue dans une fenêtre déplaçable au-dessus
+du plan, cadrée sur la vue.
+
+**D184 — Hauteurs d'abord (Q40 b).** Ordre : **S5c + S5d** (pièces de la coupe ↔ locaux, hauteur par local),
+puis **S5a + S5b** côté écran (traits cliquables, fenêtre), puis **S5e** (élévations). Le rattachement par la
+position le long du trait a quand même besoin des traits et des vues : ils sont **relevés dès le premier
+lot**, mais **montrés** seulement au second.
+
+**D185 — Vérité terrain sur les deux projets (Q41 a).** Traits de coupe et vues des deux projets, et
+hauteur de chaque local traversé du R+1 du projet 1, relevés à l'œil avant l'agent, dans
+`docs/thermique/verite-terrain-coupes.md`.
+
+## 3 ter. Règles de rattachement, tirées de la vérité terrain (2026-09-28)
+
+**D186 — Une coupe se lit par projection.** L'abscisse d'une pièce de la coupe correspond à la projection
+du plan sur la **droite du regard** (regarder dans le sens d = (dx, dy), c'est avoir la droite en (dy, −dx)).
+Les décrochés du trait, parallèles au regard, n'ont pas de largeur dans la coupe. Entre la coupe et le plan il
+ne manque qu'un **décalage**.
+
+**D187 — Deux calages indépendants.** Le décalage vient d'abord des **numéros de programme** communs
+(6.1.2, 4.3.4 : les textes sont abrégés, pas les numéros), sinon du **meilleur recouvrement**. Quand les deux
+existent et diffèrent de plus de 30 cm, la fiche le dit.
+
+**D188 — Trait dans l'épaisseur d'un mur.** Un local à moins de **15 cm** du trait est candidat. Chaque
+pièce de la coupe va au local qui porte **son numéro** ; à défaut, au local qu'elle **épouse** (recouvrement
+rapporté à la plus grande des deux étendues), pas à celui qu'elle recouvre le plus : une circulation qui
+longe tout le trait ne prend pas la place des bureaux.
+
+**D189 — L'étage se reconnaît.** Une coupe traverse tous les niveaux : on retient l'étage dont les pièces
+ressemblent le plus aux locaux du plan (numéros communs, puis recouvrement). Un volume posé plus bas qui
+monte à travers l'étage est une **double hauteur** : signalée, sans hauteur inventée.
+
+**Sol et plafond** se donnent par le **nom d'une ligne de niveau** de la coupe (H10, H11 : la cote écrite
+fait foi) ou par une position mesurée, calée sur les lignes de niveau connues. Une hauteur **écrite** sur la
+coupe l'emporte sur la mesure.
+
+**Résultat sur les données réelles (projet 1, R+1)** — `thermique_coupes.py`, 9 tests :
+- coupe A : **8 locaux sur 8**, par les noms comme sans eux ; le croisement géométrique seul en trouvait 2 ;
+  bon étage parmi trois ; 2,88 m partout ; les deux calages concordent à 11 cm ;
+- coupe C : formation et lecture confort à 2,88 m, atrium signalé en double hauteur ;
+- coupe D : aucune pièce rattachée, dit comme tel.
 
 ## 4. Ce que je vérifierai à chaque lot
 
