@@ -21,7 +21,14 @@ do_not_auto_read:
 
 > Mise à jour : **2026-09-28** (reprise Claude après les lots Codex du 25 au 28).
 
-- **▶️ REPRENDRE ICI — retours d'usage du 2026-09-28** (`thermique/retours-usage-2026-09-28-decisions.md`).
+- **🔥 PRIORITAIRE — superposition des niveaux, coupes et élévations** (`thermique/superposition-niveaux-decisions.md`).
+  Demande urgente de l'utilisateur (Q24) : voir en transparence le niveau du dessus / dessous pour lire
+  les liaisons plancher / mur. Méthode déjà écrite le 2026-09-14 (`metre-plans-decisions.md` §3, règle
+  des quatre quarts), calage décidé (Q10 : deux points communs) — **rien de construit**. Lots S1 niveaux
+  → S2 calage → S3 calque fantôme → S4 quatre quarts → S5 coupes. **En attente des réponses Q25 à Q29.**
+- **✅ EN PRODUCTION `5f133139`, puis LOCAL NON POUSSÉ `383d9064`** : P5, ajout de pont instantané
+  (`thermique/retours-ponts-2026-09-28-decisions.md`, Q19 à Q24 répondues ; P1 à P4 restent à faire).
+- **▶️ retours d'usage du 2026-09-28** (`thermique/retours-usage-2026-09-28-decisions.md`).
   **LOT LOCAL NON POUSSÉ** (l'utilisateur poussera plus tard) : correctif de l'**erreur 422** (plus de
   50 gestes refusés à l'enregistrement des ponts), sujet 2, « Valider ce local », puis **A** (chaque
   étape ne montre que ses objets, D155) et **B** (ponts attrapables, zonage estompé, D156). En attente
