@@ -670,6 +670,25 @@ def enregistrer_sheet_etude(
     return serialize_etude(db, etude)
 
 
+@router.post("/sheets/{sheet_id}/etude/locaux/{local_id}/valider", response_model=EtudeRead)
+def valider_local_route(
+    sheet_id: int,
+    local_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Valide un local sans recalcul ; refusé tant qu'un mur ou une menuiserie douteux n'est pas tranché (Q7)."""
+    sheet = _sheet_or_404(db, user, sheet_id)
+    etude = _etude_ou_404(db, sheet)
+    contenu = json.loads(etude.content_json)
+    try:
+        etats = edition.valider_local(contenu, json.loads(etude.local_states_json), local_id)
+    except ThermiqueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    etude = enregistrer_etude(db, etude, user, contenu, etats, "validation_local")
+    return serialize_etude(db, etude)
+
+
 @router.get("/sheets/{sheet_id}/etude/versions", response_model=list[EtudeVersionRead])
 def read_sheet_etude_versions(
     sheet_id: int,

@@ -543,3 +543,49 @@ def test_un_geste_sans_element_designe_est_refuse():
     contenu = _etude_avec_deux_elements()
     with pytest.raises(ThermiqueError, match="n'est pas désigné"):
         edition.appliquer(contenu, [{"type": "element_confirmer"}])
+
+
+def _etude_a_valider(**drapeaux_mur) -> dict:
+    """Un bureau, un mur douteux dessiné chez lui, un angle douteux, et un mur douteux chez le voisin."""
+    element = lambda troncon, debut, fin, type_, **reste: {  # noqa: E731
+        "troncon": troncon, "debut_m": debut, "fin_m": fin, "type": type_, "a_verifier": True, **reste
+    }
+    forme = lambda troncon, debut, fin, piece: {  # noqa: E731
+        "source_parcours": {"troncon": troncon, "debut_m": debut, "fin_m": fin, "piece": piece}
+    }
+    return {
+        "locaux": [{"id": "L1", "nom": "Bureau"}, {"id": "L2", "nom": "Salle"}],
+        "enveloppe": {
+            "releve_brut": {
+                "elements": [
+                    element("T01", 0.0, 3.0, "paroi", **drapeaux_mur),
+                    element("T01", 3.0, 3.0, "angle_sortant"),
+                    element("T02", 0.0, 4.0, "paroi"),
+                ]
+            },
+            "objets": [forme("T01", 0.0, 3.0, "Bureau"), forme("T02", 0.0, 4.0, "Salle")],
+            "liaisons": [{"type": "angle_sortant", "troncon": "T01", "abscisse_m": 3.0, "piece": "Bureau"}],
+        },
+    }
+
+
+def test_valider_un_local_est_refuse_tant_qu_un_mur_douteux_n_est_pas_tranche():
+    with pytest.raises(ThermiqueError, match="Il reste 1 mur ou menuiserie"):
+        edition.valider_local(_etude_a_valider(), {}, "L1")
+
+
+@pytest.mark.parametrize("drapeau", ["confirme", "corrige", "exclu"])
+def test_un_mur_tranche_libere_la_validation_et_les_ponts_ne_la_bloquent_pas(drapeau):
+    """Q7 : uniquement les côtés. L'angle douteux du bureau et le mur du voisin ne comptent pas."""
+    etats = edition.valider_local(_etude_a_valider(**{drapeau: True}), {"L2": {"status": "a_verifier"}}, "L1")
+    assert etats["L1"] == {"status": "valide", "motif": None}
+    assert etats["L2"] == {"status": "a_verifier"}
+
+
+def test_un_mur_que_l_agent_n_a_pas_mis_en_doute_est_tenu_pour_acquis():
+    assert edition.parois_a_trancher(_etude_a_valider(a_verifier=False), "L1") == []
+
+
+def test_valider_un_local_inconnu_est_refuse():
+    with pytest.raises(ThermiqueError, match="introuvable"):
+        edition.valider_local(_etude_a_valider(), {}, "L9")

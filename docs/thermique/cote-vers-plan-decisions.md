@@ -82,12 +82,32 @@ reste à préciser avant de coder — voir la fin de ce fichier.
   289 formes, 77 liaisons) est inchangé par construction.
 - Aucune recette authentifiée à la souris : aucun identifiant n'a été demandé, affiché ni saisi.
 
-## Ce qui reste à préciser (Q7)
+## Q7 — Valider un local : tranchée et codée le 2026-09-28
 
-Pour coder « valider un local exige que ses côtés soient jugés », il faut dire ce qu'est un côté jugé.
-Deux lectures possibles :
-1. **Les éléments d'enveloppe du côté sont tous tranchés** (confirmés, corrigés ou écartés) — c'est l'état
-   qui existe déjà en F4 ; la validation serait refusée tant qu'un mur ou une menuiserie du local reste
-   « à vérifier ».
-2. **Chaque côté porte sa propre coche « vu »**, posée par le thermicien depuis la liste — un état nouveau,
-   à stocker côté serveur.
+Deux lectures étaient possibles ; l'utilisateur a choisi **(a) : tous les murs et menuiseries du local
+sont tranchés (confirmés, corrigés ou écartés)**, plutôt qu'une coche « vu » par côté.
+
+**Constat en codant — un défaut en production.** Depuis D139 (lot Codex), un recadrage se *conserve*
+localement et l'enregistrement du lot se fait avec `valider: false` : **plus aucun geste ne validait un
+local**. L'étape « Locaux » du parcours ne pouvait donc plus jamais passer à « fait ».
+
+**D152 — La validation devient un geste à part.** Bouton « Valider ce local » sur la fiche, route
+`POST /sheets/{id}/etude/locaux/{local_id}/valider` : pas de recalcul, le contenu n'est pas touché, une
+version est créée (motif `validation_local`), puis la fiche enchaîne sur le premier local encore à valider
+(D63).
+
+**D153 — La règle est tenue par le serveur**, qui refuse (409) en disant combien de murs ou menuiseries
+restent. L'écran applique la même règle pour griser le bouton et l'expliquer. Les **ponts ne comptent
+pas** (Q7). Un élément que l'agent **n'a pas mis en doute est tenu pour acquis**, comme à l'étape
+« parois et menuiseries » (D114) : seuls les éléments « à vérifier » doivent être tranchés. *Hypothèse
+prise pour rester cohérent avec D114 ; l'exiger pour tous les éléments tient en une ligne
+(`a_verifier` à retirer du filtre, serveur et écran).*
+
+**D154 — Un travail en attente passe avant.** Contour en cours, corrections d'éléments ou modifications
+de locaux non enregistrées : le bouton est grisé et dit quoi faire, car le serveur ne les connaît pas
+encore.
+
+**Mesuré sur le vrai R+1** : **11 locaux sur 24** sont validables tout de suite ; les 13 autres
+totalisent **63** murs ou menuiseries à trancher, dont 28 dans le Pôle multimédia (64 à l'échelle du
+niveau, un n'étant rattaché à aucun local). Tests : 6 backend (`test_thermique_etude_edition.py`, 31 au
+vert), 7 frontend (`validation.test.tsx`, 115 tests thermiques au vert), typecheck et build.

@@ -21,13 +21,15 @@ do_not_auto_read:
 
 > Mise à jour : **2026-09-28** (reprise Claude après les lots Codex du 25 au 28).
 
-- **✅ LOCAL, NON POUSSÉ — sujet 2 : un côté se désigne de la fiche au plan et retour (D145 à D151).**
+- **✅ « Valider ce local » rétabli (Q7, D152 à D154).** Depuis le lot Codex D139, plus aucun geste ne
+  validait un local. Nouveau bouton sur la fiche et route dédiée sans recalcul ; refus tant qu'un mur ou
+  une menuiserie « à vérifier » du local n'est pas tranché ; les ponts ne comptent pas. R+1 : 11 locaux
+  sur 24 validables tout de suite, 63 éléments à trancher pour les autres.
+- **✅ Sujet 2 : un côté se désigne de la fiche au plan et retour (D145 à D151).**
   Cliquer un côté dans « Côtés et adjacences » le surligne sur le plan et l'y amène ; cliquer à
   l'intérieur d'un local près d'un côté le désigne dans la fiche. Sur le R+1, 207 côtés sur 222 se
   désignent au clic sur le plan, les 15 autres (courts, dans des redents) depuis la fiche. Aucun calcul
   touché. 108 tests front thermiques, typecheck et build. Décisions : `thermique/cote-vers-plan-decisions.md`.
-  **Question tranchée (Q7)** : valider un local n'exige **pas** ses ponts, **uniquement ses côtés** — le
-  sens de « côté jugé » reste à préciser avant de coder (deux lectures dans le fichier de décisions).
 - **✅ EN PRODUCTION (`15e07ccc`, 2026-09-28) — lots Codex.** Annuler / Rétablir des corrections
   d'éléments (`Ctrl+Z`, `Ctrl+Maj+Z`, `Ctrl+Y`, D116–D124) ; créer un local au clic droit dans le vide et
   le supprimer définitivement au clic droit (`creation-suppression-locaux-decisions.md`) ; `Échap` et

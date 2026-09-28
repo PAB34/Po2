@@ -19,13 +19,13 @@ import { StudyCoherenceReport, StudyCoverageBanner, StudyOverlay, StudyRoomCreat
 import { ElementPanel } from "./ElementPanel";
 import { PontsPanel } from "./PontsPanel";
 import { coteAt, empreinteCote, milieuCote, rangVise, type CoteVisee } from "./cotes";
-import { pontAt, pontDeElement, trouverElement, viserSurLePlan } from "./elements";
+import { paroisATrancher, pontAt, pontDeElement, trouverElement, viserSurLePlan } from "./elements";
 import { etapeCourante, parcours, type EtapeId } from "./parcours";
 import { useStudyEdition } from "./useStudyEdition";
 import { useStudyElements } from "./useStudyElements";
 import { cibleEditable } from "./elementsHistory";
 import { peutAnnulerEditionAvecEchap } from "./edition";
-import { NATURE_LABELS, otherLocalNatures, roomAt, studyQueryKey } from "./study";
+import { NATURE_LABELS, otherLocalNatures, roomAt, sortedStudyRooms, studyQueryKey } from "./study";
 
 type Panel = "planche" | "fiche" | "documents" | "bibliotheque" | "infos";
 
@@ -154,6 +154,8 @@ export function WorkspacePage() {
   // Le côté désigné, partagé entre la fiche et le plan (sujet 2, D145).
   const [coteVisee, setCoteVisee] = useState<CoteVisee | null>(null);
   const clicsCote = useRef(0);
+  // « Valider ce local » : un geste à part depuis que les recadrages se conservent localement (Q7).
+  const [validation, setValidation] = useState<{ busy: boolean; message: string | null }>({ busy: false, message: null });
 
   const { data: project, error } = useQuery({
     queryKey: projectQueryKey(projectId),
@@ -268,6 +270,7 @@ export function WorkspacePage() {
       }
       // Ouvrir un local, ou recliquer dans le sien hors d'un côté, relâche le côté désigné (D149).
       setCoteVisee(null);
+      setValidation({ busy: false, message: null });
       selectRoomDirect(id);
     },
     [editionState.draft, editionState.keepDraft, selectRoomDirect],
@@ -338,6 +341,30 @@ export function WorkspacePage() {
   // Désigner un côté relâche l'élément désigné, sinon la fiche resterait masquée (D150). Un second clic
   // sur le même côté le relâche (D146). Depuis la fiche, le plan va au côté ; depuis le plan, le côté est
   // déjà sous les yeux et le plan ne bouge pas.
+  // Ce qui empêche de valider le local ouvert : un travail en attente d'abord, puis les parois douteuses.
+  const validationBloquee = editionState.draft
+    ? "Terminez ou annulez d'abord la reprise du contour."
+    : elementsState.pending > 0
+      ? "Enregistrez d'abord les corrections d'éléments en attente."
+      : editionState.pending > 0
+        ? "Enregistrez ou abandonnez d'abord les modifications de locaux en attente."
+        : null;
+  const validerLocal = async () => {
+    if (!token || !sheetId || !selectedRoom) return;
+    setValidation({ busy: true, message: null });
+    try {
+      const enregistre = await thermiqueApi.validateStudyRoom(token, sheetId, selectedRoom.id);
+      queryClient.setQueryData<Study>(studyQueryKey(sheetId), enregistre);
+      setValidation({ busy: false, message: null });
+      // Enchaîner sur le premier local encore à valider, chauffés d'abord (D63).
+      const suivant = sortedStudyRooms(enregistre.content.locaux).find(
+        (room) => (enregistre.local_states[room.id]?.status ?? "a_verifier") !== "valide",
+      );
+      if (suivant) selectRoom(suivant.id);
+    } catch (error) {
+      setValidation({ busy: false, message: error instanceof Error ? error.message : "La validation a échoué." });
+    }
+  };
   const viserCote = (rang: number, depuis: "fiche" | "plan") => {
     if (!selectedRoom || rang === rangCote) {
       setCoteVisee(null);
@@ -816,6 +843,17 @@ export function WorkspacePage() {
                       edition={editionState.edition}
                       coteVisee={rangCote}
                       onCote={editionState.draft ? undefined : (rang) => viserCote(rang, "fiche")}
+                      validation={
+                        shownStudy && selectedRoom
+                          ? {
+                              restants: paroisATrancher(shownStudy.content, selectedRoom).length,
+                              bloque: validationBloquee,
+                              busy: validation.busy || editionState.busy || elementsState.busy,
+                              message: validation.message,
+                              onValider: () => void validerLocal(),
+                            }
+                          : undefined
+                      }
                     />
                   )}
                   {/* Les éléments du local, sous sa fiche et jamais en carte flottante (F4, Q8). */}

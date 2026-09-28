@@ -378,6 +378,10 @@ export const thermiqueApi = {
     sheetId: number,
     payload: { operations: StudyOperation[]; local_id?: string | null; motif?: string; valider?: boolean },
   ) => request<Study>(token, `/thermique/sheets/${sheetId}/etude/enregistrer`, { method: "POST", body: JSON.stringify(payload) }),
+  validateStudyRoom: (token: string, sheetId: number, localId: string) =>
+    request<Study>(token, `/thermique/sheets/${sheetId}/etude/locaux/${encodeURIComponent(localId)}/valider`, {
+      method: "POST",
+    }),
   listStudyVersions: (token: string, sheetId: number) =>
     request<StudyVersion[]>(token, `/thermique/sheets/${sheetId}/etude/versions`),
   restoreStudyVersion: (token: string, sheetId: number, numero: number) =>

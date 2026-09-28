@@ -378,12 +378,49 @@ function CoteLigne({
   );
 }
 
+/** Ce qu'il faut pour proposer « Valider ce local » (Q7). */
+export type StudyRoomValidation = {
+  /** Murs et menuiseries mis en doute par l'agent et pas encore tranchés. */
+  restants: number;
+  /** Un travail en attente qui doit être enregistré d'abord, dit en clair. */
+  bloque: string | null;
+  busy: boolean;
+  message: string | null;
+  onValider: () => void;
+};
+
+function ValidationLocal({ validation, valide }: { validation: StudyRoomValidation; valide: boolean }) {
+  const { restants, bloque, busy, message, onValider } = validation;
+  const raison = bloque
+    ? bloque
+    : restants > 0
+      ? `Encore ${restants} mur${restants > 1 ? "s" : ""} ou menuiserie${restants > 1 ? "s" : ""} à vérifier : confirmez, corrigez ou écartez-les ci-dessous. Les ponts thermiques ne bloquent pas la validation.`
+      : null;
+  return (
+    <div className="th-study-valider">
+      {!valide && (
+        <button
+          type="button"
+          className="po2-button po2-button--primary"
+          disabled={busy || Boolean(raison)}
+          onClick={onValider}
+        >
+          {busy ? "Validation…" : "Valider ce local"}
+        </button>
+      )}
+      {!valide && raison && <small className="th-muted">{raison}</small>}
+      {message && <p className="th-alert th-alert--warn">{message}</p>}
+    </div>
+  );
+}
+
 export function StudyRoomPanel({
   room,
   state,
   edition,
   coteVisee = null,
   onCote,
+  validation,
 }: {
   room: StudyRoom | null;
   state?: Study["local_states"][string];
@@ -391,6 +428,7 @@ export function StudyRoomPanel({
   /** Rang du côté désigné, partagé avec le plan (sujet 2). */
   coteVisee?: number | null;
   onCote?: (rang: number) => void;
+  validation?: StudyRoomValidation;
 }) {
   if (!room) {
     return <p className="th-muted">Sélectionnez un local sur le plan ou dans la liste pour ouvrir sa fiche.</p>;
@@ -432,6 +470,8 @@ export function StudyRoomPanel({
         <span className={`th-badge th-study-badge--${state?.status ?? "a_verifier"}`}>
           {(state?.status ?? "a_verifier").replace(/_/g, " ")}
         </span>
+        {state?.status === "a_revoir" && state.motif && <small className="th-muted"> — {state.motif}</small>}
+        {validation && <ValidationLocal validation={validation} valide={state?.status === "valide"} />}
       </div>
 
       {/* Une cote ne se dessine que si son tracé a voyagé avec la fiche (D80). Sans lui le plan reste

@@ -261,6 +261,19 @@ export function viserSurLePlan(
   return { ref, room: rooms.find((room) => room.nom === nom) ?? null };
 }
 
+/**
+ * Murs et menuiseries du local encore à trancher : ce qui empêche de le valider (Q7).
+ *
+ * Même règle que le serveur (`parois_a_trancher`) : les ponts n'entrent pas en compte, et un élément
+ * que l'agent n'a pas mis en doute est tenu pour acquis (D114).
+ */
+export function paroisATrancher(content: StudyContent, room: StudyRoom | null): StudyReleveElement[] {
+  return elementsDuLocal(content, room).filter(
+    (element) =>
+      !estPont(element) && element.a_verifier && !element.exclu && !element.confirme && !element.corrige,
+  );
+}
+
 export function porteursDuComposant(content: StudyContent, composant: string | null): number {
   if (!composant) {
     return 0;

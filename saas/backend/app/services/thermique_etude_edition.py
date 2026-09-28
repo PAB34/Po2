@@ -431,3 +431,52 @@ def voisins_modifies(avant: dict[str, Any], apres: dict[str, Any], sauf: str | N
         if local["id"] not in anciennes or anciennes[local["id"]] != local.get("fiche"):
             changes.append(local["id"])
     return changes
+
+
+# Les liaisons (ponts thermiques) ne conditionnent pas la validation d'un local (Q7, 2026-09-28).
+TYPES_PONT = ("angle_sortant", "angle_rentrant", "about_refend")
+
+
+def parois_a_trancher(contenu: dict[str, Any], local_id: str) -> list[dict[str, Any]]:
+    """Murs et menuiseries du local que l'agent a mis en doute et que personne n'a encore tranchés.
+
+    Q7 : valider un local exige ses côtés, pas ses ponts. Un élément est tranché quand il est confirmé,
+    corrigé ou écarté ; celui que l'agent n'a pas mis en doute est tenu pour acquis, comme à l'étape
+    « parois et menuiseries » (D114). Le rattachement au local passe par les formes dessinées, seules à
+    porter le nom du local (`source_parcours.piece`).
+    """
+    local = next((item for item in contenu.get("locaux", []) if item.get("id") == local_id), None)
+    if local is None:
+        raise ThermiqueError("Le local à valider est introuvable.")
+    enveloppe_niveau = contenu.get("enveloppe") or {}
+    cles = set()
+    for forme in enveloppe_niveau.get("objets") or []:
+        source = forme.get("source_parcours") or {}
+        if source.get("piece") == local.get("nom") and source.get("troncon") and source.get("debut_m") is not None:
+            cles.add((source["troncon"], source["debut_m"], source.get("fin_m")))
+    return [
+        element
+        for element in (enveloppe_niveau.get("releve_brut") or {}).get("elements") or []
+        if (element.get("troncon"), element.get("debut_m"), element.get("fin_m")) in cles
+        and element.get("type") not in TYPES_PONT
+        and element.get("a_verifier")
+        and not (element.get("exclu") or element.get("confirme") or element.get("corrige"))
+    ]
+
+
+def valider_local(contenu: dict[str, Any], etats: dict[str, Any], local_id: str) -> dict[str, Any]:
+    """Valide un local sans recalculer le niveau, ou refuse en disant ce qui reste (Q7).
+
+    Depuis que les recadrages se conservent localement (D139), plus aucun enregistrement ne valide un
+    local : la validation devient un geste à part, qui ne touche ni au contenu ni aux voisins.
+    """
+    restants = parois_a_trancher(contenu, local_id)
+    if restants:
+        nombre = len(restants)
+        raise ThermiqueError(
+            f"Il reste {nombre} mur{'s' if nombre > 1 else ''} ou menuiserie{'s' if nombre > 1 else ''} "
+            "à vérifier dans ce local : confirmez, corrigez ou écartez-les avant de le valider."
+        )
+    resultat = {identifiant: dict(etat) for identifiant, etat in etats.items()}
+    resultat[local_id] = {"status": "valide", "motif": None}
+    return resultat
