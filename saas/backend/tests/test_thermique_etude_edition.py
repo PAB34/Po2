@@ -716,6 +716,17 @@ def test_un_mur_tranche_libere_la_validation_et_les_ponts_ne_la_bloquent_pas(dra
     assert etats["L2"] == {"status": "a_verifier"}
 
 
+def test_un_mur_douteux_qui_longe_deux_locaux_bloque_les_deux():
+    """M2 : dessiné en deux morceaux, un par local ; chacun le rattache à son local."""
+    contenu = _etude_a_valider()
+    contenu["enveloppe"]["objets"] = [
+        {"source_parcours": {"troncon": "T01", "debut_m": 0.0, "fin_m": 1.2, "piece": "Bureau"}},
+        {"source_parcours": {"troncon": "T01", "debut_m": 1.2, "fin_m": 3.0, "piece": "Salle"}},
+    ]
+    assert len(edition.parois_a_trancher(contenu, "L1")) == 1
+    assert len(edition.parois_a_trancher(contenu, "L2")) == 1
+
+
 def test_un_mur_que_l_agent_n_a_pas_mis_en_doute_est_tenu_pour_acquis():
     assert edition.parois_a_trancher(_etude_a_valider(a_verifier=False), "L1") == []
 

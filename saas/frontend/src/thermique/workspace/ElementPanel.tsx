@@ -27,10 +27,10 @@ import {
 const LIBELLES_CHAMP: Record<string, string> = {
   type: "type",
   composant: "composant",
-  nu_exterieur_cm: "nu extérieur",
-  nu_interieur_cm: "nu intérieur",
-  nu_exterieur_fin_cm: "nu extérieur (fin)",
-  nu_interieur_fin_cm: "nu intérieur (fin)",
+  nu_exterieur_cm: "face extérieure",
+  nu_interieur_cm: "face intérieure",
+  nu_exterieur_fin_cm: "face extérieure (fin)",
+  nu_interieur_fin_cm: "face intérieure (fin)",
 };
 
 function Etat({ element }: { element: StudyReleveElement }) {
@@ -94,7 +94,7 @@ function Correction({
       return;
     }
     if (int > ext) {
-      setErreur(`Le nu intérieur (${int} cm) ne peut pas dépasser le nu extérieur (${ext} cm).`);
+      setErreur(`La face intérieure (${int} cm) ne peut pas être au-delà de la face extérieure (${ext} cm).`);
       return;
     }
     if (ext !== element.nu_exterieur_cm) {
@@ -127,16 +127,25 @@ function Correction({
         Composant
         <input value={composant} onChange={(event) => setComposant(event.target.value)} disabled={busy} />
       </label>
+      {/* « Nu extérieur / intérieur » ne parlait pas (retour d'usage M3) : ce sont les deux faces du mur,
+          repérées depuis le trait de façade qui guide le relevé, en cm, négatif vers l'intérieur. */}
       <div className="th-element-nus">
         <label>
-          Nu extérieur (cm)
+          Face extérieure du mur (cm)
           <input value={nuExt} onChange={(event) => setNuExt(event.target.value)} disabled={busy} inputMode="decimal" />
         </label>
         <label>
-          Nu intérieur (cm)
+          Face intérieure du mur (cm)
           <input value={nuInt} onChange={(event) => setNuInt(event.target.value)} disabled={busy} inputMode="decimal" />
         </label>
       </div>
+      <small className="th-muted">
+        Distances au trait de façade qui guide le relevé, négatives vers l'intérieur.
+        {Number.isFinite(Number(nuExt.replace(",", "."))) && Number.isFinite(Number(nuInt.replace(",", ".")))
+          ? ` Épaisseur du mur : ${Math.round((Number(nuExt.replace(",", ".")) - Number(nuInt.replace(",", "."))) * 10) / 10} cm.`
+          : ""}
+        {element.type === "menuiserie" ? " Pour une menuiserie, c'est le mur dans lequel elle est posée." : ""}
+      </small>
       {erreur && <p className="th-alert th-alert--error">{erreur}</p>}
       <div className="th-inline">
         <button type="button" className="po2-button po2-button--primary" disabled={busy} onClick={() => valider("cet_element")}>

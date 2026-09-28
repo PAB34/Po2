@@ -73,6 +73,7 @@ function removeReference(projectId: number) {
 const metricsKey = (sheetId: number) => `thermique.metres.${sheetId}`;
 // Rayon de saisie d'un élément d'enveloppe, en pixels d'écran : un trait fin doit rester attrapable.
 const PRISE_ELEMENT_PX = 6;
+const PRISE_ELEMENT_PAROIS_PX = 10;
 // La pastille d'un pont fait 5 px de rayon : on vise un peu plus large pour l'attraper sans peine.
 const PRISE_PONT_PX = 8;
 // À l'étape des ponts, rien d'autre n'est attrapable : on vise large (D156).
@@ -665,7 +666,11 @@ export function WorkspacePage() {
                             : shownStudy.content,
                           shownStudy.content.locaux,
                           point,
-                          { element: PRISE_ELEMENT_PX / pixelsPerPt, pont: PRISE_PONT_PX / pixelsPerPt },
+                          {
+                            // Étape des parois : les menuiseries y sont épaissies, la prise suit (M1).
+                            element: (vue.clic === "elements" ? PRISE_ELEMENT_PAROIS_PX : PRISE_ELEMENT_PX) / pixelsPerPt,
+                            pont: PRISE_PONT_PX / pixelsPerPt,
+                          },
                         );
                   if (vise) {
                     setCoteVisee(null);
@@ -830,6 +835,7 @@ export function WorkspacePage() {
                             grouperPonts={etape !== "ponts"}
                             coteVisee={rangCote}
                             familles={vue}
+                            accentMenuiseries={etape === "enveloppe"}
                           />
                       )}
                     </>

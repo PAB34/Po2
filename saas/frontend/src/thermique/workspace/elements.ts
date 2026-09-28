@@ -67,6 +67,39 @@ export function trouverElement(content: StudyContent, ref: StudyElementRef | nul
 
 const cleDe = (ref: StudyElementRef) => `${ref.troncon}|${ref.debut_m}|${ref.fin_m}`;
 
+// Les bornes d'un morceau sont arrondies au millimètre au découpage : on compare à cette tolérance près.
+const TOLERANCE_MORCEAU_M = 0.002;
+
+/**
+ * Le morceau dessiné appartient-il à cet élément du relevé ?
+ *
+ * Un élément qui longe deux locaux est **découpé** au dessin, à l'endroit où le local derrière change : sur
+ * le R+1, 24 formes de murs sont ainsi des morceaux. Comparer les identités exactes faisait désigner le
+ * morceau cliqué et non l'élément, et une menuiserie coupée par un recadrage se lisait comme deux (M2).
+ */
+export function faitPartieDe(parent: StudyElementRef | null, morceau: StudyElementRef | null): boolean {
+  return Boolean(
+    parent &&
+      morceau &&
+      parent.troncon === morceau.troncon &&
+      parent.fin_m > parent.debut_m &&
+      parent.debut_m - TOLERANCE_MORCEAU_M <= morceau.debut_m &&
+      morceau.fin_m <= parent.fin_m + TOLERANCE_MORCEAU_M,
+  );
+}
+
+/** L'élément du relevé dont cette forme est le dessin, entier ou en morceau. */
+export function parentDeForme(content: StudyContent, shape: StudyEnvelopeShape): StudyReleveElement | null {
+  const morceau = refDeForme(shape);
+  if (!morceau) return null;
+  const elements = content.enveloppe.releve_brut.elements;
+  return (
+    elements.find((element) => memeElement(refDeElement(element), morceau)) ??
+    elements.find((element) => !estPont(element) && faitPartieDe(refDeElement(element), morceau)) ??
+    null
+  );
+}
+
 /**
  * Éléments relevés qui touchent un local, dans l'ordre du parcours de l'enveloppe.
  *
@@ -84,9 +117,10 @@ export function elementsDuLocal(content: StudyContent, room: StudyRoom | null): 
     if (shape.source_parcours?.piece !== room.nom) {
       continue;
     }
-    const ref = refDeForme(shape);
-    if (ref) {
-      vises.add(cleDe(ref));
+    // Le morceau du local renvoie à l'élément entier : un mur qui longe deux locaux est listé dans les deux.
+    const parent = parentDeForme(content, shape);
+    if (parent) {
+      vises.add(cleDe(refDeElement(parent)));
     }
   }
   for (const bridge of pontsDuLocal(content, room)) {
@@ -256,15 +290,15 @@ export function viserSurLePlan(
   tolerances: { element: number; pont: number },
 ): { ref: StudyElementRef; room: StudyRoom | null } | null {
   const pont = pontAt(content.enveloppe.liaisons ?? [], point, tolerances.pont);
-  const ref = pont ? elementDuPont(content, pont) : elementAt(content.enveloppe.objets ?? [], point, tolerances.element);
-  if (!ref) {
+  const morceau = pont ? elementDuPont(content, pont) : elementAt(content.enveloppe.objets ?? [], point, tolerances.element);
+  if (!morceau) {
     return null;
   }
-  const nom = pont
-    ? pont.piece
-    : ((content.enveloppe.objets ?? []).find((shape) => memeElement(refDeForme(shape), ref))?.source_parcours?.piece ??
-      null);
-  return { ref, room: rooms.find((room) => room.nom === nom) ?? null };
+  // Le local est celui du morceau cliqué ; l'élément désigné, lui, est l'élément entier du relevé.
+  const forme = pont ? null : (content.enveloppe.objets ?? []).find((shape) => memeElement(refDeForme(shape), morceau));
+  const nom = pont ? pont.piece : (forme?.source_parcours?.piece ?? null);
+  const parent = forme ? parentDeForme(content, forme) : null;
+  return { ref: parent ? refDeElement(parent) : morceau, room: rooms.find((room) => room.nom === nom) ?? null };
 }
 
 /**

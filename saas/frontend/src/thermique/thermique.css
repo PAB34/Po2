@@ -2710,6 +2710,21 @@ circle.th-seg--measure {
   stroke-dasharray: none;
 }
 
+/* Étape des parois et menuiseries : une menuiserie, trait fin sur le plan, se voyait mal et s'attrapait
+   mal (retour d'usage M1). Elle y est épaissie, et plus encore quand elle est désignée. */
+.th-metrics--parois .th-metric-element.is-menuiserie {
+  stroke-width: 5;
+  stroke-linecap: butt;
+}
+
+.th-metrics--parois .th-metric-element.is-menuiserie.is-selected {
+  stroke-width: 7;
+}
+
+.th-metrics--parois .th-metric-element__halo {
+  stroke-width: 11;
+}
+
 .th-metric-pont__halo {
   fill: none;
   stroke: #ffffff;

@@ -549,18 +549,28 @@ def parois_a_trancher(contenu: dict[str, Any], local_id: str) -> list[dict[str, 
     if local is None:
         raise ThermiqueError("Le local à valider est introuvable.")
     enveloppe_niveau = contenu.get("enveloppe") or {}
-    cles = set()
+    morceaux = []
     for forme in enveloppe_niveau.get("objets") or []:
         source = forme.get("source_parcours") or {}
         if source.get("piece") == local.get("nom") and source.get("troncon") and source.get("debut_m") is not None:
-            cles.add((source["troncon"], source["debut_m"], source.get("fin_m")))
+            morceaux.append((source["troncon"], float(source["debut_m"]), float(source.get("fin_m") or source["debut_m"])))
+
+    # Un élément qui longe deux locaux est dessiné en morceaux, découpés là où le local derrière change : il
+    # appartient aux deux, et un seul morceau suffit à le rattacher (retour d'usage M2).
+    def touche(element: dict[str, Any]) -> bool:
+        debut, fin = float(element.get("debut_m", 0)), float(element.get("fin_m", 0))
+        return any(
+            troncon == element.get("troncon") and debut - 0.002 <= m_debut and m_fin <= fin + 0.002
+            for troncon, m_debut, m_fin in morceaux
+        )
+
     return [
         element
         for element in (enveloppe_niveau.get("releve_brut") or {}).get("elements") or []
-        if (element.get("troncon"), element.get("debut_m"), element.get("fin_m")) in cles
-        and element.get("type") not in TYPES_PONT
+        if element.get("type") not in TYPES_PONT
         and element.get("a_verifier")
         and not (element.get("exclu") or element.get("confirme") or element.get("corrige"))
+        and touche(element)
     ]
 
 

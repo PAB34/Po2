@@ -1,7 +1,7 @@
 import type { PdfPoint, StudyBridge, StudyElementRef, StudyEnvelopeShape, StudyRoom, StudySide } from "../api";
 import type { ToScreen } from "../components/TileSheetViewer";
 import { pointInPolygon } from "./edition";
-import { memeElement, refDeForme } from "./elements";
+import { faitPartieDe, memeElement, refDeForme } from "./elements";
 
 /** Ce que l'on montre au-delà du local sélectionné (D83). Le local sélectionné, lui, montre tout. */
 export type MetricsShow = {
@@ -213,6 +213,7 @@ export function StudyMetrics({
   grouperPonts = true,
   coteVisee = null,
   familles = { cotes: true, elements: true, ponts: true },
+  accentMenuiseries = false,
 }: {
   rooms: StudyRoom[];
   selected: StudyRoom | null;
@@ -234,6 +235,8 @@ export function StudyMetrics({
    * montrait tout à toutes les étapes, et un pont se perdait parmi les cotes et les murs.
    */
   familles?: { cotes: boolean; elements: boolean; ponts: boolean };
+  /** Étape des parois et menuiseries : les menuiseries, traits fins, sont épaissies pour se voir et s'attraper (M1). */
+  accentMenuiseries?: boolean;
 }) {
   // Le local sélectionné montre tout ce que l'étape permet ; les cases étendent au reste du niveau (D83).
   const cotesDe = !familles.cotes ? [] : show.metres ? rooms : selected ? [selected] : [];
@@ -280,18 +283,27 @@ export function StudyMetrics({
     );
   });
 
+  // Un élément qui longe deux locaux est dessiné en morceaux : tous s'allument quand il est désigné (M2).
+  const designe = (shape: StudyEnvelopeShape) =>
+    memeElement(refDeForme(shape), selectedElement) || faitPartieDe(selectedElement, refDeForme(shape));
+
   return (
-    <g className="th-metrics">
+    <g className={`th-metrics${accentMenuiseries ? " th-metrics--parois" : ""}`}>
       {(familles.elements ? shapes : [])
         .filter((shape) => (shape.points_pdf?.length ?? 0) >= 2 && visible(shape.source_parcours?.piece, show.elements))
         // La forme visée passe en dernier : dessinée avant les autres couches du mur, elle disparaissait
         // dessous. C'est ce qui faisait dire « on ne voit pas l'élément clairement sur le plan ».
-        .sort((a, b) => Number(memeElement(refDeForme(a), selectedElement)) - Number(memeElement(refDeForme(b), selectedElement)))
+        .sort((a, b) => Number(designe(a)) - Number(designe(b)))
         .map((shape) => {
           const points = (shape.points_pdf ?? []).map(toScreen).map(([x, y]) => `${x},${y}`).join(" ");
           const couleur = COULEURS_ELEMENT[shape.category] ?? COULEURS_ELEMENT.indetermine;
-          const vise = memeElement(refDeForme(shape), selectedElement);
-          const classes = ["th-metric-element", vise ? "is-selected" : "", shape.review_required ? "is-doute" : ""]
+          const vise = designe(shape);
+          const classes = [
+            "th-metric-element",
+            vise ? "is-selected" : "",
+            shape.review_required ? "is-doute" : "",
+            shape.category === "menuiserie_exterieure" ? "is-menuiserie" : "",
+          ]
             .filter(Boolean)
             .join(" ");
           const commun = { points, stroke: couleur, className: classes };
