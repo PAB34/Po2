@@ -18,6 +18,7 @@ import { METRICS_DEFAUT, StudyMetrics, type MetricsShow } from "./StudyMetrics";
 import { StudyCoherenceReport, StudyCoverageBanner, StudyOverlay, StudyRoomCreationPanel, StudyRoomList, StudyRoomPanel } from "./StudyPanel";
 import { ElementPanel } from "./ElementPanel";
 import { FenetreCoupe } from "./FenetreCoupe";
+import { traitAt, TraitsDeCoupe, traitsCliquables } from "./TraitsDeCoupe";
 import { PontsPanel } from "./PontsPanel";
 import { coteAt, empreinteCote, milieuCote, rangVise, type CoteVisee } from "./cotes";
 import { elementDuPont, paroisATrancher, pontAt, pontDeElement, trouverElement, viserSurLePlan } from "./elements";
@@ -79,6 +80,8 @@ const PRISE_ELEMENT_PX = 6;
 const PRISE_ELEMENT_PAROIS_PX = 10;
 // La pastille d'un pont fait 5 px de rayon : on vise un peu plus large pour l'attraper sans peine.
 const PRISE_PONT_PX = 8;
+// Un trait de coupe est dessiné épais : il s'attrape large (D171).
+const PRISE_TRAIT_COUPE_PX = 10;
 // À l'étape des ponts, rien d'autre n'est attrapable : on vise large (D156).
 const PRISE_PONT_ETAPE_PX = 18;
 // Serrage du plan sur le pont en cours, en multiple du cadrage ajusté : de quoi voir le coin et ses
@@ -358,6 +361,9 @@ export function WorkspacePage() {
     enabled: Boolean(token && projectId),
   });
   const [coupeOuverte, setCoupeOuverte] = useState<number | null>(null);
+  // Case « Voir les coupes » (D171) : les traits, relevés ou déduits, en lignes épaisses cliquables.
+  const [voirCoupes, setVoirCoupes] = useState(false);
+  const traitsAffiches = voirCoupes ? traitsCliquables(hauteurs.data) : [];
   const vueOuverte = vues.data?.find((vue) => vue.id === coupeOuverte) ?? null;
   const plancheOuverte = vueOuverte ? sheets.find((s) => s.id === vueOuverte.sheet_id) ?? null : null;
   const selectedLocalId = searchParams.get("local");
@@ -735,6 +741,12 @@ export function WorkspacePage() {
                 setPoints((current) => (current.length >= 2 ? [point] : [...current, point]));
               }}
               onPick={(point, pixelsPerPt) => {
+                // Traits de coupe montrés : un clic dessus ouvre la coupe, avant tout autre objet (D171).
+                const trait = traitAt(traitsAffiches, point, PRISE_TRAIT_COUPE_PX / pixelsPerPt);
+                if (trait) {
+                  setCoupeOuverte(trait.vueId);
+                  return;
+                }
                 // Dans le local ouvert, un clic sur un élément d'enveloppe l'attrape en priorité : c'est
                 // le geste de l'étape 5. Le reste du temps, le clic ouvre ou referme un local.
                 if (shownStudy) {
@@ -920,6 +932,19 @@ export function WorkspacePage() {
                       </label>
                     );
                   })}
+                  <label title={
+                    (hauteurs.data?.coupes.length ?? 0) > 0
+                      ? "Les traits de coupe, relevés sur le plan ou situés d'après la coupe : un clic ouvre la coupe"
+                      : "Aucune coupe lue ni située pour ce niveau"
+                  }>
+                    <input
+                      type="checkbox"
+                      disabled={(hauteurs.data?.coupes.length ?? 0) === 0}
+                      checked={voirCoupes}
+                      onChange={() => setVoirCoupes((actuel) => !actuel)}
+                    />
+                    Voir les coupes
+                  </label>
                   {shownStudy &&
                     METRICS_CASES.map((item) => (
                       <label key={item.cle} title={item.titre}>
@@ -957,6 +982,7 @@ export function WorkspacePage() {
                     />
                   )}
                   <NorthOverlay nord={sheet.nord} enCours={points} toScreen={toScreen} actif={tool === "nord"} />
+                  {traitsAffiches.length > 0 && <TraitsDeCoupe traits={traitsAffiches} toScreen={toScreen} />}
                   {shownStudy && (
                     <>
                         <StudyOverlay

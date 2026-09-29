@@ -227,7 +227,7 @@ export type HauteursDuPlan = {
   coupes: { trait: string; deduit: boolean; vue_id: number; vue: string; vue_sheet_id: number; alertes: string[] }[];
   traits_sans_vue: string[];
   coupes_non_situees?: string[];
-  traits: { nom: string; points: PdfPoint[]; sens: [number, number]; deduit?: boolean }[];
+  traits: { nom: string; points: PdfPoint[]; sens: [number, number]; deduit?: boolean; vue_id?: number }[];
 };
 
 /** Une vue lue sur une planche de coupes ou de façades (S5), en points PDF de sa planche. */

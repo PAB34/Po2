@@ -2355,6 +2355,36 @@ circle.th-seg--measure {
   gap: 0.3rem;
 }
 
+/* Traits de coupe sur le plan (S5, D171) : épais, cliquables ; un trait déduit de la coupe est en tirets. */
+.th-trait-coupe polyline {
+  fill: none;
+  stroke: #b91c1c;
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.8;
+  cursor: pointer;
+}
+
+.th-trait-coupe.is-deduit polyline {
+  stroke-dasharray: 14 8;
+}
+
+.th-trait-coupe__fleche {
+  fill: none;
+  stroke: #b91c1c;
+  stroke-width: 3;
+}
+
+.th-trait-coupe text {
+  fill: #b91c1c;
+  font-size: 16px;
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 3px;
+}
+
 /* Coupe ouverte au-dessus du plan (S5, D183) : déplaçable par son titre, redimensionnable. */
 .th-fenetre-coupe {
   position: fixed;
