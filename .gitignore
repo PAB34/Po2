@@ -3,6 +3,7 @@
 .claude/agents/*
 !.claude/agents/thermicien-plan.md
 !.claude/agents/thermicien-enveloppe.md
+!.claude/agents/thermicien-coupe.md
 !.claude/skills/
 .claude/skills/*
 !.claude/skills/etude-thermique/

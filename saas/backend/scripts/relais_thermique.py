@@ -27,6 +27,9 @@ import requests
 
 SCRIPTS = Path(__file__).resolve().parent
 CHAINE = SCRIPTS / "run_etude_niveau.py"
+LECTURE_COUPES = SCRIPTS / "run_lecture_coupes.py"
+# Étude d'un niveau, traits de coupe d'un plan, vues d'une planche de coupes (S5, D181).
+TYPES_CONNUS = ("niveau", "traits", "coupes")
 REGLAGES = Path.home() / ".thermique-relais.json"
 SITE_PAR_DEFAUT = "https://thermique.patrimoineaucarre.com"
 
@@ -78,7 +81,8 @@ class Site:
         return self.jeton
 
     def file(self) -> list[dict]:
-        return self._appel("GET", "/thermique/travaux").json()
+        # Le relais annonce ce qu'il sait faire : un ancien relais ne reçoit que des niveaux (S5, D181).
+        return self._appel("GET", "/thermique/travaux", params={"types": ",".join(TYPES_CONNUS)}).json()
 
     def prendre(self, travail_id: int) -> dict:
         return self._appel("POST", f"/thermique/travaux/{travail_id}/prendre").json()
@@ -95,6 +99,13 @@ class Site:
                 f"/thermique/travaux/{travail_id}/rendre",
                 files={"fichier": (etude.name, fichier, "application/json")},
             )
+
+    def rendre_lecture(self, travail_id: int, lecture: Path) -> None:
+        self._appel(
+            "POST",
+            f"/thermique/travaux/{travail_id}/rendre-lecture",
+            json=json.loads(lecture.read_text(encoding="utf-8")),
+        )
 
     def reporter(self, travail_id: int, message: str) -> None:
         self._appel("POST", f"/thermique/travaux/{travail_id}/reporter", json={"message": message[:2000]})
@@ -159,10 +170,43 @@ def session_claude_expiree(sortie: str) -> bool:
     return any(marque in bas for marque in SESSION_EXPIREE)
 
 
+def lancer_la_lecture(plan: Path, consignes: dict, dossier: Path) -> tuple[int, str]:
+    """Lance ``run_lecture_coupes.py`` (traits d'un plan ou vues d'une planche de coupes)."""
+    commande = [
+        sys.executable, str(LECTURE_COUPES), str(plan),
+        "--type", consignes["type"], "--page", str(consignes["page"]), "--sorties", str(dossier),
+    ]
+    print(f"    {' '.join(commande[1:])}")
+    resultat = subprocess.run(commande, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    return resultat.returncode, f"{resultat.stdout}\n{resultat.stderr}".strip()
+
+
+def traiter_une_lecture(site: Site, travail: dict, consignes: dict, sorties: Path) -> None:
+    """Lit les traits de coupe d'un plan ou les vues d'une planche, et rend la lecture au site."""
+    dossier = sorties / str(consignes["project_id"]) / "coupes" / f"planche-{consignes['sheet_id']}-{consignes['type']}"
+    dossier.mkdir(parents=True, exist_ok=True)
+    plan = site.plan(consignes["document_id"], dossier / f"planche-{consignes['document_id']}.pdf")
+    code, sortie = lancer_la_lecture(plan, consignes, dossier)
+    if session_claude_expiree(sortie):
+        site.reporter(travail["id"], "session Claude expirée sur le poste")
+        raise Arret("votre session Claude a expiré : lancez `claude auth login`, puis relancez le relais")
+    lecture = dossier / "lecture.json"
+    if code != CHAINE_FINI or not lecture.is_file():
+        site.echec(travail["id"], sortie[-2000:] or f"la lecture s'est arrêtée (code {code})")
+        print("    échec : la planche sort de la file, son message est visible sur le site")
+        return
+    site.rendre_lecture(travail["id"], lecture)
+    print("    lecture rendue au site")
+
+
 def traiter(site: Site, travail: dict, sorties: Path, dernier_niveau: str | None) -> str | None:
-    """Traite un niveau. Rend le nom du niveau s'il est allé au bout, sinon `None`."""
-    print(f"\n▶ {travail['label']} (niveau {travail.get('level_label') or '?'})")
+    """Traite un travail. Rend le nom du niveau si une étude de niveau est allée au bout, sinon `None`."""
+    type_travail = travail.get("type") or "niveau"
+    print(f"\n▶ {travail['label']} ({type_travail}, niveau {travail.get('level_label') or '?'})")
     consignes = site.prendre(travail["id"])
+    if type_travail != "niveau":
+        traiter_une_lecture(site, travail, {**consignes, "type": type_travail}, sorties)
+        return None
     dossier = sorties / str(consignes["project_id"])
     dossier.mkdir(parents=True, exist_ok=True)
     plan = site.plan(consignes["document_id"], dossier / f"plan-{consignes['document_id']}.pdf")
