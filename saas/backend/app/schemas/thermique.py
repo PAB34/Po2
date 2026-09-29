@@ -351,6 +351,15 @@ class HauteurConfirmee(BaseModel):
     plafond: list[float] = Field(min_length=2, max_length=2)
 
 
+class MenuiserieConfirmee(BaseModel):
+    """Deux coins opposés d'une menuiserie sur l'élévation (points PDF de sa planche), et à quoi la hauteur
+    s'applique : tout le composant (`largeur_cm` absent, D200) ou une baie de cette largeur."""
+
+    coins: list[list[float]] = Field(min_length=2, max_length=2)
+    composant: str = Field(min_length=1, max_length=40)
+    largeur_cm: float | None = None
+
+
 class HauteursDuPlan(BaseModel):
     sheet_id: int
     locaux: dict[str, dict[str, Any]]

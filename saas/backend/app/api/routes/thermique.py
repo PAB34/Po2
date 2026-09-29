@@ -43,6 +43,7 @@ from app.schemas.thermique import (
     HauteurConfirmee,
     HauteursDuPlan,
     LectureCoupes,
+    MenuiserieConfirmee,
     MiseEnFileResult,
     CalageRequest,
     NordRequest,
@@ -91,6 +92,7 @@ from app.services.thermique_composants import (
 from app.services import thermique_etude_edition as edition
 from app.services import thermique_calage
 from app.services import thermique_lecture_coupes as lecture_coupes
+from app.services import thermique_menuiseries as menuiseries_service
 from app.services import thermique_nord
 from app.services import thermique_ponts_catalogue as ponts_catalogue
 from app.services import thermique_travaux as travaux
@@ -1035,6 +1037,48 @@ def retirer_les_hauteurs_confirmees(
 ) -> dict:
     vue = _vue_or_404(db, user, vue_id)
     return lecture_coupes.serialize_vue(lecture_coupes.retirer_confirmations(db, vue))
+
+
+@router.get("/projects/{project_id}/menuiseries")
+def lire_menuiseries_du_projet(
+    project_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Composants de menuiserie, baies de tous les niveaux étudiés et leur hauteur (S5e, D199, D200)."""
+    project = _project_or_404(db, user, project_id)
+    return menuiseries_service.menuiseries_du_projet(db, project.id)
+
+
+@router.post("/vues/{vue_id}/menuiseries")
+def confirmer_une_menuiserie(
+    vue_id: int,
+    payload: MenuiserieConfirmee,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Deux coins d'une menuiserie sur l'élévation : sa hauteur vaut pour le composant ou la baie (D193, D200)."""
+    from datetime import datetime, timezone
+
+    vue = _vue_or_404(db, user, vue_id)
+    try:
+        return menuiseries_service.confirmer(
+            db, vue, payload.coins, payload.composant, payload.largeur_cm, datetime.now(timezone.utc).isoformat()
+        )
+    except ThermiqueError as exc:
+        raise _bad_request(exc) from exc
+
+
+@router.delete("/vues/{vue_id}/menuiseries/{composant}")
+def retirer_une_menuiserie(
+    vue_id: int,
+    composant: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    vue = _vue_or_404(db, user, vue_id)
+    menuiseries_service.retirer(db, vue, composant)
+    return {"ok": True}
 
 
 @router.get("/sheets/{sheet_id}/hauteurs", response_model=HauteursDuPlan)

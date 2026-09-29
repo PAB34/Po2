@@ -77,6 +77,40 @@ le trait de façade sur le plan attend que le nord soit posé (l'outil le dit) ;
 repère marche sans ; (b) autre.
 REPONSE :
 
+## 3 bis. Décisions (2026-09-29 : « Ok pour tes recommandations, go »)
+
+**D193 (Q43 a)** — Deux coins opposés d'une menuiserie sur l'élévation : largeur et hauteur mesurées le long de la
+droite et du haut de la vue ; l'outil propose le repère dont la largeur colle ; le thermicien valide.
+**D194 (Q44 a)** — Repères proposés à ± 5 cm de la largeur mesurée, le plus proche d'abord.
+**D195 (Q45 a)** — Une hauteur confirmée vaut pour toutes les menuiseries du repère (même composant, largeur à
+± 1 cm), sur tous les niveaux du projet. La confirmation est gardée avec la vue de façade ; la plus récente
+l'emporte.
+**D196 (Q46 a)** — Un mur-rideau prend la hauteur sous plafond du local qu'il borde (D178), sans clic.
+**D197 (Q47 a)** — L'allège attend.
+**D198 (Q48 a)** — Le trait de façade sur le plan attend que le nord soit posé ; l'élévation s'ouvre depuis la
+fiche de la menuiserie sans lui.
+
+## 3 ter. Mesure sur le vrai R+1 et décisions révisées (2026-09-29)
+
+Les 58 menuiseries du R+1 donnaient **52 repères** (composant + largeur à ± 1 cm) : largeurs vraiment différentes
+d'une baie à l'autre (M4 de 2,02 à 4,15 m) et morceaux de 8 à 30 cm. Trois causes : une menuiserie coupée à la
+jonction de deux tronçons (T04/T05 à 17,26 m…), des modules de mur-rideau entre poteaux (légitimes), des tranches
+de M3 en bout des tronçons de la façade en dents de scie.
+
+Choix de l'utilisateur : « Nettoyer d'abord », puis « Nettoyer + par composant ».
+
+**D199 — Baie.** Des menuiseries contiguës (± 2 cm) de même composant, sans rien entre elles, **même de part et
+d'autre d'une jonction de tronçons**, forment une **baie** (D174 appliquée). Le relevé garde ses morceaux (leur
+identité porte les corrections du thermicien) ; la baie est l'unité qui se compte, se mesure et reçoit une
+hauteur. R+1 : 58 menuiseries → **49 baies** (9 fusions). Une baie de moins de 40 cm restée seule est signalée
+« morceau à vérifier » : 8 sur le R+1 (5 tranches de M3 de 8 à 30 cm, deux de mur-rideau de 7 et 10 cm, une M-L5-1
+de 31 cm).
+
+**D200 — Hauteur par composant (remplace D195).** Une hauteur confirmée vaut pour **toutes les baies du
+composant**, sur tous les niveaux, quelle que soit leur largeur ; une baie particulière peut recevoir sa propre
+hauteur, qui l'emporte. D193 reste : les deux coins donnent largeur et hauteur ; la largeur mesurée doit être à
+± 5 cm d'une baie du composant choisi (D194), sinon l'outil refuse (mauvaise menuiserie cliquée).
+
 ---
 
 ## 4. Ce que je vérifierai
