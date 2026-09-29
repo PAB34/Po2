@@ -37,7 +37,9 @@ déperditifs**, 289 formes, 77 liaisons. Tout lot qui ne touche pas au calcul do
   de coupe et repères de façade, cliquables pour ouvrir la vue ; pièces de la coupe rattachées aux locaux
   du plan ; **hauteur sous plafond lue par local** ; hauteur des menuiseries lue en élévation).
   ⚠️ S4 ne se vérifie qu'avec **deux niveaux étudiés et calés** : seul le R+1 l'est.
-  **S5 en cours (2026-09-29, commits locaux non poussés)** : `thermique/coupes-elevations-S5-decisions.md`
+  **✅ EN PRODUCTION `a82c3af0` (2026-09-29, migration 0088, bundle `thermique-DSkqJM3Q.js`, route `/vues` 401)** :
+  tout S5 ci-dessous. Jamais recetté à la souris : la recette par l'utilisateur est la prochaine étape.
+  **S5 (2026-09-29)** : `thermique/coupes-elevations-S5-decisions.md`
   (Q34–Q41 répondues → D178–D185 ; règles de rattachement D186–D189). Vérité terrain des deux projets :
   `thermique/verite-terrain-coupes.md` + `.json`. Le R+1 étudié est celui du **projet 1** (Frontignan, PC04,
   1/100). **Fait** : rattachement coupe → locaux (`thermique_coupes.py`, coupe A réelle 8/8), rangement des
