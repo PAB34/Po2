@@ -347,13 +347,23 @@ def liste_rendue(reponse: dict[str, Any], cle: str) -> list[Any] | None:
     return autres[0] if len(autres) == 1 else None
 
 
+def point_lu(valeur: Any) -> list[float] | None:
+    """Un point rendu par l'agent : [x, y] ou {"x": …, "y": …} (le schéma de réponse n'est pas toujours
+    respecté : essai du 2026-09-29 sur PC04)."""
+    if isinstance(valeur, dict):
+        valeur = [valeur.get("x"), valeur.get("y")]
+    if isinstance(valeur, (list, tuple)) and len(valeur) == 2 and all(isinstance(v, (int, float)) for v in valeur):
+        return [float(valeur[0]), float(valeur[1])]
+    return None
+
+
 def traits_de_lecture(bruts: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[str]]:
     """Les traits exploitables, et ce qui a été écarté en clair. Un sens illisible n'écarte pas le trait : la
     coupe le tranchera (`thermique_coupes.rattacher` essaie les deux sens)."""
     traits, ecartes = [], []
     for brut in bruts:
         nom = str(brut.get("nom") or "").strip()
-        points = [p for p in brut.get("points") or [] if isinstance(p, (list, tuple)) and len(p) == 2]
+        points = [p for p in (point_lu(p) for p in brut.get("points") or []) if p is not None]
         if not nom or len(points) < 2:
             ecartes.append(f"trait « {nom or '?'} » écarté : une seule extrémité lue")
             continue
@@ -384,7 +394,11 @@ def points_a_preciser(traits: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def appliquer_precisions(traits: list[dict[str, Any]], zooms: list[dict[str, Any]], reponse: dict[str, Any]) -> list[dict[str, Any]]:
     """Remplace chaque sommet approché par le point lu sur son zoom, s'il reste dans le zoom."""
-    lus = {str(e["image"]): e["point"] for e in reponse.get("extremites", [])}
+    lus = {
+        str(e.get("image")): point_lu(e.get("point"))
+        for e in (liste_rendue(reponse, "extremites") or [])
+        if isinstance(e, dict) and point_lu(e.get("point")) is not None
+    }
     par_nom = {t["nom"]: [list(p) for p in t["points"]] for t in traits}
     for zoom in zooms:
         point = lus.get(str(zoom["image"])) or lus.get(Path(str(zoom["image"])).name)
@@ -431,7 +445,9 @@ def lecture_de_vue(vue: dict[str, Any], brut: dict[str, Any]) -> dict[str, Any]:
     la projection de son cadre sur la droite, son sol et son plafond la projection sur le haut, sauf quand ils
     tombent sur une ligne de niveau cotée : la cote écrite fait foi.
     """
-    niveaux_bruts = [n for n in brut.get("niveaux", []) if isinstance(n, dict) and n.get("nom")]
+    niveaux_bruts = [
+        {**n, "point": point_lu(n.get("point"))} for n in brut.get("niveaux", []) if isinstance(n, dict) and n.get("nom")
+    ]
     deduit = haut_par_les_cotes(niveaux_bruts)
     hx, hy = deduit or SENS.get(vue.get("haut") or "haut", (0.0, 1.0))
     dx, dy = hy, -hx

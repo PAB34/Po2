@@ -55,8 +55,12 @@ class Agent:
 
     def __call__(self, etape: str, consigne: str, schema: dict) -> dict:
         (self.dossier / f"{etape}.consigne.txt").write_text(consigne, encoding="utf-8")
+        # Une étape déjà réussie se rejoue au lieu d'être repayée : une lecture coupée reprend où elle s'arrêtait.
+        deja = (self.reponses or self.dossier) / f"{etape}.json"
+        if deja.is_file():
+            return json.loads(deja.read_text(encoding="utf-8"))
         if self.reponses is not None:
-            return json.loads((self.reponses / f"{etape}.json").read_text(encoding="utf-8"))
+            raise ThermiqueError(f"Aucune réponse enregistrée pour l'étape « {etape} » dans {self.reponses}.")
         commande = [
             claude_executable(), "--add-dir", str(self.dossier), "-p", consigne,
             "--agent", AGENT, "--model", self.modele, "--output-format", "json",

@@ -139,6 +139,9 @@ def test_la_reponse_reelle_de_l_agent_sur_pc04_se_recupere():
     assert [t["nom"] for t in traits] == ["A", "B", "D"]
     assert ecartes == ["trait « C » écarté : une seule extrémité lue"]
     assert consignes.liste_rendue({"a": [], "b": [], "observations": []}, "traits") is None
+    # Second essai : points rendus en objets {"x", "y"}.
+    traits, _ = consignes.traits_de_lecture([{"nom": "B", "points": [{"x": 275, "y": 1245}, {"x": 1450, "y": 1245}], "sens": "haut"}])
+    assert traits[0]["points"] == [[275.0, 1245.0], [1450.0, 1245.0]]
 
 
 def test_la_reponse_de_l_agent_se_lit_meme_glissee_dans_du_texte():
