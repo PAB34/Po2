@@ -201,7 +201,8 @@ def schema_vues_ensemble() -> dict[str, Any]:
 
 
 def schema_lecture_vue() -> dict[str, Any]:
-    borne = {"anyOf": [{"type": "number"}, {"type": "string"}, {"type": "null"}]}
+    """L'agent ne raisonne pas sur la rotation de la vue (essai du 2026-09-29 : coupes tournées lues comme
+    droites). Il donne des positions de page ; l'outil déduit le haut par les cotes de niveau."""
     return {
         "type": "object",
         "additionalProperties": False,
@@ -212,11 +213,11 @@ def schema_lecture_vue() -> dict[str, Any]:
                 "items": {
                     "type": "object",
                     "additionalProperties": False,
-                    "required": ["nom", "cote_m", "position"],
+                    "required": ["nom", "cote_m", "point"],
                     "properties": {
                         "nom": {"type": "string"},
                         "cote_m": {"type": ["number", "null"]},
-                        "position": {"type": ["number", "null"]},
+                        "point": _POINT,
                     },
                 },
             },
@@ -225,13 +226,13 @@ def schema_lecture_vue() -> dict[str, Any]:
                 "items": {
                     "type": "object",
                     "additionalProperties": False,
-                    "required": ["nom", "gauche", "droite", "sol", "plafond", "hsp_ecrite_m", "exterieur"],
+                    "required": ["nom", "cadre", "sol", "plafond", "sans_plafond", "hsp_ecrite_m", "exterieur"],
                     "properties": {
                         "nom": {"type": ["string", "null"]},
-                        "gauche": {"type": "number"},
-                        "droite": {"type": "number"},
-                        "sol": {"anyOf": [{"type": "number"}, {"type": "string"}]},
-                        "plafond": borne,
+                        "cadre": {"type": "array", "items": {"type": "number"}, "minItems": 4, "maxItems": 4},
+                        "sol": {"type": ["string", "null"]},
+                        "plafond": {"type": ["string", "null"]},
+                        "sans_plafond": {"type": "boolean"},
                         "hsp_ecrite_m": {"type": ["number", "null"]},
                         "exterieur": {"type": "boolean"},
                     },
@@ -309,28 +310,27 @@ def consigne_vues_ensemble(images: list[Path], titre: str = "", nature_planche: 
 
 
 def consigne_lecture_vue(vue: dict[str, Any], images: list[Path]) -> str:
-    axe_horizontal = "x" if vue["haut"] in ("haut", "bas") else "y"
-    axe_vertical = "y" if axe_horizontal == "x" else "x"
     return "\n".join(
         [
             f"Coupe « {vue['nom']} », en {len(images)} tuiles qui se recouvrent :",
             *[f"- {image}" for image in images],
             REPERE,
-            f"Dans cette vue, le haut du bâtiment est vers le {vue['haut']} de la page : l'horizontale de la coupe "
-            f"se lit sur l'axe {axe_horizontal} de la page, la verticale sur l'axe {axe_vertical}.",
-            "1. `niveaux` : chaque ligne ou repère de niveau (sol fini, plafond fini, dalle : « H10 », « ±0,00 », "
-            "« +7,05 NGF »…). `nom` tel qu'écrit, `cote_m` sa cote en mètres si elle est écrite ou déductible d'une "
-            f"chaîne de cotes écrite, sinon null ; `position` sa coordonnée {axe_vertical} sur la grille.",
-            "2. `pieces` : chaque pièce COUPÉE (volume traversé par le plan de coupe, souvent grisé ou limité par "
-            "des murs et planchers coupés, hachurés ou noircis), à chaque étage. `nom` tel qu'écrit (numéro de "
-            f"programme compris : « 6.1.2 Bur.1 »), null s'il n'y en a pas ; `gauche`, `droite` = ses bornes, "
-            f"coordonnées {axe_horizontal} de ses deux murs ou cloisons ; `sol` = nom de la ligne de niveau de son "
-            f"sol fini si elle en porte une, sinon sa coordonnée {axe_vertical} ; `plafond` = de même pour son "
-            "plafond fini (sous le faux plafond s'il y en a un), null si le volume monte sans plafond à cet étage "
-            "(double hauteur, trémie, atrium) ; `hsp_ecrite_m` = hauteur sous plafond si elle est écrite pour cette "
-            "pièce, sinon null ; `exterieur` vrai pour une terrasse, un balcon, une coursive, un parking ouvert.",
-            "N'invente rien : une borne illisible se signale dans `observations`. Ignore le mobilier, les personnages, "
-            "la végétation et ce qui est vu au-delà du plan de coupe.",
+            "La coupe peut être dessinée tournée d'un quart de tour : ne t'en occupe pas, donne seulement des "
+            "positions de page (x, y) lues sur la grille. L'outil déduira le sens de la coupe.",
+            "1. `niveaux` : chaque repère ou ligne de niveau (« ±0,00 », « +4,16 », « H10 », « +7,05 NGF »…). "
+            "`nom` tel qu'écrit ; `cote_m` sa cote en mètres si elle est écrite, ou déductible d'une chaîne de "
+            "cotes écrite (H10 → H11 = 2,88 donne H11 = H10 + 2,88), sinon null ; `point` = [x, y] de la pointe "
+            "du repère ou d'un point de la ligne, là où elle marque le niveau.",
+            "2. `pieces` : chaque pièce COUPÉE (volume traversé par le plan de coupe, souvent grisé, borné par des "
+            "murs et planchers coupés, hachurés ou noircis), à chaque étage. `nom` tel qu'écrit, numéro de programme "
+            "compris (« 6.1.2 Bur.1 »), null s'il n'y en a pas ; `cadre` = [x0, y0, x1, y1] le rectangle de la "
+            "pièce, de mur à mur et du sol fini au plafond fini (sous le faux plafond) ; `sol`, `plafond` = le nom "
+            "de la ligne de niveau sur laquelle tombe son sol, son plafond, si elle en porte une (sinon null : le "
+            "cadre fait foi) ; `sans_plafond` vrai si le volume monte sans plafond à cet étage (double hauteur, "
+            "trémie, atrium) ; `hsp_ecrite_m` = hauteur sous plafond écrite pour cette pièce, sinon null ; "
+            "`exterieur` vrai pour une terrasse, un balcon, une coursive, un parking ouvert.",
+            "Une pièce dont tu ne vois pas les bornes n'est pas listée : dis-le dans `observations`. N'invente rien. "
+            "Ignore le mobilier, les personnages, la végétation et ce qui est vu au-delà du plan de coupe.",
         ]
     )
 
@@ -396,48 +396,75 @@ def appliquer_precisions(traits: list[dict[str, Any]], zooms: list[dict[str, Any
     return [{**t, "points": par_nom[t["nom"]]} for t in traits]
 
 
-def lecture_de_vue(vue: dict[str, Any], brut: dict[str, Any]) -> dict[str, Any]:
-    """Coordonnées de page lues par l'agent → repère de la vue attendu par `thermique_coupes.rattacher`.
+def _correlation(a: list[float], b: list[float]) -> float:
+    n = len(a)
+    ma, mb = sum(a) / n, sum(b) / n
+    cov = sum((x - ma) * (y - mb) for x, y in zip(a, b))
+    va = sum((x - ma) ** 2 for x in a) ** 0.5
+    vb = sum((y - mb) ** 2 for y in b) ** 0.5
+    return cov / (va * vb) if va > 0 and vb > 0 else 0.0
 
-    La droite de la vue est le haut tourné d'un quart de tour dans le sens horaire : (hy, −hx). Une borne se
-    projette sur la droite, une altitude sur le haut ; comme la vue n'est tournée que par quarts de tour, une
-    seule coordonnée de page porte chaque projection.
+
+def haut_par_les_cotes(niveaux: list[dict[str, Any]]) -> tuple[float, float] | None:
+    """Le haut de la vue, déduit de la direction dans laquelle les cotes de niveau montent sur la page.
+
+    C'est ce que l'agent ne savait pas faire (2026-09-29) : il notait lui-même que les repères de niveau
+    étaient « alignés selon x » sans en conclure que la coupe était tournée. Il faut au moins deux cotes
+    distantes d'un mètre ; sinon, rien n'est déduit.
     """
-    hx, hy = SENS[vue["haut"]]
+    points = [(n["point"], float(n["cote_m"])) for n in niveaux if n.get("cote_m") is not None and n.get("point")]
+    cotes = [c for _, c in points]
+    if len(points) < 2 or max(cotes) - min(cotes) < 1.0:
+        return None
+    rx = _correlation([float(p[0]) for p, _ in points], cotes)
+    ry = _correlation([float(p[1]) for p, _ in points], cotes)
+    if max(abs(rx), abs(ry)) < 0.8:
+        return None
+    return ((1.0 if rx > 0 else -1.0), 0.0) if abs(rx) > abs(ry) else (0.0, (1.0 if ry > 0 else -1.0))
+
+
+def lecture_de_vue(vue: dict[str, Any], brut: dict[str, Any]) -> dict[str, Any]:
+    """Positions de page lues par l'agent → repère de la vue attendu par `thermique_coupes.rattacher`.
+
+    Le haut vient des cotes de niveau (`haut_par_les_cotes`), à défaut du repérage d'ensemble. La droite de la
+    vue est le haut tourné d'un quart de tour dans le sens horaire : (hy, −hx). Les bornes d'une pièce sont
+    la projection de son cadre sur la droite, son sol et son plafond la projection sur le haut, sauf quand ils
+    tombent sur une ligne de niveau cotée : la cote écrite fait foi.
+    """
+    niveaux_bruts = [n for n in brut.get("niveaux", []) if isinstance(n, dict) and n.get("nom")]
+    deduit = haut_par_les_cotes(niveaux_bruts)
+    hx, hy = deduit or SENS.get(vue.get("haut") or "haut", (0.0, 1.0))
     dx, dy = hy, -hx
 
-    def le_long_de_la_droite(valeur: float) -> float:
-        return float(valeur) * (dx if dx else dy)
-
-    def le_long_du_haut(valeur: Any) -> Any:
-        if valeur is None or isinstance(valeur, str):
-            return valeur
-        return float(valeur) * (hx if hx else hy)
+    def sur_le_haut(point: Any) -> float:
+        return float(point[0]) * hx + float(point[1]) * hy
 
     niveaux = [
-        {"nom": n["nom"], "cote_m": n.get("cote_m"), "position": le_long_du_haut(n.get("position"))}
-        for n in brut.get("niveaux", [])
+        {"nom": str(n["nom"]), "cote_m": n.get("cote_m"), "position": sur_le_haut(n["point"]) if n.get("point") else None}
+        for n in niveaux_bruts
     ]
-    # Un nom de niveau sans cote ne peut pas servir de sol ou de plafond : on revient à sa position.
-    sans_cote = {n["nom"]: n["position"] for n in niveaux if n.get("cote_m") is None}
-
-    def altitude(valeur: Any) -> Any:
-        if isinstance(valeur, str) and valeur in sans_cote:
-            return sans_cote[valeur]
-        return le_long_du_haut(valeur)
+    cotes = {n["nom"] for n in niveaux if n["cote_m"] is not None}
 
     pieces = []
     for piece in brut.get("pieces", []):
-        sol = altitude(piece["sol"])
-        if sol is None:
+        cadre = piece.get("cadre") if isinstance(piece, dict) else None
+        if not isinstance(cadre, list) or len(cadre) != 4 or any(not isinstance(v, (int, float)) for v in cadre):
             continue
+        coins = [(cadre[0], cadre[1]), (cadre[2], cadre[3]), (cadre[0], cadre[3]), (cadre[2], cadre[1])]
+        largeur = [x * dx + y * dy for x, y in coins]
+        hauteur = [x * hx + y * hy for x, y in coins]
+        sol = piece.get("sol") if piece.get("sol") in cotes else min(hauteur)
+        if piece.get("sans_plafond"):
+            plafond = None
+        else:
+            plafond = piece.get("plafond") if piece.get("plafond") in cotes else max(hauteur)
         pieces.append(
             {
                 "nom": piece.get("nom"),
-                "debut": le_long_de_la_droite(piece["gauche"]),
-                "fin": le_long_de_la_droite(piece["droite"]),
+                "debut": min(largeur),
+                "fin": max(largeur),
                 "sol": sol,
-                "plafond": altitude(piece.get("plafond")),
+                "plafond": plafond,
                 "hsp_ecrite_m": piece.get("hsp_ecrite_m"),
                 "exterieur": bool(piece.get("exterieur")),
             }
@@ -447,6 +474,7 @@ def lecture_de_vue(vue: dict[str, Any], brut: dict[str, Any]) -> dict[str, Any]:
         "nature": vue["nature"],
         "cadre": [float(v) for v in vue["cadre"]],
         "haut": [hx, hy],
-        "niveaux": [n for n in niveaux if n.get("cote_m") is not None or n.get("position") is not None],
+        "haut_par": "cotes" if deduit else "reperage",
+        "niveaux": [n for n in niveaux if n["cote_m"] is not None or n["position"] is not None],
         "pieces": pieces,
     }

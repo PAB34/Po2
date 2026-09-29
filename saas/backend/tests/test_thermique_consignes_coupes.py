@@ -15,42 +15,74 @@ from app.services import thermique_lecture_coupes as lecture
 BACKEND = Path(__file__).resolve().parents[1]
 
 
-def test_une_vue_tournee_se_remet_dans_le_repere_de_la_coupe():
-    """PC10 : le haut de la coupe A est la droite de la page ; sa droite est donc le bas (−y)."""
-    vue = {"nom": "COUPE A", "nature": "coupe", "cadre": [882, 978, 1573, 2003], "haut": "droite"}
+def _piece(nom, cadre, sol=None, plafond=None, sans_plafond=False, exterieur=False, hsp=None):
+    return {"nom": nom, "cadre": cadre, "sol": sol, "plafond": plafond, "sans_plafond": sans_plafond,
+            "hsp_ecrite_m": hsp, "exterieur": exterieur}
+
+
+# PC10 : les repères de niveau de la coupe A sont alignés en haut de la vue, et montent vers la DROITE de la
+# page (lecture réelle de l'agent sur PC11, 2026-09-29 : « alignés selon x »).
+NIVEAUX_TOURNES = [
+    {"nom": "±0,00", "cote_m": 0.0, "point": [1137.5, 2040]},
+    {"nom": "H10", "cote_m": 4.16, "point": [1252.0, 2040]},
+    {"nom": "H11", "cote_m": 7.04, "point": [1335.0, 2040]},
+    {"nom": "+8,00", "cote_m": 8.0, "point": [1363.0, 2040]},
+]
+
+
+def test_le_haut_d_une_coupe_tournee_se_deduit_des_cotes_meme_si_le_reperage_s_est_trompe():
+    """L'agent a dit « haut » ; les cotes montent vers +x : la vue est tournée, sa droite est le −y de la page."""
+    vue = {"nom": "COUPE A", "nature": "coupe", "cadre": [882, 978, 1573, 2003], "haut": "haut"}
     brut = {
-        "niveaux": [{"nom": "H10", "cote_m": 4.16, "position": 1252.0}, {"nom": "H11", "cote_m": 7.04, "position": 1335.0}],
+        "niveaux": NIVEAUX_TOURNES,
         "pieces": [
-            {"nom": "6.1.2 - Bur.1", "gauche": 1255.7, "droite": 1170.5, "sol": "H10", "plafond": "H11", "hsp_ecrite_m": None, "exterieur": False},
-            {"nom": None, "gauche": 1339.1, "droite": 1562.8, "sol": 1252.0, "plafond": None, "hsp_ecrite_m": None, "exterieur": False},
+            _piece("6.1.2 - Bur.1", [1252.0, 1170.5, 1335.0, 1255.7], sol="H10", plafond="H11"),
+            _piece(None, [1137.5, 1339.1, 1560.0, 1562.8], sans_plafond=True),
         ],
     }
     lu = consignes.lecture_de_vue(vue, brut)
-    assert lu["haut"] == [1.0, 0.0]
-    bur = lu["pieces"][0]
-    assert sorted((bur["debut"], bur["fin"])) == [-1255.7, -1170.5]
+    assert lu["haut"] == [1.0, 0.0] and lu["haut_par"] == "cotes"
+    bur, atrium = lu["pieces"]
+    assert (bur["debut"], bur["fin"]) == (-1255.7, -1170.5)
     assert (bur["sol"], bur["plafond"]) == ("H10", "H11")
-    assert lu["pieces"][1]["sol"] == 1252.0 and lu["pieces"][1]["plafond"] is None
-    [piece, vide] = coupes.pieces_de_la_vue(lu, 100)
-    assert piece["plafond_m"] - piece["sol_m"] == pytest.approx(2.88)
-    # Position calée sur les deux lignes de niveau (lues à 83 pt l'une de l'autre pour 2,88 m écrits) : à
-    # quelques centimètres de H10, assez pour reconnaître l'étage.
-    assert vide["sol_m"] == pytest.approx(4.16, abs=0.05)
-
-
-def test_une_vue_droite_garde_ses_coordonnees():
-    vue = {"nom": "COUPE CC", "nature": "coupe", "cadre": [0, 0, 100, 100], "haut": "haut"}
-    lu = consignes.lecture_de_vue(vue, {"niveaux": [], "pieces": [
-        {"nom": "Salle", "gauche": 10, "droite": 40, "sol": 20, "plafond": 70, "hsp_ecrite_m": 2.7, "exterieur": False}]})
-    assert lu["pieces"][0] | {} == {"nom": "Salle", "debut": 10.0, "fin": 40.0, "sol": 20.0, "plafond": 70.0, "hsp_ecrite_m": 2.7, "exterieur": False}
-
-
-def test_un_niveau_sans_cote_se_remplace_par_sa_position():
-    vue = {"nom": "B", "nature": "coupe", "cadre": [0, 0, 1, 1], "haut": "haut"}
-    lu = consignes.lecture_de_vue(vue, {"niveaux": [{"nom": "N1", "cote_m": None, "position": 300.0}], "pieces": [
-        {"nom": None, "gauche": 0, "droite": 1, "sol": "N1", "plafond": None, "hsp_ecrite_m": None, "exterieur": False}]})
-    assert lu["pieces"][0]["sol"] == 300.0
+    assert atrium["sol"] == 1137.5 and atrium["plafond"] is None
     lecture.valider_vues([lu])
+    piece, vide = coupes.pieces_de_la_vue(lu, 100)
+    assert piece["plafond_m"] - piece["sol_m"] == pytest.approx(2.88)
+    assert vide["sol_m"] == pytest.approx(0.0, abs=0.1)
+
+
+@pytest.mark.parametrize(
+    ("points", "haut"),
+    [
+        ([[0, 100], [0, 200]], (0.0, 1.0)),
+        ([[0, 200], [0, 100]], (0.0, -1.0)),
+        ([[100, 0], [200, 0]], (1.0, 0.0)),
+        ([[200, 0], [100, 0]], (-1.0, 0.0)),
+    ],
+)
+def test_les_quatre_orientations(points, haut):
+    niveaux = [{"nom": "a", "cote_m": 0.0, "point": points[0]}, {"nom": "b", "cote_m": 3.0, "point": points[1]}]
+    assert consignes.haut_par_les_cotes(niveaux) == haut
+
+
+def test_sans_deux_cotes_le_reperage_fait_foi():
+    assert consignes.haut_par_les_cotes([{"nom": "a", "cote_m": 0.0, "point": [0, 0]}]) is None
+    vue = {"nom": "CC", "nature": "coupe", "cadre": [0, 0, 100, 100], "haut": "haut"}
+    lu = consignes.lecture_de_vue(vue, {"niveaux": [], "pieces": [_piece("Salle", [10, 20, 40, 70], hsp=2.7)]})
+    assert lu["haut_par"] == "reperage"
+    assert lu["pieces"][0] == {"nom": "Salle", "debut": 10, "fin": 40, "sol": 20, "plafond": 70,
+                               "hsp_ecrite_m": 2.7, "exterieur": False}
+
+
+def test_une_piece_sans_cadre_est_ecartee_sans_faire_echouer_la_vue():
+    """Lecture réelle (PC11) : l'agent a listé des pièces nommées sans bornes lisibles."""
+    vue = {"nom": "CC", "nature": "coupe", "cadre": [0, 0, 100, 100], "haut": "haut"}
+    lu = consignes.lecture_de_vue(vue, {"niveaux": [], "pieces": [
+        {"nom": "Sas", "cadre": None, "sol": None, "plafond": None, "sans_plafond": False, "hsp_ecrite_m": None, "exterieur": False},
+        _piece("Salle", [10, 20, 40, 70]),
+    ]})
+    assert [p["nom"] for p in lu["pieces"]] == ["Salle"]
 
 
 def test_les_tuiles_couvrent_la_vue_en_se_recouvrant():
@@ -138,9 +170,8 @@ def test_la_chaine_rejouee_ecrit_une_lecture_que_le_site_accepte(tmp_path):
         {"nom": "COUPE A", "nature": "coupe", "cadre": [882, 978, 1573, 2003], "haut": "droite"},
         {"nom": "Zoom sur menuiserie", "nature": "detail", "cadre": [100, 100, 300, 300], "haut": "haut"},
     ], "observations": []}), encoding="utf-8")
-    (reponses / "vue-00.json").write_text(json.dumps({"niveaux": [
-        {"nom": "H10", "cote_m": 4.16, "position": 1252}, {"nom": "H11", "cote_m": 7.04, "position": 1335}],
-        "pieces": [{"nom": "6.1.2 - Bur.1", "gauche": 1255.7, "droite": 1170.5, "sol": "H10", "plafond": "H11", "hsp_ecrite_m": None, "exterieur": False}],
+    (reponses / "vue-00.json").write_text(json.dumps({"niveaux": NIVEAUX_TOURNES,
+        "pieces": [_piece("6.1.2 - Bur.1", [1252.0, 1170.5, 1335.0, 1255.7], sol="H10", plafond="H11")],
         "observations": []}), encoding="utf-8")
     sortie = tmp_path / "travail"
     fini = subprocess.run(
