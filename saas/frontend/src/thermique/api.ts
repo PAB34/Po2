@@ -268,6 +268,8 @@ export type VueCoupe = {
   cadre: [number, number, number, number];
   haut: [number, number];
   corrections?: { sol: number; plafond: number; hauteur_m: number }[];
+  /** Hauteurs de menuiserie mesurées sur cette façade (S5e, D193). */
+  menuiseries?: { composant: string; largeur_cm: number | null; hauteur_m: number }[];
 };
 
 export type StudyRoom = {
@@ -397,6 +399,8 @@ export type Work = {
   sheet_id: number;
   label: string;
   level_label: string | null;
+  /** « niveau » : étude d'un plan ; « traits » : traits de coupe d'un plan ; « coupes » : vues d'une planche (S5). */
+  type?: "niveau" | "traits" | "coupes";
   statut: "en_attente" | "en_cours" | "fini" | "refuse" | "echec";
   rang: number;
   message: string | null;

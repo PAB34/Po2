@@ -444,7 +444,7 @@ export function WorkspacePage() {
   const selectedRoom = shownStudy?.content.locaux.find((room) => room.id === selectedLocalId) ?? null;
 
   // Le parcours (F2, D106) : il se déduit de l'étude, et c'est lui qui règle le panneau et les calques.
-  const etapes = parcours(sheet ?? null, shownStudy);
+  const etapes = parcours(sheet ?? null, shownStudy, vues.data ?? []);
   const demandee = searchParams.get("etape");
   const etape = (etapes.find((item) => item.id === demandee)?.id ?? etapeCourante(etapes)) as EtapeId;
   const etapeActive = etapes.find((item) => item.id === etape) ?? etapes[0];

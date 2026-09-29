@@ -1,4 +1,4 @@
-import type { Sheet, Study, StudyContent, StudyReleveElement } from "../api";
+import type { Sheet, Study, StudyContent, StudyReleveElement, VueCoupe } from "../api";
 import { estPont } from "./elements";
 import type { MetricsShow } from "./StudyMetrics";
 import { validatedRoomCount } from "./study";
@@ -12,7 +12,7 @@ import { validatedRoomCount } from "./study";
  *
  * Fonction pure : elle ne lit que l'étude, pour être vérifiable sans écran.
  */
-export type EtapeId = "planche" | "analyse" | "locaux" | "enveloppe" | "ponts" | "hauteurs";
+export type EtapeId = "planche" | "analyse" | "lecture" | "locaux" | "enveloppe" | "ponts" | "hauteurs";
 
 /** « fait » : rien ne reste. « en_cours » : il reste du travail. « attente » : le préalable manque. */
 export type EtatEtape = "fait" | "en_cours" | "attente";
@@ -74,7 +74,61 @@ export function avancement(elements: StudyReleveElement[], exigeant = false): Av
 
 const pluriel = (nombre: number, mot: string) => `${nombre} ${mot}${nombre > 1 ? "s" : ""}`;
 
-export function parcours(sheet: Sheet | null, study: Study | undefined): Etape[] {
+/**
+ * Le parcours d'une planche de coupes ou de façades (S5) : ni nord, ni locaux, ni ponts. L'échelle suffit, l'agent
+ * lit les vues (bouton « Analyser avec Claude Code » des Documents), puis le thermicien confirme les hauteurs
+ * dans la fenêtre de la vue, ouverte depuis le plan d'un niveau (D183, D191, D193).
+ */
+function parcoursDesVues(sheet: Sheet, vues: VueCoupe[]): Etape[] {
+  const prete = sheet.status === "prete";
+  const facade = sheet.nature === "facade";
+  const lues = vues.filter((vue) => vue.nature !== "detail");
+  const confirmees = facade
+    ? lues.reduce((total, vue) => total + (vue.menuiseries?.length ?? 0), 0)
+    : lues.reduce((total, vue) => total + (vue.corrections?.length ?? 0), 0);
+  return [
+    {
+      id: "planche",
+      titre: "Planche à l'échelle",
+      // Le nord se pose sur les plans de niveau, pas ici : une élévation dit déjà quelle façade elle montre.
+      reste: prete ? "prête" : "à classer et mettre à l'échelle",
+      etat: prete ? "fait" : "en_cours",
+      panneau: "planche",
+      calques: null,
+    },
+    {
+      id: "lecture",
+      titre: facade ? "Lecture des façades" : "Lecture des coupes",
+      reste: lues.length
+        ? `${pluriel(lues.length, facade ? "façade lue" : "coupe lue")}`
+        : prete
+          ? "Documents → « Analyser avec Claude Code »"
+          : "après la planche",
+      etat: lues.length ? "fait" : prete ? "en_cours" : "attente",
+      panneau: "documents",
+      calques: null,
+    },
+    {
+      id: "hauteurs",
+      titre: facade ? "Hauteur des menuiseries" : "Hauteurs des locaux",
+      reste: !lues.length
+        ? "après la lecture"
+        : confirmees
+          ? `${pluriel(confirmees, facade ? "menuiserie mesurée" : "étage confirmé")}`
+          : facade
+            ? "depuis le plan : fiche d'une menuiserie → « Voir la façade »"
+            : "depuis le plan : fiche d'un local → « Voir la coupe »",
+      etat: !lues.length ? "attente" : confirmees ? "fait" : "en_cours",
+      panneau: "planche",
+      calques: null,
+    },
+  ];
+}
+
+export function parcours(sheet: Sheet | null, study: Study | undefined, vues: VueCoupe[] = []): Etape[] {
+  if (sheet && (sheet.nature === "coupe" || sheet.nature === "facade")) {
+    return parcoursDesVues(sheet, vues.filter((vue) => vue.sheet_id === sheet.id));
+  }
   const content = study?.content;
   const planchePrete = sheet?.status === "prete";
   const nord = Boolean(sheet?.nord);

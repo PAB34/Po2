@@ -20,6 +20,12 @@ const STATUT_TONS: Record<Work["statut"], string> = {
   echec: "th-work--echec",
 };
 
+const TYPE_LABELS: Record<NonNullable<Work["type"]>, string> = {
+  niveau: "étude du niveau",
+  traits: "traits de coupe",
+  coupes: "lecture des vues",
+};
+
 export function worksQueryKey(projectId: number) {
   return ["thermique", "travaux", projectId] as const;
 }
@@ -61,7 +67,7 @@ export function AnalysisQueue({ projectId }: { projectId: number }) {
 
   return (
     <section className="th-queue">
-      <h2>Analyse des niveaux</h2>
+      <h2>Analyse des planches</h2>
       <div className="th-inline">
         <button type="button" className="po2-button po2-button--primary" disabled={busy} onClick={() => void analyser()}>
           {busy ? "Mise en file…" : "Analyser avec Claude Code"}
@@ -72,7 +78,8 @@ export function AnalysisQueue({ projectId }: { projectId: number }) {
       </div>
       <p className="th-muted">
         Les plans sont analysés sur votre poste, du niveau le plus bas au plus haut, pour que les composants
-        reconnus à un étage servent au suivant.
+        reconnus à un étage servent au suivant. Les planches de coupes et de façades mises à l'échelle sont lues
+        ensuite : l'agent y repère et nomme les vues.
       </p>
 
       {erreur && <p className="th-alert th-alert--error">{erreur}</p>}
@@ -94,19 +101,22 @@ export function AnalysisQueue({ projectId }: { projectId: number }) {
 
       {enFile.length > 0 && (
         <p className="th-alert th-alert--warn">
-          {enFile.length} niveau{enFile.length > 1 ? "x attendent" : " attend"} le relais sur votre poste. Lancez&nbsp;:
+          {enFile.length} planche{enFile.length > 1 ? "s attendent" : " attend"} le relais sur votre poste. Lancez&nbsp;:
           <code>python scripts/relais_thermique.py</code>
         </p>
       )}
 
       {liste.length === 0 ? (
-        <p className="th-muted">Aucun niveau n'a encore été envoyé à l'analyse.</p>
+        <p className="th-muted">Aucune planche n'a encore été envoyée à l'analyse.</p>
       ) : (
         <ul className="th-works">
           {liste.map((item) => (
             <li key={item.id} className={STATUT_TONS[item.statut]}>
               <div className="th-work-ligne">
-                <span className="th-work-nom">{item.level_label || item.label}</span>
+                <span className="th-work-nom">
+                  {item.level_label || item.label}
+                  {item.type && item.type !== "niveau" ? ` · ${TYPE_LABELS[item.type]}` : ""}
+                </span>
                 <span className="th-work-statut">{STATUT_LABELS[item.statut]}</span>
               </div>
               {item.message && <p className="th-work-message">{item.message}</p>}
