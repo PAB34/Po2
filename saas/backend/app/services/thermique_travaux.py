@@ -288,6 +288,8 @@ def consignes_du_travail(db: Session, travail: ThermiqueTravail) -> dict[str, An
         "travail_id": travail.id,
         "type": travail.type or NIVEAU,
         "sheet_id": sheet.id,
+        "label": sheet.label,
+        "nature": sheet.nature,
         "project_id": sheet.project_id,
         "document_id": sheet.document_id,
         "niveau": sheet.level_label or sheet.label,

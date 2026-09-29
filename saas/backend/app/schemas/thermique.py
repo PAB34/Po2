@@ -323,6 +323,8 @@ class TravailConsignes(BaseModel):
     travail_id: int
     type: str = "niveau"
     sheet_id: int
+    label: str = ""
+    nature: str | None = None
     project_id: int
     document_id: int
     niveau: str

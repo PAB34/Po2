@@ -175,7 +175,10 @@ def lancer_la_lecture(plan: Path, consignes: dict, dossier: Path) -> tuple[int, 
     commande = [
         sys.executable, str(LECTURE_COUPES), str(plan),
         "--type", consignes["type"], "--page", str(consignes["page"]), "--sorties", str(dossier),
+        "--titre", consignes.get("label") or "",
     ]
+    if consignes.get("nature") in ("coupe", "facade"):
+        commande += ["--nature", consignes["nature"]]
     print(f"    {' '.join(commande[1:])}")
     resultat = subprocess.run(commande, capture_output=True, text=True, encoding="utf-8", errors="replace")
     return resultat.returncode, f"{resultat.stdout}\n{resultat.stderr}".strip()

@@ -91,6 +91,45 @@ def test_l_image_quadrillee_a_la_taille_demandee(tmp_path):
     assert largeur == pytest.approx(800, abs=2) and hauteur == pytest.approx(400, abs=2)
 
 
+def test_la_reponse_reelle_de_l_agent_sur_pc04_se_recupere():
+    """Réponse de l'essai du 2026-09-29 : clé « coupes » au lieu de « traits », trait C à une seule extrémité et
+    sans sens. Les trois autres traits sont gardés, C est écarté et dit."""
+    reponse = {
+        "coupes": [
+            {"nom": "A", "points": [[1148, 770], [1148, 1875]], "sens": "gauche"},
+            {"nom": "B", "points": [[272, 1250], [1310, 1250]], "sens": "haut"},
+            {"nom": "C", "points": [[770, 785]], "sens": None},
+            {"nom": "D", "points": [[520, 915], [1405, 915]], "sens": "haut"},
+        ],
+        "observations": "…",
+    }
+    traits, ecartes = consignes.traits_de_lecture(consignes.liste_rendue(reponse, "traits"))
+    assert [t["nom"] for t in traits] == ["A", "B", "D"]
+    assert ecartes == ["trait « C » écarté : une seule extrémité lue"]
+    assert consignes.liste_rendue({"a": [], "b": [], "observations": []}, "traits") is None
+
+
+def test_la_reponse_de_l_agent_se_lit_meme_glissee_dans_du_texte():
+    sys.path.insert(0, str(BACKEND / "scripts"))
+    import run_lecture_coupes as chaine
+
+    from app.services.thermique import ThermiqueError
+
+    assert chaine.reponse_de_l_agent(json.dumps({"structured_output": {"vues": []}}), "x") == {"vues": []}
+    texte = 'Voici la lecture : {"vues": [], "observations": []} — fin.'
+    assert chaine.reponse_de_l_agent(json.dumps({"result": texte}), "x") == {"vues": [], "observations": []}
+    with pytest.raises(ThermiqueError, match="error_max_turns"):
+        chaine.reponse_de_l_agent(json.dumps({"subtype": "error_max_turns", "result": "J'ai lu 12 tuiles."}), "x")
+    with pytest.raises(ThermiqueError, match="enveloppe JSON"):
+        chaine.reponse_de_l_agent("pas du json", "x")
+
+
+def test_une_page_blanche_ne_donne_aucune_tuile_a_lire(tmp_path):
+    """Le quadrillage seul n'est pas du dessin : l'agent ne reçoit que des tuiles où quelque chose est dessiné."""
+    assert consignes.rendre_ensemble(_pdf(tmp_path / "p.pdf"), 0, [0, 0, 1684, 2384], tmp_path, "ensemble") == []
+    assert list(tmp_path.glob("ensemble-*.png")) == []
+
+
 def test_la_chaine_rejouee_ecrit_une_lecture_que_le_site_accepte(tmp_path):
     """Réponses d'agent enregistrées : aucun appel à Claude Code, la chaîne entière tourne."""
     reponses = tmp_path / "reponses"

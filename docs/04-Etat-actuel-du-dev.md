@@ -37,9 +37,15 @@ déperditifs**, 289 formes, 77 liaisons. Tout lot qui ne touche pas au calcul do
   de coupe et repères de façade, cliquables pour ouvrir la vue ; pièces de la coupe rattachées aux locaux
   du plan ; **hauteur sous plafond lue par local** ; hauteur des menuiseries lue en élévation).
   ⚠️ S4 ne se vérifie qu'avec **deux niveaux étudiés et calés** : seul le R+1 l'est.
-  **S5 choisi en reprise (2026-09-28)** : cadrage `thermique/coupes-elevations-S5-decisions.md` (existant,
-  lecture des planches réelles des deux projets, lots S5a–S5e, **Q34–Q41 en attente de réponse**). Le R+1
-  étudié est celui du **projet 1** (Frontignan, PC04, 1/100).
+  **S5 en cours (2026-09-29, commits locaux non poussés)** : `thermique/coupes-elevations-S5-decisions.md`
+  (Q34–Q41 répondues → D178–D185 ; règles de rattachement D186–D189). Vérité terrain des deux projets :
+  `thermique/verite-terrain-coupes.md` + `.json`. Le R+1 étudié est celui du **projet 1** (Frontignan, PC04,
+  1/100). **Fait** : rattachement coupe → locaux (`thermique_coupes.py`, coupe A réelle 8/8), rangement des
+  lectures + route `GET /sheets/{id}/hauteurs` + hauteur saisie par `modifier` (`thermique_lecture_coupes.py`,
+  **migration 0088**), hauteur dans la fiche du local (écran), agent `thermicien-coupe` + script
+  `run_lecture_coupes.py` (images quadrillées en points PDF, `--reponses` pour rejouer) + relais par type de
+  travail (un ancien relais ne reçoit que des niveaux). **Reste** : mesurer l'agent contre la vérité terrain
+  (script `s5_ecart_agent.py` du bloc-notes), puis S5a/S5b (traits cliquables, fenêtre flottante D183), S5e.
 - `thermique/retours-menuiseries-2026-09-28-decisions.md` — M1, M2 (morceaux → élément entier), M3 **faits**.
   Réponses Q30–Q33 → **D174** fusion d'office de 2 menuiseries contiguës de même composant ; **D175**
   menuiserie dessinée = composant le plus employé ; **D176** identiques = même composant, largeur ± 1 cm ;

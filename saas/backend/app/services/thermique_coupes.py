@@ -266,10 +266,34 @@ def rattacher(
     vue: dict[str, Any],
     echelle_vue: float,
 ) -> dict[str, Any]:
+    """Rattache les pièces d'une vue de coupe aux locaux d'un plan, dans le sens du regard qui colle le mieux.
+
+    Le sens lu sur le plan (drapeau, flèche) est une convention graphique que l'agent peut mal lire (essai du
+    2026-09-29 : coupe B lue « haut » au lieu de « bas »). Retourner le regard inverse l'ordre des pièces :
+    on essaie donc les deux sens et la coupe tranche ; un sens corrigé est signalé.
+    """
+    direct = _rattacher_dans_un_sens(trait, echelle_plan, locaux, vue, echelle_vue)
+    inverse_trait = {**trait, "sens": [-float(v) for v in trait["sens"]]}
+    inverse = _rattacher_dans_un_sens(inverse_trait, echelle_plan, locaux, vue, echelle_vue)
+    if inverse["score"] > direct["score"] * 1.2 + 1e-9:
+        inverse["alertes"].insert(0, "sens du regard lu sur le plan contredit par la coupe : sens retourné")
+        inverse["sens_retourne"] = True
+        return inverse
+    direct["sens_retourne"] = False
+    return direct
+
+
+def _rattacher_dans_un_sens(
+    trait: dict[str, Any],
+    echelle_plan: float,
+    locaux: list[dict[str, Any]],
+    vue: dict[str, Any],
+    echelle_vue: float,
+) -> dict[str, Any]:
     """Rattache les pièces d'une vue de coupe aux locaux d'un plan, à l'étage qui leur ressemble le plus.
 
     Rend l'étage retenu, le décalage et comment il a été trouvé, une ligne par pièce de la coupe (local
-    rattaché, hauteur, et pourquoi), et les désaccords entre la position et le nom.
+    rattaché, hauteur, et pourquoi), les désaccords entre la position et le nom, et le score de ressemblance.
     """
     plan = traversees_du_plan(trait, locaux, echelle_plan)
     toutes = pieces_de_la_vue(vue, echelle_vue)
@@ -294,7 +318,10 @@ def rattacher(
             }
         )
     if not candidats:
-        return {"etage_sol_m": None, "decalage_m": None, "lignes": [], "alertes": ["aucun local du plan ne se retrouve dans cette coupe"]}
+        return {
+            "etage_sol_m": None, "decalage_m": None, "lignes": [], "score": 0.0,
+            "alertes": ["aucun local du plan ne se retrouve dans cette coupe"],
+        }
     retenu = max(candidats, key=lambda c: c["score"])
     decalage = retenu["decalage_m"]
     alertes = []
@@ -348,6 +375,9 @@ def rattacher(
                     )
             ligne["local"] = choisi["local"]
         lignes.append(ligne)
+    # Ressemblance : chaque pièce dont le numéro tombe sur son local compte plus que tout recouvrement ;
+    # c'est ce qui départage les deux sens du regard (un regard retourné inverse l'ordre des pièces).
+    concordants = sum(1 for l in lignes if l["par"] == "nom et position")
     return {
         "etage_sol_m": retenu["sol_m"],
         "decalage_m": round(decalage, 3),
@@ -355,6 +385,7 @@ def rattacher(
         "numeros_communs": retenu["numeros_communs"],
         "lignes": lignes,
         "alertes": alertes,
+        "score": concordants * 100.0 + _score(decalage, retenu["pieces"], plan),
     }
 
 

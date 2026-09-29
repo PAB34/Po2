@@ -20,12 +20,21 @@ from pathlib import Path
 from typing import Any
 
 SENS = {"haut": (0.0, 1.0), "bas": (0.0, -1.0), "gauche": (-1.0, 0.0), "droite": (1.0, 0.0)}
-PAS_ENSEMBLE_PT = 100
+# L'agent voit une image réduite à environ 1 000 pixels de côté (essai du 2026-09-29 : une page entière
+# rendue à 1 600 px lui est arrivée illisible, repères et graduations compris). Toute image est donc rendue
+# à cette taille, et une vue d'ensemble est une mosaïque de tuiles d'environ 500 points.
+COTE_IMAGE_PX = 1000
+PAS_ENSEMBLE_PT = 50
+TAILLE_ENSEMBLE_PT = 520
 PAS_ZOOM_PT = 5
 PAS_TUILE_PT = 20
 TAILLE_TUILE_PT = 400
 RECOUVREMENT_TUILE_PT = 40
 DEMI_ZOOM_PT = 60
+# Une tuile où presque rien n'est dessiné n'est pas montrée à l'agent. Mesuré le 2026-09-29 : une tuile
+# blanche (graduations seules) pèse 0,6 à 1,2 ‰, la marge de PC04 qui ne porte que les drapeaux des coupes
+# A et C 2,9 ‰ ; l'ancien seuil de 4 ‰ l'écartait et l'agent n'a pas vu ces drapeaux.
+ENCRE_MIN = 0.002
 
 
 # --- Images quadrillées -----------------------------------------------------------------------------------
@@ -46,7 +55,8 @@ def rendre_quadrille(pdf: Path, page_index: int, cadre: list[float], pas: float,
         y0, y1 = sorted((float(cadre[1]), float(cadre[3])))
         x0, y0 = max(x0, 0.0), max(y0, 0.0)
         x1, y1 = min(x1, largeur_page), min(y1, hauteur_page)
-        echelle = largeur_px / max(x1 - x0, 1.0)
+        # `largeur_px` borne le plus grand côté : une tuile haute et étroite reste lisible.
+        echelle = largeur_px / max(x1 - x0, y1 - y0, 1.0)
         image = page.render(scale=echelle, crop=(x0, y0, largeur_page - x1, hauteur_page - y1)).to_pil().convert("RGB")
     finally:
         document.close()
@@ -72,6 +82,30 @@ def rendre_quadrille(pdf: Path, page_index: int, cadre: list[float], pas: float,
     sortie.parent.mkdir(parents=True, exist_ok=True)
     image.save(sortie)
     return sortie
+
+
+def encre(image_path: Path) -> float:
+    """Part des pixels dessinés d'une image, hors quadrillage (bleu et orange)."""
+    import numpy as np
+    from PIL import Image
+
+    pixels = np.asarray(Image.open(image_path).convert("RGB")).astype(int)
+    r, g, b = pixels[..., 0], pixels[..., 1], pixels[..., 2]
+    sombre = (r + g + b) < 600
+    grille = ((b > 150) & (r < 120)) | ((r > 180) & (b < 90) & (g > 60))
+    return float((sombre & ~grille).mean())
+
+
+def rendre_ensemble(pdf: Path, page_index: int, cadre: list[float], dossier: Path, prefixe: str) -> list[Path]:
+    """La vue d'ensemble d'une page en mosaïque de tuiles lisibles par l'agent ; les tuiles vides sont écartées."""
+    images = []
+    for rang, morceau in enumerate(tuiles(cadre, TAILLE_ENSEMBLE_PT, RECOUVREMENT_TUILE_PT)):
+        image = rendre_quadrille(pdf, page_index, morceau, PAS_ENSEMBLE_PT, COTE_IMAGE_PX, dossier / f"{prefixe}-{rang:02d}.png")
+        if encre(image) >= ENCRE_MIN:
+            images.append(image)
+        else:
+            image.unlink(missing_ok=True)
+    return images
 
 
 def tuiles(cadre: list[float], taille: float = TAILLE_TUILE_PT, recouvrement: float = RECOUVREMENT_TUILE_PT) -> list[list[float]]:
@@ -217,10 +251,19 @@ REPERE = (
 )
 
 
-def consigne_traits_ensemble(image: Path) -> str:
+def _mosaique(images: list[Path]) -> list[str]:
+    return [
+        f"La planche est montrée en {len(images)} tuiles qui se recouvrent, toutes dans le même repère ; lis-les "
+        "toutes avant de répondre :",
+        *[f"- {image}" for image in images],
+    ]
+
+
+def consigne_traits_ensemble(images: list[Path], titre: str = "") -> str:
     return "\n".join(
         [
-            f"Plan de niveau : {image}",
+            f"Plan de niveau{f' « {titre} »' if titre else ''}.",
+            *_mosaique(images),
             REPERE,
             "Repère chaque trait de coupe du plan (lettre ou chiffre : A, B, 1…). Il est marqué soit par un trait "
             "continu ou mixte (souvent rouge) terminé par des flèches, soit seulement par deux repères à ses "
@@ -244,16 +287,23 @@ def consigne_traits_precis(zooms: list[dict[str, Any]]) -> str:
     return "\n".join(lignes)
 
 
-def consigne_vues_ensemble(image: Path) -> str:
+def consigne_vues_ensemble(images: list[Path], titre: str = "", nature_planche: str = "coupe") -> str:
+    classement = "coupes" if nature_planche == "coupe" else "façades"
     return "\n".join(
         [
-            f"Planche de coupes ou de façades : {image}",
+            f"Planche classée « {classement} » par le thermicien{f', intitulée « {titre} »' if titre else ''}. "
+            f"Ses vues sont des {classement}, sauf un détail ou un zoom clairement annoncé comme tel.",
+            *_mosaique(images),
             REPERE,
-            "Liste chaque vue dessinée sur la planche : `nom` tel qu'écrit (« COUPE AA », « Coupe B », « Façade "
-            "Est »…) ; `nature` : coupe, facade, ou detail (un zoom, un détail constructif, une vue partielle "
-            "annotée « détail » ou « zoom ») ; `cadre` = [x0, y0, x1, y1] qui englobe la vue (bâtiment, cotes de "
-            "niveau, axes), sans le cartouche ; `haut` = le côté de la page vers lequel est le haut du bâtiment "
-            "(le ciel, la toiture) : une vue peut être tournée d'un quart de tour.",
+            "Liste chaque vue dessinée sur la planche : `nom` tel qu'écrit près de la vue ou dans le cartouche "
+            "(« COUPE AA », « Coupe B », « Façade Est »…) ; `nature` : coupe, facade, ou detail (un zoom, un "
+            "détail constructif, une vue partielle annotée « détail » ou « zoom ») ; `cadre` = [x0, y0, x1, y1] "
+            "en points PDF lus sur la grille, qui englobe la vue (bâtiment, cotes de niveau, axes), sans le "
+            "cartouche ; `haut` = le côté de la page vers lequel est le haut du bâtiment.",
+            "Une coupe peut être **tournée d'un quart de tour** et ressembler alors à un plan : ce qui la trahit, ce "
+            "sont les repères de niveau (±0,00, +4,16, H10, NGF) alignés le long d'un bord, le sol naturel ou la "
+            "rue d'un côté, la toiture de l'autre, des textes écrits dans le même sens. Le haut est du côté de la "
+            "toiture et des cotes de niveau les plus élevées.",
         ]
     )
 
@@ -286,6 +336,30 @@ def consigne_lecture_vue(vue: dict[str, Any], images: list[Path]) -> str:
 
 
 # --- Conversions vers le format du serveur ------------------------------------------------------------------
+
+
+def liste_rendue(reponse: dict[str, Any], cle: str) -> list[Any] | None:
+    """La liste attendue sous `cle` ; l'agent la range parfois sous un autre nom (« coupes » pour « traits ») :
+    une seule liste dans la réponse, hors observations, vaut réponse."""
+    if isinstance(reponse.get(cle), list):
+        return reponse[cle]
+    autres = [v for k, v in reponse.items() if k != "observations" and isinstance(v, list)]
+    return autres[0] if len(autres) == 1 else None
+
+
+def traits_de_lecture(bruts: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[str]]:
+    """Les traits exploitables, et ce qui a été écarté en clair. Un sens illisible n'écarte pas le trait : la
+    coupe le tranchera (`thermique_coupes.rattacher` essaie les deux sens)."""
+    traits, ecartes = [], []
+    for brut in bruts:
+        nom = str(brut.get("nom") or "").strip()
+        points = [p for p in brut.get("points") or [] if isinstance(p, (list, tuple)) and len(p) == 2]
+        if not nom or len(points) < 2:
+            ecartes.append(f"trait « {nom or '?'} » écarté : une seule extrémité lue")
+            continue
+        sens = SENS.get(brut.get("sens") or "", (0.0, 1.0))
+        traits.append({"nom": nom, "points": [[float(x), float(y)] for x, y in points], "sens": list(sens)})
+    return traits, ecartes
 
 
 def trait_de_lecture(brut: dict[str, Any]) -> dict[str, Any]:

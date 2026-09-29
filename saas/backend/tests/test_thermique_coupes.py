@@ -95,6 +95,16 @@ def test_coupe_a_huit_locaux_sur_huit_au_bon_etage():
     assert r["alertes"] == []
 
 
+def test_un_sens_du_regard_mal_lu_est_retourne_par_la_coupe():
+    """Essai de l'agent (2026-09-29) : un drapeau lu du mauvais côté. La coupe tranche, et le dit."""
+    retourne = {**TRAIT_A, "sens": [1, 0]}
+    r = coupes.rattacher(retourne, 100, LOCAUX, VUE_A, 100)
+    assert r["sens_retourne"] is True
+    assert [l["local"] for l in r["lignes"]] == ATTENDU_A
+    assert "sens retourné" in r["alertes"][0]
+    assert coupes.rattacher(TRAIT_A, 100, LOCAUX, VUE_A, 100)["sens_retourne"] is False
+
+
 def test_coupe_a_sans_les_noms_le_recouvrement_suffit():
     anonyme = {**VUE_A, "pieces": [{**p, "nom": None} for p in VUE_A["pieces"]]}
     r = coupes.rattacher(TRAIT_A, 100, LOCAUX, anonyme, 100)
