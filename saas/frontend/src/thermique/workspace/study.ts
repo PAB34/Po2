@@ -1,7 +1,8 @@
-import type { PdfPoint, Study, StudyLocalNature, StudyOperation, StudyRoom } from "../api";
+import type { LocalHauteur, PdfPoint, Study, StudyLocalNature, StudyOperation, StudyRoom } from "../api";
 import { pointInPolygon } from "./edition";
 
 export const studyQueryKey = (sheetId: number | null) => ["thermique", "etude", sheetId] as const;
+export const hauteursQueryKey = (sheetId: number | null) => ["thermique", "hauteurs", sheetId] as const;
 
 export const STUDY_LOCAL_NATURES: StudyLocalNature[] = [
   "chauffe",
@@ -44,6 +45,31 @@ export const changeLocalNatureOperation = (id: string, nature: StudyLocalNature)
   id,
   nature,
 });
+
+/** Pose la hauteur sous plafond d'un local (D178), ou la retire au profit de celle des coupes (`null`). */
+export const changeLocalHauteurOperation = (id: string, hauteur: number | null): StudyOperation =>
+  hauteur === null ? { type: "modifier", id, retirer_hauteur: true } : { type: "modifier", id, hauteur_m: hauteur };
+
+/** D'où vient la hauteur d'un local, en clair. */
+export function provenanceHauteur(hauteur: LocalHauteur): string {
+  const vues = hauteur.lectures.map((lecture) => lecture.vue).join(", ");
+  switch (hauteur.source) {
+    case "saisie":
+      return hauteur.proposee_m !== null
+        ? `saisie par vous (les coupes proposent ${hauteur.proposee_m.toLocaleString("fr-FR")} m)`
+        : "saisie par vous";
+    case "lue":
+      return `lue sur la coupe ${vues}`;
+    case "moyenne":
+      return `moyenne des coupes ${vues}, pondérée par la longueur traversée`;
+    case "deduite":
+      return "déduite : aucune coupe ne traverse ce local, hauteur la plus fréquente du niveau";
+    case "double_hauteur":
+      return "double hauteur : la coupe ne montre pas de plafond à cet étage";
+    default:
+      return "aucune coupe lue pour ce niveau";
+  }
+}
 
 export function sortedStudyRooms(rooms: StudyRoom[]): StudyRoom[] {
   return rooms

@@ -25,7 +25,13 @@ import {
   type EditMode,
   type StudyDraft,
 } from "./edition";
-import { changeLocalNatureOperation, sortedStudyRooms, studyQueryKey } from "./study";
+import {
+  changeLocalHauteurOperation,
+  changeLocalNatureOperation,
+  hauteursQueryKey,
+  sortedStudyRooms,
+  studyQueryKey,
+} from "./study";
 import { appliquerGeometrieLocale } from "./localGeometry";
 
 // Rayon de saisie d'une poignée, en pixels d'écran.
@@ -298,6 +304,43 @@ export function useStudyEdition({
     [busy, draft, natureBlockedReason, pendingOperations.length, queryClient, sheetId, study, token, versions],
   );
 
+  /** Hauteur sous plafond saisie (D178), ou retirée (`null`) au profit de celle des coupes. */
+  const changeHauteur = useCallback(
+    async (roomId: string, hauteur: number | null) => {
+      if (!token || !sheetId || busy) {
+        return;
+      }
+      if (draft) {
+        setMessage("Terminez ou annulez d'abord la reprise du contour.");
+        return;
+      }
+      if (pendingOperations.length > 0) {
+        setMessage("Enregistrez ou abandonnez d'abord les modifications locales en attente.");
+        return;
+      }
+      setBusy(true);
+      setMessage(null);
+      try {
+        const enregistre = await thermiqueApi.saveStudy(token, sheetId, {
+          operations: [changeLocalHauteurOperation(roomId, hauteur)],
+          local_id: roomId,
+          motif: "hauteur_local",
+          valider: false,
+        });
+        queryClient.setQueryData<Study>(studyQueryKey(sheetId), enregistre);
+        void queryClient.invalidateQueries({ queryKey: hauteursQueryKey(sheetId) });
+        setPreview(null);
+        setMessage(hauteur === null ? "Hauteur des coupes rétablie." : "Hauteur enregistrée.");
+        void versions.refetch();
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "L'enregistrement de la hauteur a échoué.");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [busy, draft, pendingOperations.length, queryClient, sheetId, token, versions],
+  );
+
   const selectedShownRoom = selectedRoom
     ? (localContent?.locaux.find((room) => room.id === selectedRoom.id) ?? selectedRoom)
     : null;
@@ -314,6 +357,7 @@ export function useStudyEdition({
         rooms: study?.content.locaux ?? [],
         natureBlockedReason: draft ? "Terminez ou annulez d'abord la reprise du contour." : natureBlockedReason,
         onNature: (nature: StudyLocalNature) => void changeNature(selectedShownRoom.id, nature),
+        onHauteur: (hauteur: number | null) => void changeHauteur(selectedShownRoom.id, hauteur),
         onStart: (mode: EditMode) => {
           setPreview(null);
           setMessage(null);

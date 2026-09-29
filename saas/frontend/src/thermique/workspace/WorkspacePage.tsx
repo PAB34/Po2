@@ -28,7 +28,7 @@ import { useStudyEdition } from "./useStudyEdition";
 import { useStudyElements } from "./useStudyElements";
 import { cibleEditable } from "./elementsHistory";
 import { peutAnnulerEditionAvecEchap } from "./edition";
-import { NATURE_LABELS, otherLocalNatures, roomAt, sortedStudyRooms, studyQueryKey } from "./study";
+import { hauteursQueryKey, NATURE_LABELS, otherLocalNatures, roomAt, sortedStudyRooms, studyQueryKey } from "./study";
 
 type Panel = "planche" | "fiche" | "documents" | "bibliotheque" | "infos";
 
@@ -343,6 +343,13 @@ export function WorkspacePage() {
     enabled: Boolean(token && sheetId),
   });
   const study = studyQuery.data;
+  // Hauteur de chaque local, lue dans les coupes ou saisie (S5, D178 à D189).
+  const hauteurs = useQuery({
+    queryKey: hauteursQueryKey(sheetId),
+    queryFn: () => thermiqueApi.getHauteurs(token!, sheetId!),
+    enabled: Boolean(token && sheetId && study),
+    retry: false,
+  });
   const selectedLocalId = searchParams.get("local");
   const selectRoomDirect = useCallback((id: string) => setParams({ local: id, panneau: "fiche" }), [setParams]);
   // Les corrections d'éléments s'appliquent d'abord : l'édition des contours travaille ensuite sur
@@ -1088,6 +1095,7 @@ export function WorkspacePage() {
                             }
                           : undefined
                       }
+                      hauteur={selectedRoom ? hauteurs.data?.locaux[selectedRoom.id] : undefined}
                     />
                   )}
                   {/* Les éléments du local, sous sa fiche et jamais en carte flottante (F4, Q8). À l'étape des

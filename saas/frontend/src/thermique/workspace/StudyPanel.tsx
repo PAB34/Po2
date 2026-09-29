@@ -1,11 +1,11 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent } from "react";
 
-import type { PdfPoint, Study, StudyLocalNature, StudyRoom, StudySide } from "../api";
+import type { LocalHauteur, PdfPoint, Study, StudyLocalNature, StudyRoom, StudySide } from "../api";
 import type { ToScreen } from "../components/TileSheetViewer";
 import { controleCote } from "./cotes";
 import { LIMIT_COLORS, LIMIT_LABELS, type StudyDraft } from "./edition";
-import { NATURE_COLORS, NATURE_LABELS, sortedStudyRooms, STUDY_LOCAL_NATURES } from "./study";
+import { NATURE_COLORS, NATURE_LABELS, provenanceHauteur, sortedStudyRooms, STUDY_LOCAL_NATURES } from "./study";
 
 // Natures qui ne déperdent pas elles-mêmes (même règle que `LOCAUX_HORS_VOLUME` côté serveur).
 const HORS_VOLUME: StudyLocalNature[] = ["non_chauffe", "gaine_technique", "exterieur"];
@@ -175,6 +175,8 @@ export type StudyEdition = {
   rooms: StudyRoom[];
   natureBlockedReason: string | null;
   onNature: (nature: StudyLocalNature) => void;
+  /** Hauteur sous plafond saisie, ou `null` pour revenir à celle des coupes (S5, D178). */
+  onHauteur?: (hauteur: number | null) => void;
   onStart: (mode: "contour" | "couper") => void;
   onCancel: () => void;
   onDraft: (changes: Partial<Pick<StudyDraft, "nom" | "noms" | "nature">>) => void;
@@ -464,6 +466,80 @@ function ValidationLocal({ validation, valide }: { validation: StudyRoomValidati
   );
 }
 
+/** Lit une hauteur saisie (virgule ou point), bornée comme au serveur : 1,50 à 15 m. */
+export function lireHauteur(texte: string): { valeur: number | null; erreur: string | null } {
+  const nombre = Number(texte.trim().replace(",", "."));
+  if (!texte.trim() || !Number.isFinite(nombre) || nombre < 1.5 || nombre > 15) {
+    return { valeur: null, erreur: "Saisissez une hauteur entre 1,50 et 15 m." };
+  }
+  return { valeur: Math.round(nombre * 1000) / 1000, erreur: null };
+}
+
+/** Hauteur sous plafond fini du local (S5, D178 à D180) : sa valeur, d'où elle vient, et sa saisie. */
+export function HauteurLocal({
+  hauteur,
+  saisie,
+  busy = false,
+  onHauteur,
+}: {
+  hauteur?: LocalHauteur;
+  /** Hauteur déjà saisie dans l'étude : elle fait foi même si les coupes n'ont pas encore été lues. */
+  saisie?: number | null;
+  busy?: boolean;
+  onHauteur?: (hauteur: number | null) => void;
+}) {
+  const valeur = hauteur?.hauteur_m ?? saisie ?? null;
+  const [texte, setTexte] = useState(valeur === null ? "" : String(valeur).replace(".", ","));
+  const [erreur, setErreur] = useState<string | null>(null);
+  useEffect(() => {
+    setTexte(valeur === null ? "" : String(valeur).replace(".", ","));
+    setErreur(null);
+  }, [valeur]);
+  const saisieEnCours = hauteur?.source === "saisie" || (saisie ?? null) !== null;
+
+  const enregistrer = () => {
+    const lu = lireHauteur(texte);
+    setErreur(lu.erreur);
+    if (lu.valeur !== null) onHauteur?.(lu.valeur);
+  };
+
+  return (
+    <div className="th-hauteur">
+      <p className={valeur === null ? "th-alert th-alert--warn" : "th-muted"}>
+        Hauteur sous plafond : <strong>{valeur === null ? "inconnue" : `${valeur.toLocaleString("fr-FR")} m`}</strong>
+        {hauteur ? ` — ${provenanceHauteur(hauteur)}` : saisie != null ? " — saisie par vous" : ""}
+      </p>
+      {hauteur?.alerte && <p className="th-alert th-alert--warn">{hauteur.alerte}</p>}
+      {onHauteur && (
+        <div className="th-hauteur__saisie">
+          <label>
+            Hauteur (m)
+            <input
+              inputMode="decimal"
+              value={texte}
+              disabled={busy}
+              aria-label="Hauteur sous plafond fini (m)"
+              onChange={(event) => setTexte(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") enregistrer();
+              }}
+            />
+          </label>
+          <button type="button" className="po2-button po2-button--ghost" disabled={busy} onClick={enregistrer}>
+            {saisieEnCours ? "Modifier" : "Valider cette hauteur"}
+          </button>
+          {saisieEnCours && (
+            <button type="button" className="po2-button po2-button--ghost" disabled={busy} onClick={() => onHauteur(null)}>
+              Revenir aux coupes
+            </button>
+          )}
+        </div>
+      )}
+      {erreur && <small className="th-alert th-alert--warn">{erreur}</small>}
+    </div>
+  );
+}
+
 export function StudyRoomPanel({
   room,
   state,
@@ -471,6 +547,7 @@ export function StudyRoomPanel({
   coteVisee = null,
   onCote,
   validation,
+  hauteur,
 }: {
   room: StudyRoom | null;
   state?: Study["local_states"][string];
@@ -479,6 +556,8 @@ export function StudyRoomPanel({
   coteVisee?: number | null;
   onCote?: (rang: number) => void;
   validation?: StudyRoomValidation;
+  /** Hauteur du local lue dans les coupes, ou saisie (S5). */
+  hauteur?: LocalHauteur;
 }) {
   if (!room) {
     return <p className="th-muted">Sélectionnez un local sur le plan ou dans la liste pour ouvrir sa fiche.</p>;
@@ -510,6 +589,14 @@ export function StudyRoomPanel({
         )}
         {edition?.natureBlockedReason && <small className="th-muted">{edition.natureBlockedReason}</small>}
         <p className="th-muted">{squareMeters(sheet.surface_m2)} · périmètre {meters(sheet.perimetre_m)}</p>
+        {room.nature !== "exterieur" && (
+          <HauteurLocal
+            hauteur={hauteur}
+            saisie={room.hauteur_m}
+            busy={edition?.busy}
+            onHauteur={edition && !edition.draft ? edition.onHauteur : undefined}
+          />
+        )}
         {/* Le linéaire déperditif est ce qu'un recadrage fait varier sans le dire : il est annoncé ici,
             car un local décollé de la façade cesse de déperdre et ses cotes changent de sens. */}
         {HORS_VOLUME.includes(room.nature) ? (
@@ -605,9 +692,14 @@ export function StudyRoomPanel({
         </ul>
       </section>
 
-      {(sheet.a_completer ?? []).length > 0 && (
-        <section><h2>À compléter</h2><ul>{sheet.a_completer?.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ul></section>
-      )}
+      {(() => {
+        // La hauteur connue (lue, déduite ou saisie) n'est plus « à compléter ».
+        const connue = (hauteur?.hauteur_m ?? room.hauteur_m ?? null) !== null;
+        const reste = (sheet.a_completer ?? []).filter((item) => !(connue && item.startsWith("hauteur sous plafond")));
+        return reste.length > 0 ? (
+          <section><h2>À compléter</h2><ul>{reste.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ul></section>
+        ) : null;
+      })()}
       {((sheet.alertes ?? []).length > 0 || room.demandes.length > 0) && (
         <section>
           <h2>Alertes et demandes</h2>

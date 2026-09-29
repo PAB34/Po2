@@ -210,10 +210,31 @@ export type StudyRoomSheet = {
   a_completer?: string[];
   alertes?: string[];
 };
+/** D'où vient la hauteur d'un local (D178 à D180). */
+export type HauteurSource = "saisie" | "lue" | "moyenne" | "deduite" | "double_hauteur" | "absente";
+
+export type LocalHauteur = {
+  hauteur_m: number | null;
+  proposee_m: number | null;
+  source: HauteurSource;
+  lectures: { vue: string; hsp_m: number; longueur_m: number }[];
+  alerte: string | null;
+};
+
+export type HauteursDuPlan = {
+  sheet_id: number;
+  locaux: Record<string, LocalHauteur>;
+  coupes: { trait: string; vue: string; vue_sheet_id: number; alertes: string[] }[];
+  traits_sans_vue: string[];
+  traits: { nom: string; points: PdfPoint[]; sens: [number, number] }[];
+};
+
 export type StudyRoom = {
   id: string;
   nom: string;
   nature: StudyLocalNature;
+  /** Hauteur sous plafond fini saisie ou validée par le thermicien (S5, D178). */
+  hauteur_m?: number | null;
   contour: PdfPoint[];
   contour_pdf: PdfPoint[];
   limites: StudyLimit[];
@@ -289,7 +310,15 @@ export type StudyElementChanges = Partial<{
 }>;
 export type StudyElementScope = "cet_element" | "partout";
 export type StudyOperation =
-  | { type: "modifier"; id: string; contour_pdf?: PdfPoint[]; nature?: StudyLocalNature; nom?: string }
+  | {
+      type: "modifier";
+      id: string;
+      contour_pdf?: PdfPoint[];
+      nature?: StudyLocalNature;
+      nom?: string;
+      hauteur_m?: number;
+      retirer_hauteur?: boolean;
+    }
   | { type: "couper"; id: string; segment_pdf: PdfPoint[]; noms?: string[] }
   | { type: "fusionner"; ids: string[]; nom?: string }
   | { type: "local_ajouter"; contour_pdf: PdfPoint[]; nature: StudyLocalNature; nom: string }
@@ -438,6 +467,7 @@ export const thermiqueApi = {
   ) => request<Sheet>(token, `/thermique/sheets/${sheetId}/calage`, { method: "POST", body: JSON.stringify(payload) }),
   getStudy: (token: string, sheetId: number) => request<Study | null>(token, `/thermique/sheets/${sheetId}/etude`),
   getPontsCatalogue: (token: string) => request<PontsCatalogue>(token, "/thermique/ponts/catalogue"),
+  getHauteurs: (token: string, sheetId: number) => request<HauteursDuPlan>(token, `/thermique/sheets/${sheetId}/hauteurs`),
   importStudy: (token: string, sheetId: number, file: File, replace = false) => {
     const form = new FormData();
     form.append("fichier", file);

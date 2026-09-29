@@ -2331,6 +2331,24 @@ circle.th-seg--measure {
   margin-top: 0.6rem;
 }
 
+/* Hauteur sous plafond du local (S5, D178) : valeur, provenance, saisie. */
+.th-hauteur {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0.4rem 0;
+}
+
+.th-hauteur__saisie {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.4rem;
+}
+
+.th-hauteur__saisie input {
+  width: 6rem;
+}
+
 /* L'en-tête du côté est un bouton qui le montre sur le plan (sujet 2, D146). */
 .th-study-side__viser {
   display: grid;
