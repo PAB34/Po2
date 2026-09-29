@@ -209,7 +209,14 @@ def hauteurs_du_plan(db: Session, sheet: ThermiqueSheet) -> dict[str, Any]:
             deduits[vue.id] = trait
             nouveaux = True
         if not trait.get("points"):
-            non_situees.append(vue.nom)
+            # Aucun trait droit ne ressemble à la coupe : repli sur les seuls noms de pièces.
+            r = coupes.rattacher_par_les_noms(serialize_vue(vue), locaux, echelle_vue)
+            if any(l["local"] for l in r["lignes"]):
+                rattachements[vue.nom] = r
+                lectures.append({"trait": vue.nom, "deduit": True, "vue_id": vue.id,
+                                 "vue_sheet_id": vue.sheet_id, "vue": vue.nom, **r})
+            else:
+                non_situees.append(vue.nom)
             continue
         r = coupes.rattacher(trait, sheet.scale_denominator, locaux, serialize_vue(vue), echelle_vue)
         rattachements[vue.nom] = r

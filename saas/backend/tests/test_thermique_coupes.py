@@ -296,6 +296,34 @@ def test_deux_clics_corrigent_le_plafond_mal_lu_de_tout_l_etage(db_session):
     assert lecture.hauteurs_du_plan(db_session, plan)["locaux"]["piece-003"]["hauteur_m"] == 3.84
 
 
+def test_sans_trait_possible_les_noms_seuls_rattachent_les_pieces():
+    """Repli de D190 : trait à décrochés (projet 2, coupe C). Aucune droite ne suit la coupe ; chaque pièce va
+    au local qui porte seul son nom. Un nom porté par plusieurs locaux n'est pas deviné."""
+    carre = lambda x, y: [[x, y], [x + 80, y], [x + 80, y + 80], [x, y + 80]]  # noqa: E731
+    locaux = [
+        {"id": "L1", "nom": "Salle de pause", "contour_pdf": carre(0, 0)},
+        {"id": "L2", "nom": "Couloir", "contour_pdf": carre(300, 400)},
+        {"id": "L3", "nom": "Espace BD", "contour_pdf": carre(900, 150)},
+        {"id": "L4", "nom": "Bureau", "contour_pdf": carre(500, 900)},
+        {"id": "L5", "nom": "Bureau", "contour_pdf": carre(700, 900)},
+    ]
+    vue = {
+        "nom": "COUPE CC", "haut": [0, 1], "niveaux": NIVEAUX,
+        "pieces": [
+            {"nom": "Salle de pause", "debut": 0, "fin": 100, "sol": "H10", "plafond": "H11"},
+            {"nom": "COULOIR", "debut": 100, "fin": 150, "sol": "H10", "plafond": "H11"},
+            {"nom": "Espace BD", "debut": 150, "fin": 400, "sol": "H10", "plafond": "H11"},
+            {"nom": "Bureau", "debut": 400, "fin": 480, "sol": "H10", "plafond": "H11"},
+            {"nom": "Espace BD", "debut": 150, "fin": 400, "sol": "H00", "plafond": "H01"},
+        ],
+    }
+    r = coupes.rattacher_par_les_noms(vue, locaux, 50)
+    assert r["etage_sol_m"] == pytest.approx(4.16)
+    assert [l["local"] for l in r["lignes"]] == ["L1", "L2", "L3", None]
+    assert [l["hsp_m"] for l in r["lignes"]][:3] == [2.88] * 3
+    assert any("Bureau" in a for a in r["alertes"])
+
+
 def test_une_coupe_sans_numeros_n_est_pas_situee(db_session):
     from app.services import thermique_lecture_coupes as lecture
 

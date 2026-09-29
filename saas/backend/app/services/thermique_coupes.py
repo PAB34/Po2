@@ -497,6 +497,71 @@ def deduire_trait(
     }
 
 
+def _cle_de_nom(nom: str | None) -> str | None:
+    """Le numéro de programme s'il y en a un, sinon le nom sans accents ni casse ni ponctuation."""
+    if not nom:
+        return None
+    numero = numero_programme(nom)
+    if numero:
+        return numero
+    import unicodedata
+
+    texte = unicodedata.normalize("NFD", nom.lower())
+    texte = "".join(c for c in texte if unicodedata.category(c) != "Mn")
+    texte = re.sub(r"[^a-z0-9]+", " ", texte).strip()
+    return texte or None
+
+
+def rattacher_par_les_noms(vue: dict[str, Any], locaux: list[dict[str, Any]], echelle_vue: float) -> dict[str, Any]:
+    """Rattachement sans trait, par le seul nom des pièces (repli de D190).
+
+    Quand aucune droite du plan ne ressemble à la coupe (trait à décrochés, en biais…), chaque pièce de la
+    coupe va au local qui porte **seul** son numéro de programme, ou à défaut son nom. L'étage retenu est
+    celui où le plus de noms se retrouvent. Un nom porté par plusieurs locaux (six bureaux « 6.1.2 ») reste
+    sans rattachement : on ne devine pas.
+    """
+    par_cle: dict[str, list[dict[str, Any]]] = {}
+    for local in locaux:
+        cle = _cle_de_nom(local.get("nom"))
+        if cle:
+            par_cle.setdefault(cle, []).append(local)
+    toutes = pieces_de_la_vue(vue, echelle_vue)
+    meilleur: tuple[int, float, list[dict[str, Any]]] | None = None
+    for sol in etages(toutes):
+        pieces = [p for p in toutes if _a_l_etage(p, sol)]
+        trouves = sum(1 for p in pieces if len(par_cle.get(_cle_de_nom(p["nom"]) or "", [])) == 1)
+        if trouves and (meilleur is None or trouves > meilleur[0]):
+            meilleur = (trouves, sol, pieces)
+    if meilleur is None:
+        return {"etage_sol_m": None, "decalage_m": None, "lignes": [], "score": 0.0,
+                "alertes": ["aucun nom de pièce de la coupe ne se retrouve seul dans le plan"]}
+    _, sol, pieces = meilleur
+    lignes = []
+    for piece in pieces:
+        candidats = par_cle.get(_cle_de_nom(piece["nom"]) or "", [])
+        lignes.append(
+            {
+                "piece": piece["nom"],
+                "numero": piece["numero"],
+                "local": candidats[0]["id"] if len(candidats) == 1 and not piece["exterieur"] else None,
+                "longueur_m": round(piece["fin_m"] - piece["debut_m"], 3),
+                "hsp_m": None if piece["exterieur"] else _hauteur(piece, sol),
+                "double_hauteur": not piece["exterieur"] and abs(piece["sol_m"] - sol) > TOLERANCE_SOL_M,
+                "par": "extérieur" if piece["exterieur"] else ("nom seul" if len(candidats) == 1 else None),
+            }
+        )
+    ambigus = sorted({p["nom"] for p in pieces if len(par_cle.get(_cle_de_nom(p["nom"]) or "", [])) > 1})
+    return {
+        "etage_sol_m": sol,
+        "decalage_m": None,
+        "calage": "noms seuls",
+        "lignes": lignes,
+        "alertes": ["coupe située par les seuls noms de pièces : aucun trait du plan ne lui ressemble"]
+        + ([f"noms portés par plusieurs locaux, laissés de côté : {', '.join(ambigus)}"] if ambigus else []),
+        "score": float(meilleur[0]),
+    }
+
+
 def hauteurs_des_locaux(
     locaux: list[dict[str, Any]], rattachements: dict[str, dict[str, Any]]
 ) -> dict[str, dict[str, Any]]:

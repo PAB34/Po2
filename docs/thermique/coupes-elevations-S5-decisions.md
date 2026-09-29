@@ -228,6 +228,15 @@ fini d'une pièce : cela **corrige la lecture de la coupe** pour tout cet étage
 posées sur ce sol prennent ce plafond), puis la hauteur se propage aux locaux non traversés (D179). On corrige
 la lecture, pas chaque local.
 
+**D192 — Repli par les seuls noms (2026-09-29).** Quand aucune droite du plan ne ressemble à la coupe (trait
+à décrochés comme la coupe C du projet 2, trait en biais), chaque pièce de la coupe va au local qui porte
+**seul** son numéro de programme, ou à défaut son nom (sans accents ni casse). L'étage est celui où le plus de
+noms se retrouvent. Un nom porté par plusieurs locaux (« Bureau », six « 6.1.2 ») n'est pas deviné : il est
+signalé. Une coupe ainsi située n'a pas de trait dessiné sur le plan.
+
+**D171 fait (2026-09-29).** Case « Voir les coupes » dans la barre d'affichage : traits épais rouges, en tirets
+quand ils sont déduits, nom et flèche du regard ; un clic ouvre la coupe dans sa fenêtre.
+
 ## 4. Ce que je vérifierai à chaque lot
 
 - Le métré du R+1 ne bouge pas tant qu'aucune hauteur n'est validée (170,12 m déperditifs, 229 côtés).
