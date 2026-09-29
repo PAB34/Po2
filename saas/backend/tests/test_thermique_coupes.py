@@ -264,6 +264,38 @@ def test_sans_trait_sur_le_plan_il_se_deduit_de_la_coupe(db_session):
     assert lecture.hauteurs_du_plan(db_session, plan)["coupes"][0]["deduit"] is True
 
 
+def test_deux_clics_corrigent_le_plafond_mal_lu_de_tout_l_etage(db_session):
+    """Essai réel : l'agent a pris le plafond sur le sol de l'étage du dessus (3,84 m au lieu de 2,88 m).
+    Deux clics dans la coupe, sol fini puis plafond fini d'un bureau, corrigent tout l'étage (D191)."""
+    from app.services import thermique_lecture_coupes as lecture
+    from app.services.thermique import ThermiqueError
+
+    plan, coupe = _projet_avec_coupe(db_session)
+    lecture.enregistrer_traits(db_session, plan, [TRAIT_A])
+    positions = {"H00": 1137.5, "H01": 1228.0, "H10": 1252.0, "H11": 1333.6, "H20": 1363.0, "H21": 1444.6}
+    mal_lue = {
+        **VUE_A, "nom": "COUPE A", "nature": "coupe", "cadre": [882, 978, 1573, 2003],
+        "niveaux": [{**n, "position": positions[n["nom"]]} for n in NIVEAUX],
+        "pieces": [{**p, "plafond": "H20"} if p["sol"] == "H10" and p["plafond"] else p for p in VUE_A["pieces"]],
+    }
+    [vue] = lecture.enregistrer_vues(db_session, coupe, [mal_lue])
+    assert lecture.hauteurs_du_plan(db_session, plan)["locaux"]["piece-003"]["hauteur_m"] == 3.84
+
+    m = coupes.metres_par_point(100)
+    lecture.confirmer_hauteur(db_session, vue, [1252.0, 1300.0], [1252.0 + 2.88 / m, 1300.0])
+    hauteurs = lecture.hauteurs_du_plan(db_session, plan)["locaux"]
+    assert {hauteurs[f"piece-00{i}"]["hauteur_m"] for i in range(1, 8)} == {2.88}
+    assert hauteurs["piece-009"]["hauteur_m"] == 2.88
+    # Les autres étages de la coupe ne bougent pas : l'étage du dessus garde sa propre lecture.
+    r2 = [p for p in coupes.pieces_de_la_vue(lecture.serialize_vue(vue), 100) if p["nom"] == "5.2.7 - Salle de groupe"][0]
+    assert r2["plafond_m"] - r2["sol_m"] == pytest.approx(2.88) and "confirmee" not in r2
+
+    with pytest.raises(ThermiqueError, match="sol fini, puis le plafond"):
+        lecture.confirmer_hauteur(db_session, vue, [1300.0, 1300.0], [1252.0, 1300.0])
+    lecture.retirer_confirmations(db_session, vue)
+    assert lecture.hauteurs_du_plan(db_session, plan)["locaux"]["piece-003"]["hauteur_m"] == 3.84
+
+
 def test_une_coupe_sans_numeros_n_est_pas_situee(db_session):
     from app.services import thermique_lecture_coupes as lecture
 

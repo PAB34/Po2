@@ -39,6 +39,8 @@ RECOUVREMENT_MIN = 0.5
 TOLERANCE_SOL_M = 0.30
 # Une pièce qui monte plus haut que ceci au-dessus d'un sol traverse cet étage (double hauteur).
 TRAVERSEE_MIN_M = 1.0
+# Un sol cliqué par le thermicien (D191) se rattache à l'étage de la coupe le plus proche dans cette portée.
+CORRECTION_PORTEE_M = 1.5
 # Au-delà de cet écart entre deux lectures d'un même local, la fiche le signale (D180).
 ECART_LECTURES_M = 0.05
 # Au-delà de cet écart entre le décalage donné par les noms et celui donné par le recouvrement, on
@@ -182,6 +184,26 @@ def pieces_de_la_vue(vue: dict[str, Any], echelle_vue: float) -> list[dict[str, 
                 "exterieur": bool(piece.get("exterieur")),
             }
         )
+    # Hauteurs confirmées par le thermicien (D191) : deux clics, sol fini puis plafond fini d'une pièce. La
+    # hauteur mesurée entre les deux clics vaut pour toutes les pièces de la coupe posées sur ce sol ; elle
+    # l'emporte sur la lecture de l'agent, même écrite. Un volume en double hauteur n'est pas touché.
+    for correction in vue.get("corrections", []):
+        hauteur = (float(correction["plafond"]) - float(correction["sol"])) * m
+        clic = altitude(float(correction["sol"]))
+        # Le sol cliqué va à l'étage le plus proche : le calage des lignes de niveau lu par l'agent peut être
+        # décalé de quelques décimètres, la hauteur, elle, est mesurée entre les deux clics.
+        sols = [s for s in etages(resultat) if abs(s - clic) <= CORRECTION_PORTEE_M]
+        if not sols:
+            continue
+        sol_m = min(sols, key=lambda s: abs(s - clic))
+        for piece in resultat:
+            if piece["exterieur"] or abs(piece["sol_m"] - sol_m) > TOLERANCE_SOL_M:
+                continue
+            if piece["plafond_m"] is None and piece["hsp_ecrite_m"] is None:
+                continue
+            piece["hsp_ecrite_m"] = round(hauteur, 3)
+            piece["plafond_m"] = piece["sol_m"] + hauteur
+            piece["confirmee"] = True
     return resultat
 
 

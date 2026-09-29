@@ -247,6 +247,44 @@ def hauteurs_du_plan(db: Session, sheet: ThermiqueSheet) -> dict[str, Any]:
     }
 
 
+def confirmer_hauteur(db: Session, vue: ThermiqueVue, sol: Any, plafond: Any) -> ThermiqueVue:
+    """Deux clics dans la coupe, sol fini puis plafond fini d'une pièce (D191) : corrige la lecture de cet
+    étage de la coupe. Une nouvelle confirmation au même étage remplace l'ancienne."""
+    sheet = db.get(ThermiqueSheet, vue.sheet_id)
+    if sheet is None or not sheet.scale_denominator:
+        raise ThermiqueError("L'échelle de la planche de coupes n'est pas définie : la hauteur ne se mesure pas.")
+    lecture = json.loads(vue.lecture_json)
+    hx, hy = coupes._unitaire(lecture.get("haut") or [0, 1])
+    bas, haut = (_point(p, "Un point cliqué") for p in (sol, plafond))
+    position_sol = bas[0] * hx + bas[1] * hy
+    position_plafond = haut[0] * hx + haut[1] * hy
+    m = coupes.metres_par_point(sheet.scale_denominator)
+    hauteur = (position_plafond - position_sol) * m
+    if not HAUTEUR_MIN_M <= hauteur <= HAUTEUR_MAX_M:
+        raise ThermiqueError(
+            f"Les deux clics donnent {hauteur:.2f} m : cliquez d'abord le sol fini, puis le plafond fini, "
+            f"d'une même pièce (entre {HAUTEUR_MIN_M:.2f} et {HAUTEUR_MAX_M:.0f} m)."
+        )
+    gardees = [
+        c for c in lecture.get("corrections", [])
+        if abs(float(c["sol"]) - position_sol) * m > coupes.CORRECTION_PORTEE_M
+    ]
+    lecture["corrections"] = gardees + [{"sol": position_sol, "plafond": position_plafond, "hauteur_m": round(hauteur, 3)}]
+    vue.lecture_json = json.dumps(lecture, ensure_ascii=False, separators=(",", ":"))
+    db.commit()
+    db.refresh(vue)
+    return vue
+
+
+def retirer_confirmations(db: Session, vue: ThermiqueVue) -> ThermiqueVue:
+    lecture = json.loads(vue.lecture_json)
+    lecture.pop("corrections", None)
+    vue.lecture_json = json.dumps(lecture, ensure_ascii=False, separators=(",", ":"))
+    db.commit()
+    db.refresh(vue)
+    return vue
+
+
 def preparer_hauteurs(project_id: int) -> None:
     """Déduit et garde les traits de coupe de chaque plan étudié du projet (D190), en tâche de fond.
 

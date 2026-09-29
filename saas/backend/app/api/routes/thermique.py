@@ -23,6 +23,7 @@ from app.models.thermique import (
     ThermiqueProject,
     ThermiqueSheet,
     ThermiqueTravail,
+    ThermiqueVue,
 )
 from app.models.user import User
 from app.schemas.thermique import (
@@ -39,6 +40,7 @@ from app.schemas.thermique import (
     EtudeVersionRead,
     ExternalAccountCreate,
     ExternalAccountRead,
+    HauteurConfirmee,
     HauteursDuPlan,
     LectureCoupes,
     MiseEnFileResult,
@@ -989,6 +991,50 @@ def rendre_une_lecture_de_coupes(
     except ThermiqueError as exc:
         raise _bad_request(exc) from exc
     return travaux.serialize_travail(db, travaux.terminer(db, travail))
+
+
+def _vue_or_404(db: Session, user: User, vue_id: int) -> ThermiqueVue:
+    vue = db.get(ThermiqueVue, vue_id)
+    if vue is None or get_project_for_user(db, user, vue.project_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vue introuvable.")
+    return vue
+
+
+@router.get("/projects/{project_id}/vues")
+def lire_vues_du_projet(
+    project_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> list[dict]:
+    """Les coupes, façades et détails lus sur les planches du projet (S5)."""
+    project = _project_or_404(db, user, project_id)
+    vues = db.scalars(select(ThermiqueVue).where(ThermiqueVue.project_id == project.id).order_by(ThermiqueVue.id)).all()
+    return [lecture_coupes.serialize_vue(vue) for vue in vues]
+
+
+@router.post("/vues/{vue_id}/hauteur")
+def confirmer_une_hauteur(
+    vue_id: int,
+    payload: HauteurConfirmee,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Le thermicien confirme la hauteur d'un étage de la coupe par deux clics (D191)."""
+    vue = _vue_or_404(db, user, vue_id)
+    try:
+        return lecture_coupes.serialize_vue(lecture_coupes.confirmer_hauteur(db, vue, payload.sol, payload.plafond))
+    except ThermiqueError as exc:
+        raise _bad_request(exc) from exc
+
+
+@router.delete("/vues/{vue_id}/hauteur")
+def retirer_les_hauteurs_confirmees(
+    vue_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    vue = _vue_or_404(db, user, vue_id)
+    return lecture_coupes.serialize_vue(lecture_coupes.retirer_confirmations(db, vue))
 
 
 @router.get("/sheets/{sheet_id}/hauteurs", response_model=HauteursDuPlan)

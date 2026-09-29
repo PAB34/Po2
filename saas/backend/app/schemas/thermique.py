@@ -344,6 +344,13 @@ class LectureCoupes(BaseModel):
     vues: list[dict[str, Any]] | None = None
 
 
+class HauteurConfirmee(BaseModel):
+    """Deux clics dans la coupe, en points PDF de sa planche : sol fini puis plafond fini d'une pièce (D191)."""
+
+    sol: list[float] = Field(min_length=2, max_length=2)
+    plafond: list[float] = Field(min_length=2, max_length=2)
+
+
 class HauteursDuPlan(BaseModel):
     sheet_id: int
     locaux: dict[str, dict[str, Any]]
