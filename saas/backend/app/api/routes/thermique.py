@@ -965,6 +965,7 @@ def rendre_un_travail(
 def rendre_une_lecture_de_coupes(
     travail_id: int,
     lecture: LectureCoupes,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     user: User = Depends(get_authenticated_user),
 ) -> dict:
@@ -981,6 +982,8 @@ def rendre_une_lecture_de_coupes(
             lecture_coupes.enregistrer_traits(db, sheet, lecture.traits)
         elif travail.type == travaux.COUPES and lecture.vues is not None:
             lecture_coupes.enregistrer_vues(db, sheet, lecture.vues)
+            # Les traits se déduisent des coupes (D190) : plusieurs secondes par coupe, faites tout de suite.
+            background_tasks.add_task(lecture_coupes.preparer_hauteurs, sheet.project_id)
         else:
             raise ThermiqueError("La lecture rendue ne correspond pas au type du travail.")
     except ThermiqueError as exc:

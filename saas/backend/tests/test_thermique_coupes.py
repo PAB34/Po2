@@ -245,6 +245,37 @@ def test_des_lectures_rangees_a_la_hauteur_de_chaque_local(db_session):
     assert locaux["piece-008"]["proposee_m"] == 2.88
 
 
+def test_sans_trait_sur_le_plan_il_se_deduit_de_la_coupe(db_session):
+    """D190 : le plan ne porte pas le trait ; la coupe A le situe par ses numéros de pièces, une seule fois."""
+    import json
+
+    from app.services import thermique_lecture_coupes as lecture
+
+    plan, coupe = _projet_avec_coupe(db_session)
+    lecture.enregistrer_vues(db_session, coupe, [{**VUE_A, "nom": "COUPE A", "nature": "coupe", "cadre": [882, 978, 1573, 2003]}])
+
+    resultat = lecture.hauteurs_du_plan(db_session, plan)
+    assert [c["deduit"] for c in resultat["coupes"]] == [True]
+    assert [l["local"] for l in resultat["coupes"][0]["lignes"]] == ATTENDU_A
+    assert resultat["locaux"]["piece-004"]["hauteur_m"] == 2.88
+    garde = json.loads(plan.traits_coupe_json)
+    assert len(garde) == 1 and garde[0]["deduit"] is True
+    # Le trait déduit, gardé, sert tel quel la fois suivante.
+    assert lecture.hauteurs_du_plan(db_session, plan)["coupes"][0]["deduit"] is True
+
+
+def test_une_coupe_sans_numeros_n_est_pas_situee(db_session):
+    from app.services import thermique_lecture_coupes as lecture
+
+    plan, coupe = _projet_avec_coupe(db_session)
+    anonyme = {**VUE_A, "nom": "COUPE A", "nature": "coupe", "cadre": [0, 0, 1, 1],
+               "pieces": [{**p, "nom": None} for p in VUE_A["pieces"]]}
+    lecture.enregistrer_vues(db_session, coupe, [anonyme])
+    resultat = lecture.hauteurs_du_plan(db_session, plan)
+    assert resultat["coupes_non_situees"] == ["COUPE A"]
+    assert resultat["locaux"]["piece-004"]["source"] == "absente"
+
+
 def test_une_lecture_illisible_est_refusee_a_l_entree(db_session):
     from app.services import thermique_lecture_coupes as lecture
     from app.services.thermique import ThermiqueError

@@ -212,7 +212,21 @@ d'image seule, sans exemple, n'atteint pas la précision métrique.
 - (c) (a) + (b) : traits et hauteurs à la main, assistés, l'agent seulement pour nommer ; fiable tout de
   suite, l'agent s'améliore en arrière-plan contre la vérité terrain.
 - (d) Continuer à améliorer l'agent seul avant tout usage.
-REPONSE :
+REPONSE : (en conversation, 2026-09-29) « le trait de coupe sur le plan, je ne l'ai pas forcément, je vais devoir
+le déduire de la coupe elle-même », puis accord sur la proposition révisée ci-dessous : « partons sur ça ».
+
+**D190 — Le trait se déduit de la coupe.** Le trait de l'architecte n'est pas toujours sur le plan. L'outil
+cherche la droite du plan qui traverse les mêmes locaux, dans le même ordre et aux mêmes largeurs que les
+pièces de la coupe ; il en retient le **milieu de la bande** de positions équivalentes. Essai sur la vérité
+terrain : coupe A 8/8 et coupe C 3/3 avec les numéros de pièces ; sans numéros, A échoue. Les numéros de
+programme sont donc indispensables : c'est ce que l'agent lit bien. Un trait relevé sur le plan, s'il existe,
+reste prioritaire. Limites : traits droits dans les deux directions principales seulement.
+
+**D191 — La hauteur se confirme d'un clic dans la coupe.** L'agent lit mal la ligne de plafond fini (3,84 m au
+lieu de 2,88 m à l'essai). Dans la fenêtre de la coupe (D183), le thermicien clique le sol fini puis le plafond
+fini d'une pièce : cela **corrige la lecture de la coupe** pour tout cet étage (toutes les pièces de la coupe
+posées sur ce sol prennent ce plafond), puis la hauteur se propage aux locaux non traversés (D179). On corrige
+la lecture, pas chaque local.
 
 ## 4. Ce que je vérifierai à chaque lot
 

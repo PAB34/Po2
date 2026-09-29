@@ -105,10 +105,12 @@ def traversees_du_plan(
     bande = ligne.buffer(TOLERANCE_TRAIT_M / m, cap_style=2)
     resultat = []
     for local in locaux:
-        points = local.get("contour_pdf") or []
-        if len(points) < 3:
-            continue
-        forme = Polygon([(float(x), float(y)) for x, y in points]).buffer(0)
+        forme = local.get("_forme")
+        if forme is None:
+            points = local.get("contour_pdf") or []
+            if len(points) < 3:
+                continue
+            forme = Polygon([(float(x), float(y)) for x, y in points]).buffer(0)
         coupe = forme.intersection(ligne)
         direct = not coupe.is_empty and coupe.length > 0
         # Frôlé : on garde la part du local qui est dans la bande, projetée sur la droite du regard.
@@ -386,6 +388,90 @@ def _rattacher_dans_un_sens(
         "lignes": lignes,
         "alertes": alertes,
         "score": concordants * 100.0 + _score(decalage, retenu["pieces"], plan),
+    }
+
+
+# Déduction du trait (D190) : balayage grossier puis affiné autour des meilleurs.
+PAS_GROSSIER_PT = 10.0
+PAS_FIN_PT = 2.0
+# Une coupe n'est située que si au moins ce nombre de ses pièces tombent sur le local de même numéro.
+CONCORDANTS_MIN = 2
+
+
+def deduire_trait(
+    vue: dict[str, Any], locaux: list[dict[str, Any]], echelle_plan: float, echelle_vue: float
+) -> dict[str, Any] | None:
+    """Le trait de coupe déduit de la coupe elle-même, quand le plan n'en porte pas (D190).
+
+    On essaie les droites du plan dans ses deux directions principales et on garde celle dont les locaux
+    traversés ressemblent le plus aux pièces de la coupe (même score que `rattacher`, où chaque pièce qui
+    tombe sur le local de son numéro compte le plus). Plusieurs positions voisines traversent souvent les
+    mêmes locaux : on retient le milieu de cette bande. Sans numéros communs, la géométrie seule ne suffit
+    pas (vérité terrain, coupe A) : rien n'est déduit.
+    """
+    prets = []
+    for local in locaux:
+        points = local.get("contour_pdf") or []
+        if len(points) >= 3:
+            prets.append({**local, "_forme": Polygon([(float(x), float(y)) for x, y in points]).buffer(0)})
+    if not prets:
+        return None
+    xs = [c[0] for l in prets for c in l["_forme"].exterior.coords]
+    ys = [c[1] for l in prets for c in l["_forme"].exterior.coords]
+    x0, x1, y0, y1 = min(xs) - 20, max(xs) + 20, min(ys) - 20, max(ys) + 20
+
+    def trait(axe: str, valeur: float) -> dict[str, Any]:
+        if axe == "x":
+            return {"nom": vue.get("nom") or "?", "points": [[valeur, y0], [valeur, y1]], "sens": [1.0, 0.0]}
+        return {"nom": vue.get("nom") or "?", "points": [[x0, valeur], [x1, valeur]], "sens": [0.0, 1.0]}
+
+    essais: dict[tuple[str, float], dict[str, Any]] = {}
+
+    def essayer(axe: str, valeur: float) -> dict[str, Any]:
+        cle = (axe, round(valeur, 1))
+        if cle not in essais:
+            essais[cle] = rattacher(trait(axe, valeur), echelle_plan, prets, vue, echelle_vue)
+        return essais[cle]
+
+    def balayer(axe: str, debut: float, fin: float, pas: float) -> None:
+        valeur = debut
+        while valeur <= fin:
+            essayer(axe, valeur)
+            valeur += pas
+
+    balayer("x", x0, x1, PAS_GROSSIER_PT)
+    balayer("y", y0, y1, PAS_GROSSIER_PT)
+    meilleurs = sorted(essais, key=lambda c: -essais[c]["score"])[:6]
+    for axe, valeur in meilleurs:
+        balayer(axe, valeur - PAS_GROSSIER_PT, valeur + PAS_GROSSIER_PT, PAS_FIN_PT)
+
+    (axe, valeur), meilleur = max(essais.items(), key=lambda e: e[1]["score"])
+    concordants = sum(1 for l in meilleur["lignes"] if l["par"] == "nom et position")
+    if concordants < CONCORDANTS_MIN:
+        return None
+    # La bande : positions du même axe, contiguës, qui rattachent les pièces aux mêmes locaux.
+    def signature(r: dict[str, Any]) -> tuple:
+        return tuple(l["local"] for l in r["lignes"])
+
+    egaux = sorted(v for (a, v), r in essais.items() if a == axe and signature(r) == signature(meilleur))
+    bande = [valeur]
+    for sens_pas in (-1, 1):
+        courant = valeur
+        while True:
+            suivants = [v for v in egaux if 0 < (v - courant) * sens_pas <= PAS_GROSSIER_PT + 1e-6]
+            if not suivants:
+                break
+            courant = min(suivants, key=lambda v: abs(v - courant))
+            bande.append(courant)
+    milieu = (min(bande) + max(bande)) / 2
+    resultat = trait(axe, milieu)
+    retenu = essayer(axe, milieu)
+    return {
+        **resultat,
+        "sens": [-v for v in resultat["sens"]] if retenu.get("sens_retourne") else resultat["sens"],
+        "deduit": True,
+        "bande_m": round((max(bande) - min(bande)) * metres_par_point(echelle_plan), 2),
+        "concordants": concordants,
     }
 
 

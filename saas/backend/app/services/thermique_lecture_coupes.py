@@ -193,19 +193,37 @@ def hauteurs_du_plan(db: Session, sheet: ThermiqueSheet) -> dict[str, Any]:
     rattachements: dict[str, dict[str, Any]] = {}
     lectures: list[dict[str, Any]] = []
     sans_vue: list[str] = []
-    for trait in traits:
-        trouvees = [v for v in vues if meme_coupe(trait["nom"], v.nom)]
-        if not trouvees:
-            sans_vue.append(trait["nom"])
-            continue
-        vue = trouvees[0]
+    non_situees: list[str] = []
+    releves = [t for t in traits if not t.get("deduit")]
+    deduits = {t.get("vue_id"): t for t in traits if t.get("deduit")}
+    nouveaux = False
+    for vue in vues:
         echelle_vue = echelles.get(vue.sheet_id)
         if not echelle_vue or not sheet.scale_denominator:
-            sans_vue.append(trait["nom"])
+            continue
+        # Le trait relevé sur le plan fait foi ; sinon celui déduit de la coupe (D190), calculé une fois.
+        trait = next((t for t in releves if meme_coupe(t["nom"], vue.nom)), None) or deduits.get(vue.id)
+        if trait is None:
+            trait = coupes.deduire_trait(serialize_vue(vue), locaux, sheet.scale_denominator, echelle_vue)
+            trait = {**trait, "nom": vue.nom, "vue_id": vue.id} if trait else {"nom": vue.nom, "vue_id": vue.id, "deduit": True, "points": None}
+            deduits[vue.id] = trait
+            nouveaux = True
+        if not trait.get("points"):
+            non_situees.append(vue.nom)
             continue
         r = coupes.rattacher(trait, sheet.scale_denominator, locaux, serialize_vue(vue), echelle_vue)
-        rattachements[trait["nom"]] = r
-        lectures.append({"trait": trait["nom"], "vue_id": vue.id, "vue_sheet_id": vue.sheet_id, "vue": vue.nom, **r})
+        rattachements[vue.nom] = r
+        lectures.append({"trait": trait["nom"], "deduit": bool(trait.get("deduit")), "vue_id": vue.id,
+                         "vue_sheet_id": vue.sheet_id, "vue": vue.nom, **r})
+    sans_vue = [t["nom"] for t in releves if not any(meme_coupe(t["nom"], v.nom) for v in vues)]
+    if nouveaux:
+        # Un trait déduit est gardé avec la planche : la recherche prend plusieurs secondes par coupe.
+        # Seuls restent les traits déduits de vues encore présentes (une relecture de planche change les vues).
+        presentes = {vue.id for vue in vues}
+        gardes = [t for vue_id, t in deduits.items() if vue_id in presentes]
+        sheet.traits_coupe_json = json.dumps(releves + gardes, ensure_ascii=False, separators=(",", ":"))
+        db.commit()
+    traits = releves + [t for t in deduits.values() if t.get("points")]
 
     proposees = coupes.hauteurs_des_locaux(locaux, rattachements)
     saisies = {l["id"]: l.get("hauteur_m") for l in contenu.get("locaux", [])}
@@ -219,7 +237,41 @@ def hauteurs_du_plan(db: Session, sheet: ThermiqueSheet) -> dict[str, Any]:
             "hauteur_m": saisie if saisie is not None else proposee["hauteur_m"],
             "source": "saisie" if saisie is not None else proposee["source"],
         }
-    return {"sheet_id": sheet.id, "locaux": par_local, "coupes": lectures, "traits_sans_vue": sans_vue, "traits": traits}
+    return {
+        "sheet_id": sheet.id,
+        "locaux": par_local,
+        "coupes": lectures,
+        "traits_sans_vue": sans_vue,
+        "coupes_non_situees": non_situees,
+        "traits": traits,
+    }
+
+
+def preparer_hauteurs(project_id: int) -> None:
+    """Déduit et garde les traits de coupe de chaque plan étudié du projet (D190), en tâche de fond.
+
+    La recherche d'un trait prend plusieurs secondes par coupe : faite dès que les coupes sont lues, elle
+    ne se fait pas attendre à l'ouverture d'une fiche.
+    """
+    import logging
+
+    from app.core.db import SessionLocal
+    from app.models.thermique import ThermiqueEtude
+
+    db = SessionLocal()
+    try:
+        plans = db.scalars(
+            select(ThermiqueSheet)
+            .join(ThermiqueEtude, ThermiqueEtude.sheet_id == ThermiqueSheet.id)
+            .where(ThermiqueSheet.project_id == project_id, ThermiqueSheet.nature == "plan")
+        ).all()
+        for plan in plans:
+            try:
+                hauteurs_du_plan(db, plan)
+            except Exception:  # Une préparation ratée se refera à la première ouverture.
+                logging.getLogger(__name__).exception("Hauteurs non préparées pour la planche %s", plan.id)
+    finally:
+        db.close()
 
 
 def controler_hauteur(valeur: Any) -> float | None:

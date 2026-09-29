@@ -349,4 +349,6 @@ class HauteursDuPlan(BaseModel):
     locaux: dict[str, dict[str, Any]]
     coupes: list[dict[str, Any]]
     traits_sans_vue: list[str]
+    # Coupes dont le trait n'a pu être ni relevé ni déduit (D190) : sans numéros de pièces communs.
+    coupes_non_situees: list[str] = []
     traits: list[dict[str, Any]]
