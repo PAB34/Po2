@@ -230,6 +230,35 @@ export type HauteursDuPlan = {
   traits: { nom: string; points: PdfPoint[]; sens: [number, number]; deduit?: boolean; vue_id?: number }[];
 };
 
+/** D'où vient la hauteur d'une baie (S5e, D196, D200). */
+export type BaieSource = "baie" | "composant" | "hauteur_du_local" | "a_lire";
+
+export type Baie = {
+  composant: string;
+  largeur_cm: number;
+  mur_rideau: boolean;
+  morceau_a_verifier: boolean;
+  morceaux: { troncon: string; debut_m: number; fin_m: number }[];
+  sheet_id: number;
+  niveau: string;
+  hauteur_m: number | null;
+  source: BaieSource;
+  vue_id: number | null;
+  vue: string | null;
+};
+
+export type MenuiseriesDuProjet = {
+  composants: {
+    composant: string;
+    mur_rideau: boolean;
+    baies: Baie[];
+    hauteur_m: number | null;
+    a_lire: number;
+    confirmation: { vue_id: number; vue: string; largeur_mesuree_cm: number | null } | null;
+  }[];
+  morceaux_a_verifier: { composant: string; largeur_cm: number; niveau: string }[];
+};
+
 /** Une vue lue sur une planche de coupes ou de façades (S5), en points PDF de sa planche. */
 export type VueCoupe = {
   id: number;
@@ -483,6 +512,13 @@ export const thermiqueApi = {
   getVues: (token: string, projectId: number) => request<VueCoupe[]>(token, `/thermique/projects/${projectId}/vues`),
   confirmerHauteur: (token: string, vueId: number, sol: PdfPoint, plafond: PdfPoint) =>
     request<VueCoupe>(token, `/thermique/vues/${vueId}/hauteur`, { method: "POST", body: JSON.stringify({ sol, plafond }) }),
+  getMenuiseries: (token: string, projectId: number) =>
+    request<MenuiseriesDuProjet>(token, `/thermique/projects/${projectId}/menuiseries`),
+  confirmerMenuiserie: (token: string, vueId: number, coins: PdfPoint[], composant: string, largeurCm: number | null) =>
+    request<{ hauteur_m: number; largeur_mesuree_cm: number }>(token, `/thermique/vues/${vueId}/menuiseries`, {
+      method: "POST",
+      body: JSON.stringify({ coins, composant, largeur_cm: largeurCm }),
+    }),
   retirerHauteurs: (token: string, vueId: number) =>
     request<VueCoupe>(token, `/thermique/vues/${vueId}/hauteur`, { method: "DELETE" }),
   importStudy: (token: string, sheetId: number, file: File, replace = false) => {

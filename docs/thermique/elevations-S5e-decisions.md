@@ -111,6 +111,21 @@ composant**, sur tous les niveaux, quelle que soit leur largeur ; une baie parti
 hauteur, qui l'emporte. D193 reste : les deux coins donnent largeur et hauteur ; la largeur mesurée doit être à
 ± 5 cm d'une baie du composant choisi (D194), sinon l'outil refuse (mauvaise menuiserie cliquée).
 
+## Résultat (2026-09-29, commits locaux, non poussé, jamais éprouvé à la souris)
+
+- Serveur : `thermique_menuiseries.py` (baies D199, hauteur par composant ou par baie D200, mur-rideau D196,
+  mesure de deux coins D193, proposition à ± 5 cm D194), routes `GET /projects/{id}/menuiseries`,
+  `POST /vues/{id}/menuiseries`, `DELETE /vues/{id}/menuiseries/{composant}`. Pas de migration : les hauteurs
+  sont gardées avec la vue de façade.
+- Écran : dans la fiche d'une menuiserie, sa baie (largeur réunie, morceaux, hauteur et provenance, alerte
+  « morceau à vérifier ») et « Voir la façade … » ; dans la fenêtre d'une façade, « Mesurer une menuiserie » →
+  deux coins → largeur et hauteur → « Pour toutes les M4 » / « Pour cette baie seule ».
+- R+1 réel : 58 menuiseries → 49 baies, 8 morceaux à vérifier.
+- Tests : 5 backend (`test_thermique_menuiseries.py`), 6 frontend (`baies.test.tsx`, 172 au vert), typecheck,
+  build.
+- Pas fait : le trait de façade sur le plan (D198, attend le nord) ; l'usage des hauteurs dans le calcul des
+  surfaces (lot des surfaces).
+
 ---
 
 ## 4. Ce que je vérifierai

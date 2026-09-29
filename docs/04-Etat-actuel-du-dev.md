@@ -52,6 +52,11 @@ déperditifs**, 289 formes, 77 liaisons. Tout lot qui ne touche pas au calcul do
   `GET /projects/{id}/vues`, fenêtre flottante de la coupe (`FenetreCoupe.tsx`, bouton « Voir la coupe » dans
   la fiche). **Tout est en commits locaux, rien poussé, jamais éprouvé à la souris.** Reste : traits
   cliquables sur le plan (S5a/S5b), traits à décrochés ou en biais, élévations (S5e).
+  **Suite (même jour)** : D171 traits cliquables (case « Voir les coupes ») et D192 repli par les noms faits ;
+  **S5e fait** (`thermique/elevations-S5e-decisions.md`, D193–D200) : baies (58 → 49 au R+1, 8 morceaux à
+  vérifier), hauteur par composant mesurée par deux coins sur la façade, « Voir la façade » depuis la fiche
+  d'une menuiserie. Reste : trait de façade sur le plan (attend le nord, D198), surfaces (murs, baies) dans le
+  calcul.
 - `thermique/retours-menuiseries-2026-09-28-decisions.md` — M1, M2 (morceaux → élément entier), M3 **faits**.
   Réponses Q30–Q33 → **D174** fusion d'office de 2 menuiseries contiguës de même composant ; **D175**
   menuiserie dessinée = composant le plus employé ; **D176** identiques = même composant, largeur ± 1 cm ;

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 
 import type {
+  Baie,
+  MenuiseriesDuProjet,
   StudyContent,
   StudyElementChanges,
   StudyElementRef,
@@ -23,6 +25,7 @@ import {
   refDeElement,
   trouverElement,
 } from "./elements";
+import { baieDeElement, provenanceBaie } from "./baies";
 
 const LIBELLES_CHAMP: Record<string, string> = {
   type: "type",
@@ -171,6 +174,9 @@ function Detail({
   motif,
   onMotif,
   onOperation,
+  baie = null,
+  facades = [],
+  onVoirFacade,
 }: {
   element: StudyReleveElement;
   content: StudyContent;
@@ -179,6 +185,9 @@ function Detail({
   motif: string;
   onMotif: (valeur: string) => void;
   onOperation: (operation: StudyOperation) => void;
+  baie?: Baie | null;
+  facades?: { id: number; nom: string }[];
+  onVoirFacade?: (vueId: number) => void;
 }) {
   return (
     <>
@@ -207,6 +216,8 @@ function Detail({
             ))}
           </ul>
         )}
+
+        {element.type === "menuiserie" && baie && <BaieDeLaMenuiserie baie={baie} facades={facades} onVoirFacade={onVoirFacade} />}
 
         {element.exclu ? (
           <>
@@ -267,6 +278,43 @@ function Detail({
   );
 }
 
+/** La baie d'une menuiserie (S5e, D199) : largeur réunie, hauteur et sa provenance, façades à ouvrir. */
+export function BaieDeLaMenuiserie({
+  baie,
+  facades = [],
+  onVoirFacade,
+}: {
+  baie: Baie;
+  facades?: { id: number; nom: string }[];
+  onVoirFacade?: (vueId: number) => void;
+}) {
+  return (
+    <div className="th-baie">
+      <p>
+        Baie {baie.composant} · <strong>{baie.largeur_cm.toLocaleString("fr-FR")} cm</strong>
+        {baie.morceaux.length > 1 ? ` (${baie.morceaux.length} morceaux réunis)` : ""} — hauteur{" "}
+        <strong>{baie.hauteur_m === null ? "inconnue" : `${baie.hauteur_m.toLocaleString("fr-FR")} m`}</strong>,{" "}
+        {provenanceBaie(baie)}
+      </p>
+      {baie.morceau_a_verifier && (
+        <p className="th-alert th-alert--warn">
+          Morceau de {baie.largeur_cm.toLocaleString("fr-FR")} cm seul : sans doute la tranche d'une menuiserie mal
+          relevée. Corrigez ses bornes ou écartez-le.
+        </p>
+      )}
+      {onVoirFacade && facades.length > 0 && !baie.mur_rideau && (
+        <div className="th-hauteur__coupes">
+          {facades.map((facade) => (
+            <button key={facade.id} type="button" className="po2-button po2-button--ghost" onClick={() => onVoirFacade(facade.id)}>
+              Voir la façade {facade.nom}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /**
  * Panneau d'un élément d'enveloppe (F4, D102 et Q8).
  *
@@ -282,6 +330,10 @@ export function ElementPanel({
   message,
   onOperation,
   parois = false,
+  menuiseries,
+  sheetId = null,
+  facades = [],
+  onVoirFacade,
 }: {
   content: StudyContent;
   room: StudyRoom | null;
@@ -292,6 +344,11 @@ export function ElementPanel({
   onOperation: (operation: StudyOperation) => void;
   /** Étape « parois et menuiseries » : les ponts ont leur propre étape, ils n'ont rien à faire ici (D155). */
   parois?: boolean;
+  /** Baies du projet et façades lues (S5e) : hauteur de la menuiserie désignée. */
+  menuiseries?: MenuiseriesDuProjet;
+  sheetId?: number | null;
+  facades?: { id: number; nom: string }[];
+  onVoirFacade?: (vueId: number) => void;
 }) {
   const [motif, setMotif] = useState("");
   const liste = elementsDuLocal(content, room).filter((item) => !parois || !estPont(item));
@@ -321,6 +378,9 @@ export function ElementPanel({
           motif={motif}
           onMotif={setMotif}
           onOperation={onOperation}
+          baie={baieDeElement(menuiseries, sheetId, element)}
+          facades={facades}
+          onVoirFacade={onVoirFacade}
         />
         {message && <p className="th-alert">{message}</p>}
       </section>

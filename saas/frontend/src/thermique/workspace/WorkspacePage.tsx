@@ -18,6 +18,7 @@ import { METRICS_DEFAUT, StudyMetrics, type MetricsShow } from "./StudyMetrics";
 import { StudyCoherenceReport, StudyCoverageBanner, StudyOverlay, StudyRoomCreationPanel, StudyRoomList, StudyRoomPanel } from "./StudyPanel";
 import { ElementPanel } from "./ElementPanel";
 import { FenetreCoupe } from "./FenetreCoupe";
+import { menuiseriesQueryKey } from "./baies";
 import { traitAt, TraitsDeCoupe, traitsCliquables } from "./TraitsDeCoupe";
 import { PontsPanel } from "./PontsPanel";
 import { coteAt, empreinteCote, milieuCote, rangVise, type CoteVisee } from "./cotes";
@@ -361,6 +362,13 @@ export function WorkspacePage() {
     enabled: Boolean(token && projectId),
   });
   const [coupeOuverte, setCoupeOuverte] = useState<number | null>(null);
+  // Baies du projet et leur hauteur lue en élévation (S5e, D199, D200).
+  const menuiseries = useQuery({
+    queryKey: menuiseriesQueryKey(projectId),
+    queryFn: () => thermiqueApi.getMenuiseries(token!, projectId),
+    enabled: Boolean(token && projectId),
+  });
+  const facades = (vues.data ?? []).filter((vue) => vue.nature === "facade").map((vue) => ({ id: vue.id, nom: vue.nom }));
   // Case « Voir les coupes » (D171) : les traits, relevés ou déduits, en lignes épaisses cliquables.
   const [voirCoupes, setVoirCoupes] = useState(false);
   const traitsAffiches = voirCoupes ? traitsCliquables(hauteurs.data) : [];
@@ -1148,6 +1156,10 @@ export function WorkspacePage() {
                       busy={elementsState.busy}
                       message={elementsState.message}
                       onOperation={elementsState.apply}
+                      menuiseries={menuiseries.data}
+                      sheetId={sheetId}
+                      facades={facades}
+                      onVoirFacade={setCoupeOuverte}
                     />
                   )}
                 </>
@@ -1215,6 +1227,7 @@ export function WorkspacePage() {
           vue={vueOuverte}
           planche={plancheOuverte}
           planSheetId={sheetId}
+          menuiseries={menuiseries.data}
           onClose={() => setCoupeOuverte(null)}
         />
       )}

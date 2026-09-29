@@ -2431,6 +2431,35 @@ circle.th-seg--measure {
   font-size: 0.85rem;
 }
 
+.th-fenetre-coupe__choix {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0 0.6rem 0.5rem;
+  font-size: 0.85rem;
+}
+
+.th-fenetre-coupe__choix ul {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.th-fenetre-coupe__choix li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* Baie d'une menuiserie dans sa fiche (S5e, D199). */
+.th-baie {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0.4rem 0;
+}
+
 .th-fenetre-coupe__plan {
   position: relative;
   flex: 1;
