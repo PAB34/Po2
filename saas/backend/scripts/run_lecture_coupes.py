@@ -92,12 +92,18 @@ def reponse_de_l_agent(sortie: str, etape: str) -> dict:
         return brut
     texte = brut if isinstance(brut, str) else (enveloppe.get("result") if isinstance(enveloppe, dict) else None)
     if isinstance(texte, str):
-        debut, fin = texte.find("{"), texte.rfind("}")
-        if 0 <= debut < fin:
+        # Un objet, ou une liste nue (essai PC04 : les zooms rendus en liste) rangée sous la clé « liste ».
+        for ouvre, ferme in (("{", "}"), ("[", "]")):
+            debut, fin = texte.find(ouvre), texte.rfind(ferme)
+            if not 0 <= debut < fin:
+                continue
+            if ouvre == "{" and 0 <= texte.find("[") < debut:
+                continue
             try:
-                return json.loads(texte[debut : fin + 1])
+                lu = json.loads(texte[debut : fin + 1])
             except json.JSONDecodeError:
-                pass
+                continue
+            return lu if isinstance(lu, dict) else {"liste": lu, "observations": []}
     sous_type = enveloppe.get("subtype") if isinstance(enveloppe, dict) else None
     raise ThermiqueError(
         f"L'agent n'a pas rendu de JSON à l'étape « {etape} » ({sous_type}) : {str(texte)[:600]}"

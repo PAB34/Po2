@@ -395,7 +395,7 @@ def points_a_preciser(traits: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def appliquer_precisions(traits: list[dict[str, Any]], zooms: list[dict[str, Any]], reponse: dict[str, Any]) -> list[dict[str, Any]]:
     """Remplace chaque sommet approché par le point lu sur son zoom, s'il reste dans le zoom."""
     lus = {
-        str(e.get("image")): point_lu(e.get("point"))
+        str(e.get("image") or e.get("file") or e.get("fichier")): point_lu(e.get("point"))
         for e in (liste_rendue(reponse, "extremites") or [])
         if isinstance(e, dict) and point_lu(e.get("point")) is not None
     }

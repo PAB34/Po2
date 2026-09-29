@@ -181,6 +181,39 @@ coupe l'emporte sur la mesure.
 - coupe C : formation et lecture confort à 2,88 m, atrium signalé en double hauteur ;
 - coupe D : aucune pièce rattachée, dit comme tel.
 
+## 3 quater. Premier essai réel de l'agent `thermicien-coupe` (2026-09-29, projet 1)
+
+Autorisé par l'utilisateur ; une vingtaine d'appels Opus au total, plusieurs perdus à cause de défauts de ma
+chaîne, corrigés au fil de l'essai : images trop réduites, tuiles de marge écartées, format de réponse non
+respecté, coupe tournée.
+
+**Résultat : 0 local sur 13 avec la bonne hauteur** — contre 8/8 avec ma lecture à l'œil. Le rattachement
+n'est pas en cause ; c'est la **lecture** :
+
+| Ce que l'agent devait lire | Ce qu'il a rendu |
+|---|---|
+| Traits du plan PC04 | B juste (4 cm) mais sens faux (rattrapé par D-sens) ; A à **1,57 m**, D à **1,38 m** (zoom mal interprété : bord du drapeau pris du mauvais côté) ; **C introuvable** aux deux essais |
+| Vues des planches | les 4 coupes trouvées et **bien nommées** ; cadres grossiers (les deux coupes d'une page se chevauchent) |
+| Coupe C (avec le vrai trait) | **les bons locaux** : 4.2.4 → formation, 4.3.4 → lecture confort… mais hauteur **3,84 m** (sol à sol, H10 → H20) au lieu de 2,88 m (H10 → H11) ; H11 lu à la cote de H10 ; pièces du RDC mêlées |
+| Coupe A (avec le vrai trait) | 2 pièces seulement, positions à côté |
+
+Ce qui marche : trouver et nommer les vues, lire les numéros de pièces, lire la liste des cotes de niveau.
+Ce qui ne marche pas : les **positions fines** (extrémités de trait, bornes de pièce) et la **ligne de
+plafond fini** (l'agent prend le niveau suivant). C'est la leçon déjà apprise sur les murs : la lecture
+d'image seule, sans exemple, n'atteint pas la précision métrique.
+
+**Q42 — Comment obtenir les hauteurs de façon fiable ?**
+- (a) **Le thermicien donne un exemple par coupe** : il clique une fois le sol fini et le plafond fini d'une
+  pièce coupée ; l'outil en tire la hauteur de l'étage et la propage (D179), l'agent ne sert plus qu'à
+  nommer les vues et les pièces. Quelques clics par coupe.
+- (b) **Les traits se posent à la main** (deux clics par trait, le sens est tranché par la coupe, D-sens),
+  les coupes restent lues par l'agent, qu'on améliore encore (zoom dédié sur la chaîne de cotes
+  verticales H10 → H11 = 2,88).
+- (c) (a) + (b) : traits et hauteurs à la main, assistés, l'agent seulement pour nommer ; fiable tout de
+  suite, l'agent s'améliore en arrière-plan contre la vérité terrain.
+- (d) Continuer à améliorer l'agent seul avant tout usage.
+REPONSE :
+
 ## 4. Ce que je vérifierai à chaque lot
 
 - Le métré du R+1 ne bouge pas tant qu'aucune hauteur n'est validée (170,12 m déperditifs, 229 côtés).
