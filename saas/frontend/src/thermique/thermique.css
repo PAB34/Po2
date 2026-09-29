@@ -2370,6 +2370,17 @@ circle.th-seg--measure {
   stroke-dasharray: 14 8;
 }
 
+/* Une façade (S5e) : le long de l'enveloppe, en bleu, pour ne pas la confondre avec un trait de coupe. */
+.th-trait-coupe.is-facade polyline {
+  stroke: #1d4ed8;
+  stroke-width: 7;
+  opacity: 0.55;
+}
+
+.th-trait-coupe.is-facade text {
+  fill: #1d4ed8;
+}
+
 .th-trait-coupe__fleche {
   fill: none;
   stroke: #b91c1c;

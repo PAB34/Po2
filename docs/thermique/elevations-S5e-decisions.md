@@ -88,7 +88,10 @@ l'emporte.
 **D196 (Q46 a)** — Un mur-rideau prend la hauteur sous plafond du local qu'il borde (D178), sans clic.
 **D197 (Q47 a)** — L'allège attend.
 **D198 (Q48 a)** — Le trait de façade sur le plan attend que le nord soit posé ; l'élévation s'ouvre depuis la
-fiche de la menuiserie sans lui.
+fiche de la menuiserie sans lui. **Correction (2026-09-29)** : la prémisse « le nord n'est pas posé » venait de
+ma copie locale de l'étude (`banc.db`, antérieure à la prod), pas de l'application, où l'utilisateur l'a posé
+pour toutes les planches. Le trait de façade se construit donc tout de suite ; il ne manque que sur un projet
+sans nord.
 
 ## 3 ter. Mesure sur le vrai R+1 et décisions révisées (2026-09-29)
 
@@ -123,8 +126,12 @@ hauteur, qui l'emporte. D193 reste : les deux coins donnent largeur et hauteur ;
 - R+1 réel : 58 menuiseries → 49 baies, 8 morceaux à vérifier.
 - Tests : 5 backend (`test_thermique_menuiseries.py`), 6 frontend (`baies.test.tsx`, 172 au vert), typecheck,
   build.
-- Pas fait : le trait de façade sur le plan (D198, attend le nord) ; l'usage des hauteurs dans le calcul des
-  surfaces (lot des surfaces).
+- **Trait de façade sur le plan (D182, fait après correction de D198)** : l'orientation écrite dans le nom de
+  l'élévation (« FAÇADE EST », « Nord-Ouest »…) et le nord du plan donnent une direction ; les tronçons de
+  l'enveloppe dont la normale extérieure la suit à 45° près forment la façade, dessinée en bleu le long de
+  l'enveloppe sous la case « Voir les coupes et façades » ; un clic ouvre l'élévation. Calcul à l'écran
+  (`facades.ts`), 5 tests. Une façade à 45° pile d'un bâtiment orthogonal (sud-ouest d'un carré) est ambiguë.
+- Pas fait : l'usage des hauteurs dans le calcul des surfaces (lot des surfaces).
 
 ---
 

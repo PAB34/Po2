@@ -3,7 +3,17 @@ import type { ToScreen } from "../components/TileSheetViewer";
 import { distanceAuSegment } from "./elements";
 
 /** Un trait de coupe montrable et cliquable sur le plan (S5, D171) : relevé sur le plan ou déduit (D190). */
-export type TraitCliquable = { nom: string; points: PdfPoint[]; sens: [number, number]; deduit: boolean; vueId: number };
+export type TraitCliquable = {
+  nom: string;
+  points: PdfPoint[];
+  sens: [number, number];
+  deduit: boolean;
+  vueId: number;
+  /** Trait d'une façade (S5e, D182) : dessiné le long de l'enveloppe, dans sa propre couleur. */
+  facade?: boolean;
+  /** Une façade se dessine en plusieurs tronçons : seul le premier porte son nom. */
+  etiquette?: boolean;
+};
 
 /** Les traits du niveau reliés à la vue qu'ils ouvrent ; un trait sans coupe lue n'est pas cliquable. */
 export function traitsCliquables(hauteurs: HauteursDuPlan | undefined): TraitCliquable[] {
@@ -36,7 +46,7 @@ export function traitAt(traits: TraitCliquable[], point: PdfPoint, tolerance: nu
 export function TraitsDeCoupe({ traits, toScreen }: { traits: TraitCliquable[]; toScreen: ToScreen }) {
   return (
     <g className="th-traits-coupe">
-      {traits.map((trait) => {
+      {traits.map((trait, rang) => {
         const ecran = trait.points.map(toScreen);
         const [ax, ay] = ecran[0];
         const [bx, by] = ecran[ecran.length - 1];
@@ -48,14 +58,21 @@ export function TraitsDeCoupe({ traits, toScreen }: { traits: TraitCliquable[]; 
           return `M ${x} ${y} L ${x + ux * 18} ${y + uy * 18}`;
         };
         return (
-          <g key={`${trait.nom}-${trait.vueId}`} className={`th-trait-coupe${trait.deduit ? " is-deduit" : ""}`}>
+          <g
+            key={`${trait.nom}-${trait.vueId}-${rang}`}
+            className={`th-trait-coupe${trait.deduit ? " is-deduit" : ""}${trait.facade ? " is-facade" : ""}`}
+          >
             <polyline points={ecran.map(([x, y]) => `${x},${y}`).join(" ")} />
-            <path className="th-trait-coupe__fleche" d={`${fleche(ax, ay)} ${fleche(bx, by)}`} />
-            <text x={ax} y={ay - 8} textAnchor="middle">
-              {trait.nom}
-            </text>
+            {!trait.facade && <path className="th-trait-coupe__fleche" d={`${fleche(ax, ay)} ${fleche(bx, by)}`} />}
+            {(trait.etiquette ?? true) && (
+              <text x={(ax + bx) / 2} y={(ay + by) / 2 - 8} textAnchor="middle">
+                {trait.nom}
+              </text>
+            )}
             <title>
-              {`${trait.nom}${trait.deduit ? " (situé d'après la coupe)" : ""} : cliquez pour ouvrir la coupe`}
+              {trait.facade
+                ? `${trait.nom} : cliquez pour ouvrir l'élévation`
+                : `${trait.nom}${trait.deduit ? " (situé d'après la coupe)" : ""} : cliquez pour ouvrir la coupe`}
             </title>
           </g>
         );

@@ -19,6 +19,7 @@ import { StudyCoherenceReport, StudyCoverageBanner, StudyOverlay, StudyRoomCreat
 import { ElementPanel } from "./ElementPanel";
 import { FenetreCoupe } from "./FenetreCoupe";
 import { menuiseriesQueryKey } from "./baies";
+import { traitsDeFacade } from "./facades";
 import { traitAt, TraitsDeCoupe, traitsCliquables } from "./TraitsDeCoupe";
 import { PontsPanel } from "./PontsPanel";
 import { coteAt, empreinteCote, milieuCote, rangVise, type CoteVisee } from "./cotes";
@@ -371,7 +372,10 @@ export function WorkspacePage() {
   const facades = (vues.data ?? []).filter((vue) => vue.nature === "facade").map((vue) => ({ id: vue.id, nom: vue.nom }));
   // Case « Voir les coupes » (D171) : les traits, relevés ou déduits, en lignes épaisses cliquables.
   const [voirCoupes, setVoirCoupes] = useState(false);
-  const traitsAffiches = voirCoupes ? traitsCliquables(hauteurs.data) : [];
+  // Les façades aussi (S5e, D182) : le long de l'enveloppe, du côté que le nom de l'élévation désigne.
+  const traitsFacades = traitsDeFacade(study?.content, sheet?.nord, vues.data ?? []);
+  const traitsAffiches = voirCoupes ? [...traitsCliquables(hauteurs.data), ...traitsFacades] : [];
+  const coupesOuFacades = (hauteurs.data?.coupes.length ?? 0) + traitsFacades.length;
   const vueOuverte = vues.data?.find((vue) => vue.id === coupeOuverte) ?? null;
   const plancheOuverte = vueOuverte ? sheets.find((s) => s.id === vueOuverte.sheet_id) ?? null : null;
   const selectedLocalId = searchParams.get("local");
@@ -941,17 +945,19 @@ export function WorkspacePage() {
                     );
                   })}
                   <label title={
-                    (hauteurs.data?.coupes.length ?? 0) > 0
-                      ? "Les traits de coupe, relevés sur le plan ou situés d'après la coupe : un clic ouvre la coupe"
-                      : "Aucune coupe lue ni située pour ce niveau"
+                    coupesOuFacades > 0
+                      ? "Traits de coupe (relevés ou situés d'après la coupe) et façades lues : un clic ouvre la vue"
+                      : sheet.nord
+                        ? "Aucune coupe ni façade lue pour ce niveau"
+                        : "Aucune coupe lue ; les façades se repèrent une fois le nord posé"
                   }>
                     <input
                       type="checkbox"
-                      disabled={(hauteurs.data?.coupes.length ?? 0) === 0}
+                      disabled={coupesOuFacades === 0}
                       checked={voirCoupes}
                       onChange={() => setVoirCoupes((actuel) => !actuel)}
                     />
-                    Voir les coupes
+                    Voir les coupes et façades
                   </label>
                   {shownStudy &&
                     METRICS_CASES.map((item) => (
