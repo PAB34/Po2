@@ -17,6 +17,7 @@ import { PlanMenu, type PlanAction } from "./PlanMenu";
 import { METRICS_DEFAUT, StudyMetrics, type MetricsShow } from "./StudyMetrics";
 import { StudyCoherenceReport, StudyCoverageBanner, StudyOverlay, StudyRoomCreationPanel, StudyRoomList, StudyRoomPanel } from "./StudyPanel";
 import { ElementPanel } from "./ElementPanel";
+import { FenetreCoupe } from "./FenetreCoupe";
 import { PontsPanel } from "./PontsPanel";
 import { coteAt, empreinteCote, milieuCote, rangVise, type CoteVisee } from "./cotes";
 import { elementDuPont, paroisATrancher, pontAt, pontDeElement, trouverElement, viserSurLePlan } from "./elements";
@@ -350,6 +351,15 @@ export function WorkspacePage() {
     enabled: Boolean(token && sheetId && study),
     retry: false,
   });
+  // Les vues de coupe du projet, et celle ouverte dans la fenêtre flottante (D183).
+  const vues = useQuery({
+    queryKey: ["thermique", "vues", projectId],
+    queryFn: () => thermiqueApi.getVues(token!, projectId),
+    enabled: Boolean(token && projectId),
+  });
+  const [coupeOuverte, setCoupeOuverte] = useState<number | null>(null);
+  const vueOuverte = vues.data?.find((vue) => vue.id === coupeOuverte) ?? null;
+  const plancheOuverte = vueOuverte ? sheets.find((s) => s.id === vueOuverte.sheet_id) ?? null : null;
   const selectedLocalId = searchParams.get("local");
   const selectRoomDirect = useCallback((id: string) => setParams({ local: id, panneau: "fiche" }), [setParams]);
   // Les corrections d'éléments s'appliquent d'abord : l'édition des contours travaille ensuite sur
@@ -1096,6 +1106,8 @@ export function WorkspacePage() {
                           : undefined
                       }
                       hauteur={selectedRoom ? hauteurs.data?.locaux[selectedRoom.id] : undefined}
+                      coupes={hauteurs.data?.coupes}
+                      onVoirCoupe={setCoupeOuverte}
                     />
                   )}
                   {/* Les éléments du local, sous sa fiche et jamais en carte flottante (F4, Q8). À l'étape des
@@ -1170,6 +1182,16 @@ export function WorkspacePage() {
           )}
         </aside>
       </div>
+      {token && vueOuverte && plancheOuverte && (
+        <FenetreCoupe
+          key={vueOuverte.id}
+          token={token}
+          vue={vueOuverte}
+          planche={plancheOuverte}
+          planSheetId={sheetId}
+          onClose={() => setCoupeOuverte(null)}
+        />
+      )}
     </div>
   );
 }

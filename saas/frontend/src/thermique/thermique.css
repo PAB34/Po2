@@ -2349,6 +2349,64 @@ circle.th-seg--measure {
   width: 6rem;
 }
 
+.th-hauteur__coupes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+/* Coupe ouverte au-dessus du plan (S5, D183) : déplaçable par son titre, redimensionnable. */
+.th-fenetre-coupe {
+  position: fixed;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  width: min(720px, calc(100vw - 32px));
+  height: min(520px, calc(100vh - 120px));
+  min-width: 320px;
+  min-height: 260px;
+  resize: both;
+  overflow: hidden;
+  background: var(--po2-surface, #fff);
+  border: 1px solid var(--po2-border, #cbd5e1);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgb(15 23 42 / 25%);
+}
+
+.th-fenetre-coupe__titre {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.6rem;
+  cursor: move;
+  user-select: none;
+  border-bottom: 1px solid var(--po2-border, #cbd5e1);
+}
+
+.th-fenetre-coupe__titre button {
+  margin-left: auto;
+}
+
+.th-fenetre-coupe__outils {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.6rem;
+}
+
+.th-fenetre-coupe__message {
+  margin: 0;
+  padding: 0 0.6rem 0.35rem;
+  font-size: 0.85rem;
+}
+
+.th-fenetre-coupe__plan {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
 /* L'en-tête du côté est un bouton qui le montre sur le plan (sujet 2, D146). */
 .th-study-side__viser {
   display: grid;

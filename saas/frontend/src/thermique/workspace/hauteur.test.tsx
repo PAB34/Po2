@@ -1,7 +1,8 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import type { LocalHauteur } from "../api";
+import type { LocalHauteur, Sheet, VueCoupe } from "../api";
+import { cadrageDeLaVue, hauteurEntreClics } from "./FenetreCoupe";
 import { HauteurLocal, lireHauteur } from "./StudyPanel";
 import { changeLocalHauteurOperation, provenanceHauteur } from "./study";
 
@@ -73,6 +74,37 @@ describe("hauteur sous plafond d'un local (S5, D178 à D180)", () => {
     );
     expect(html).toContain("inconnue");
     expect(html).toContain("pas de plafond à cet étage");
+  });
+
+  it("deux clics dans une coupe tournée donnent la hauteur le long de son haut (D191)", () => {
+    // PC10 : le haut de la coupe est le +x de la page ; 1/100 : 2,88 m = 81,6 points.
+    const pts = 2.88 / ((0.0254 / 72) * 100);
+    expect(hauteurEntreClics([1252, 1300], [1252 + pts, 1310], [1, 0], 100)).toBeCloseTo(2.88, 3);
+    expect(hauteurEntreClics([1252 + pts, 1300], [1252, 1300], [1, 0], 100)).toBeCloseTo(-2.88, 3);
+  });
+
+  it("la fenêtre se cadre sur la vue", () => {
+    const vue = { id: 1, sheet_id: 2, nom: "COUPE A", nature: "coupe", cadre: [882, 978, 1573, 2003], haut: [1, 0] } as VueCoupe;
+    const planche = { id: 2, rotation_deg: 0, page_width_pt: 1684, page_height_pt: 2384 } as Sheet;
+    const cadrage = cadrageDeLaVue(vue, planche);
+    expect(cadrage.point).toEqual([1227.5, 1490.5]);
+    expect(cadrage.zoom).toBeCloseTo(Math.min(1684 / 691, 2384 / 1025) * 0.9, 5);
+  });
+
+  it("propose d'ouvrir d'abord les coupes qui traversent le local", () => {
+    const html = renderToStaticMarkup(
+      <HauteurLocal
+        hauteur={lue}
+        coupes={[{ vue_id: 1, vue: "COUPE A" }, { vue_id: 2, vue: "COUPE C" }]}
+        onVoirCoupe={rien}
+      />,
+    );
+    expect(html).toContain("Voir la coupe COUPE A");
+    expect(html).not.toContain("Voir la coupe COUPE C");
+    const deduite = renderToStaticMarkup(
+      <HauteurLocal hauteur={{ ...lue, source: "deduite", lectures: [] }} coupes={[{ vue_id: 2, vue: "COUPE C" }]} onVoirCoupe={rien} />,
+    );
+    expect(deduite).toContain("Voir la coupe COUPE C");
   });
 
   it("sans coupes lues, la hauteur déjà saisie dans l'étude s'affiche", () => {

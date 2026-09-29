@@ -481,13 +481,21 @@ export function HauteurLocal({
   saisie,
   busy = false,
   onHauteur,
+  coupes = [],
+  onVoirCoupe,
 }: {
   hauteur?: LocalHauteur;
   /** Hauteur déjà saisie dans l'étude : elle fait foi même si les coupes n'ont pas encore été lues. */
   saisie?: number | null;
   busy?: boolean;
   onHauteur?: (hauteur: number | null) => void;
+  /** Coupes situées sur ce niveau, pour les ouvrir et y confirmer la hauteur (D183, D191). */
+  coupes?: { vue_id: number; vue: string }[];
+  onVoirCoupe?: (vueId: number) => void;
 }) {
+  // Les coupes qui traversent ce local d'abord ; à défaut, toutes celles du niveau.
+  const lues = new Set((hauteur?.lectures ?? []).map((lecture) => lecture.vue));
+  const proposees = coupes.some((coupe) => lues.has(coupe.vue)) ? coupes.filter((coupe) => lues.has(coupe.vue)) : coupes;
   const valeur = hauteur?.hauteur_m ?? saisie ?? null;
   const [texte, setTexte] = useState(valeur === null ? "" : String(valeur).replace(".", ","));
   const [erreur, setErreur] = useState<string | null>(null);
@@ -536,6 +544,20 @@ export function HauteurLocal({
         </div>
       )}
       {erreur && <small className="th-alert th-alert--warn">{erreur}</small>}
+      {onVoirCoupe && proposees.length > 0 && (
+        <div className="th-hauteur__coupes">
+          {proposees.map((coupe) => (
+            <button
+              key={coupe.vue_id}
+              type="button"
+              className="po2-button po2-button--ghost"
+              onClick={() => onVoirCoupe(coupe.vue_id)}
+            >
+              Voir la coupe {coupe.vue}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -548,6 +570,8 @@ export function StudyRoomPanel({
   onCote,
   validation,
   hauteur,
+  coupes,
+  onVoirCoupe,
 }: {
   room: StudyRoom | null;
   state?: Study["local_states"][string];
@@ -558,6 +582,8 @@ export function StudyRoomPanel({
   validation?: StudyRoomValidation;
   /** Hauteur du local lue dans les coupes, ou saisie (S5). */
   hauteur?: LocalHauteur;
+  coupes?: { vue_id: number; vue: string }[];
+  onVoirCoupe?: (vueId: number) => void;
 }) {
   if (!room) {
     return <p className="th-muted">Sélectionnez un local sur le plan ou dans la liste pour ouvrir sa fiche.</p>;
@@ -595,6 +621,8 @@ export function StudyRoomPanel({
             saisie={room.hauteur_m}
             busy={edition?.busy}
             onHauteur={edition && !edition.draft ? edition.onHauteur : undefined}
+            coupes={coupes}
+            onVoirCoupe={onVoirCoupe}
           />
         )}
         {/* Le linéaire déperditif est ce qu'un recadrage fait varier sans le dire : il est annoncé ici,

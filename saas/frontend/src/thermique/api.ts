@@ -224,9 +224,21 @@ export type LocalHauteur = {
 export type HauteursDuPlan = {
   sheet_id: number;
   locaux: Record<string, LocalHauteur>;
-  coupes: { trait: string; vue: string; vue_sheet_id: number; alertes: string[] }[];
+  coupes: { trait: string; deduit: boolean; vue_id: number; vue: string; vue_sheet_id: number; alertes: string[] }[];
   traits_sans_vue: string[];
-  traits: { nom: string; points: PdfPoint[]; sens: [number, number] }[];
+  coupes_non_situees?: string[];
+  traits: { nom: string; points: PdfPoint[]; sens: [number, number]; deduit?: boolean }[];
+};
+
+/** Une vue lue sur une planche de coupes ou de façades (S5), en points PDF de sa planche. */
+export type VueCoupe = {
+  id: number;
+  sheet_id: number;
+  nom: string;
+  nature: "coupe" | "facade" | "detail";
+  cadre: [number, number, number, number];
+  haut: [number, number];
+  corrections?: { sol: number; plafond: number; hauteur_m: number }[];
 };
 
 export type StudyRoom = {
@@ -468,6 +480,11 @@ export const thermiqueApi = {
   getStudy: (token: string, sheetId: number) => request<Study | null>(token, `/thermique/sheets/${sheetId}/etude`),
   getPontsCatalogue: (token: string) => request<PontsCatalogue>(token, "/thermique/ponts/catalogue"),
   getHauteurs: (token: string, sheetId: number) => request<HauteursDuPlan>(token, `/thermique/sheets/${sheetId}/hauteurs`),
+  getVues: (token: string, projectId: number) => request<VueCoupe[]>(token, `/thermique/projects/${projectId}/vues`),
+  confirmerHauteur: (token: string, vueId: number, sol: PdfPoint, plafond: PdfPoint) =>
+    request<VueCoupe>(token, `/thermique/vues/${vueId}/hauteur`, { method: "POST", body: JSON.stringify({ sol, plafond }) }),
+  retirerHauteurs: (token: string, vueId: number) =>
+    request<VueCoupe>(token, `/thermique/vues/${vueId}/hauteur`, { method: "DELETE" }),
   importStudy: (token: string, sheetId: number, file: File, replace = false) => {
     const form = new FormData();
     form.append("fichier", file);
