@@ -44,8 +44,14 @@ déperditifs**, 289 formes, 77 liaisons. Tout lot qui ne touche pas au calcul do
   lectures + route `GET /sheets/{id}/hauteurs` + hauteur saisie par `modifier` (`thermique_lecture_coupes.py`,
   **migration 0088**), hauteur dans la fiche du local (écran), agent `thermicien-coupe` + script
   `run_lecture_coupes.py` (images quadrillées en points PDF, `--reponses` pour rejouer) + relais par type de
-  travail (un ancien relais ne reçoit que des niveaux). **Reste** : mesurer l'agent contre la vérité terrain
-  (script `s5_ecart_agent.py` du bloc-notes), puis S5a/S5b (traits cliquables, fenêtre flottante D183), S5e.
+  travail (un ancien relais ne reçoit que des niveaux). **Essai réel de l'agent : 0/13** (positions fines et
+  plafond fini ratés ; vues et numéros de pièces bien lus) → Q42 tranchée en conversation : **D190** le trait se
+  déduit de la coupe (balayage du plan, numéros de pièces ; coupe A 8/8, C 3/3 sur vérité terrain), **D191**
+  la hauteur se confirme par deux clics dans la coupe (corrige tout l'étage). Faits : déduction + cache du
+  trait (préparé en tâche de fond à la lecture des coupes), routes `POST/DELETE /vues/{id}/hauteur`,
+  `GET /projects/{id}/vues`, fenêtre flottante de la coupe (`FenetreCoupe.tsx`, bouton « Voir la coupe » dans
+  la fiche). **Tout est en commits locaux, rien poussé, jamais éprouvé à la souris.** Reste : traits
+  cliquables sur le plan (S5a/S5b), traits à décrochés ou en biais, élévations (S5e).
 - `thermique/retours-menuiseries-2026-09-28-decisions.md` — M1, M2 (morceaux → élément entier), M3 **faits**.
   Réponses Q30–Q33 → **D174** fusion d'office de 2 menuiseries contiguës de même composant ; **D175**
   menuiserie dessinée = composant le plus employé ; **D176** identiques = même composant, largeur ± 1 cm ;
