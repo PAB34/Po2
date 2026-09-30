@@ -109,11 +109,18 @@ def test_parse_cli_output_tolere_une_phrase_ou_un_bloc_autour_du_json():
     import pytest
 
     objets = [{"category": "cloison", "points": [[0, 0], [1, 1]]}]
-    texte = "Voici l'inventaire :\n```json\n" + json.dumps({"objects": objets}) + "\n```\nBonne lecture."
-    assert thermique_claude_agent.parse_cli_output(json.dumps({"result": texte}))["objects"] == objets
-    phrase = "Inventaire : " + json.dumps({"objets": objets}) + " fin."
-    assert thermique_claude_agent.parse_cli_output(json.dumps({"result": phrase}))["objects"] == objets
-    assert thermique_claude_agent.parse_cli_output(json.dumps({"result": json.dumps(objets)}))["objects"] == objets
+    lire = lambda texte: [o["points"] for o in thermique_claude_agent.parse_cli_output(json.dumps({"result": texte}))["objects"]]
+    attendu = [objets[0]["points"]]
+    assert lire("Voici l'inventaire :\n```json\n" + json.dumps({"objects": objets}) + "\n```\nBonne lecture.") == attendu
+    assert lire("Inventaire : " + json.dumps({"objets": objets}) + " fin.") == attendu
+    assert lire(json.dumps(objets)) == attendu
+    # Vocabulaire propre de l'agent quand la CLI n'impose pas le schéma (N-1 du projet 1).
+    composants = {"components": [{"id": "mur_01", "category": "mur_exterieur", "geometry": [[1, 2], [3, 4]], "justification": "trait épais"}]}
+    [objet] = thermique_claude_agent.parse_cli_output(json.dumps({"result": "```json\n" + json.dumps(composants) + "\n```"}))["objects"]
+    assert objet["points"] == [[1, 2], [3, 4]]
+    assert objet["evidence"] == "trait épais"
+    assert objet["geometry_type"] == "polyline"
+    assert "geometry" not in objet and "id" not in objet
     with pytest.raises(thermique_claude_agent.ThermiqueError, match="JSON valide"):
         thermique_claude_agent.parse_cli_output(json.dumps({"result": "Je n'ai pas pu lire le plan."}))
 

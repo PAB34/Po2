@@ -298,6 +298,32 @@ def _json_dans_le_texte(texte: str) -> Any:
     raise ThermiqueError("La réponse structurée de Claude Code n'est pas un JSON valide.")
 
 
+_TRACE = {"points", "geometry", "coordinates"}
+# Seuls les synonymes sans ambiguïté : une « porte » peut être intérieure ou extérieure, on ne devine pas.
+_CATEGORIES_SYNONYMES = {"mur_refend": "refend"}
+
+
+def _objet_normalise(objet: dict[str, Any]) -> dict[str, Any]:
+    """Un objet de l'agent dans le vocabulaire du schéma : `points`, `evidence`, `geometry_type`."""
+    resultat = dict(objet)
+    if "points" not in resultat:
+        resultat["points"] = resultat.pop("geometry", None) or resultat.pop("coordinates", None) or []
+    resultat.pop("geometry", None)
+    resultat.pop("coordinates", None)
+    if "evidence" not in resultat:
+        resultat["evidence"] = str(resultat.pop("justification", "") or "")
+    points = resultat["points"]
+    if resultat.get("geometry_type") not in GEOMETRIES:
+        ferme = len(points) >= 4 and list(points[0]) == list(points[-1])
+        resultat["geometry_type"] = "polygon" if ferme or resultat.get("category") in ("piece", "poteau") else "polyline"
+    resultat["category"] = _CATEGORIES_SYNONYMES.get(resultat.get("category"), resultat.get("category"))
+    resultat.setdefault("subtype", "")
+    resultat.setdefault("confidence", 0.5)
+    resultat.setdefault("review_required", True)
+    resultat.pop("id", None)
+    return resultat
+
+
 def parse_cli_output(stdout: str) -> dict[str, Any]:
     try:
         envelope = json.loads(stdout)
@@ -310,13 +336,24 @@ def parse_cli_output(stdout: str) -> dict[str, Any]:
         candidate = _json_dans_le_texte(candidate)
     if candidate is None and isinstance(envelope, dict) and "objects" in envelope:
         candidate = envelope
-    # Une liste nue d'objets, ou les objets sous un autre nom : c'est bien un inventaire.
+    # Une liste nue d'objets, ou les objets sous un autre nom (« components » constaté le 2026-09-30, quand la
+    # CLI n'impose pas le schéma) : c'est bien un inventaire, qu'on ramène au vocabulaire attendu.
     if isinstance(candidate, list):
         candidate = {"objects": candidate}
     if isinstance(candidate, dict) and not isinstance(candidate.get("objects"), list):
-        listes = [valeur for valeur in candidate.values() if isinstance(valeur, list) and valeur and isinstance(valeur[0], dict) and "points" in valeur[0]]
+        listes = [
+            valeur
+            for valeur in candidate.values()
+            if isinstance(valeur, list) and valeur and isinstance(valeur[0], dict) and _TRACE.intersection(valeur[0])
+        ]
         if len(listes) == 1:
             candidate = {**candidate, "objects": listes[0]}
+    # Une sortie structurée suit déjà le schéma ; seule une réponse rédigée se ramène au vocabulaire attendu.
+    structuree = isinstance(envelope, dict) and envelope.get("structured_output") is not None
+    if not structuree and isinstance(candidate, dict) and isinstance(candidate.get("objects"), list):
+        candidate["objects"] = [_objet_normalise(objet) for objet in candidate["objects"] if isinstance(objet, dict)]
+        observations = candidate.get("observations")
+        candidate["observations"] = [str(o) for o in observations] if isinstance(observations, list) else []
     if not isinstance(candidate, dict) or not isinstance(candidate.get("objects"), list):
         raise ThermiqueError("Claude Code n'a retourné aucun inventaire d'objets.")
     candidate.setdefault("observations", [])
