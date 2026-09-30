@@ -181,7 +181,7 @@ def main() -> int:
         return 1
     (dossier / "lecture.json").write_text(json.dumps(resultat, ensure_ascii=False, indent=1), encoding="utf-8")
     nombre = len(resultat.get("traits", resultat.get("vues", [])))
-    print(f"{nombre} {'trait(s)' if args.type == 'traits' else 'vue(s)'} lu(s) → {dossier / 'lecture.json'}")
+    print(f"{nombre} {'trait(s)' if args.type == 'traits' else 'vue(s)'} lu(s) : {dossier / 'lecture.json'}")
     return 0
 
 
