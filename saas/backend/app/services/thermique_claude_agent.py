@@ -360,6 +360,24 @@ def parse_cli_output(stdout: str) -> dict[str, Any]:
     return candidate
 
 
+AGENTS = Path(__file__).resolve().parents[4] / ".claude" / "agents"
+
+
+def consignes_de_l_agent(nom: str) -> list[str]:
+    """Les options qui font travailler la CLI avec les consignes d'un agent du dépôt.
+
+    `--agent <nom>` désactive la sortie structurée de `--json-schema` (vérifié le 2026-09-30, Claude Code
+    2.1.128 : `structured_output` vide avec `--agent`, rempli sans) ; l'agent répondait alors dans son propre
+    vocabulaire, différent à chaque essai. Ses consignes passent donc par la consigne système : même agent,
+    fichier inchangé, et la réponse suit le schéma.
+    """
+    texte = (AGENTS / f"{nom}.md").read_text(encoding="utf-8")
+    if texte.startswith("---"):
+        fin = texte.find("\n---", 3)
+        texte = texte[fin + 4 :] if fin >= 0 else texte
+    return ["--append-system-prompt", texte.strip()]
+
+
 def cli_environment(source: dict[str, str] | None = None) -> dict[str, str]:
     """Environnement du sous-processus, débarrassé des variables d'une session Claude hôte.
 
@@ -391,8 +409,7 @@ def run_agent(
         bundle_directory,
         "-p",
         build_prompt(manifest),
-        "--agent",
-        "thermicien-plan",
+        *consignes_de_l_agent("thermicien-plan"),
         "--model",
         model,
         "--output-format",

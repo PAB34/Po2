@@ -104,6 +104,15 @@ def test_parse_cli_output_accepte_resultat_json_en_texte():
     assert thermique_claude_agent.parse_cli_output(json.dumps({"result": json.dumps(raw)})) == raw
 
 
+def test_les_consignes_de_l_agent_passent_par_la_consigne_systeme_sans_son_en_tete():
+    """`--agent` coupe la sortie structurée (2026-09-30) : on passe le corps du fichier de l'agent."""
+    options = thermique_claude_agent.consignes_de_l_agent("thermicien-plan")
+    assert options[0] == "--append-system-prompt"
+    assert "--agent" not in options
+    assert not options[1].startswith("---") and "name:" not in options[1].splitlines()[0]
+    assert len(options[1]) > 200
+
+
 def test_parse_cli_output_tolere_une_phrase_ou_un_bloc_autour_du_json():
     """Constaté le 2026-09-30 sur le N-1 : l'agent rédige autour de son JSON."""
     import pytest

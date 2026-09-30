@@ -23,6 +23,7 @@ from app.services.thermique import ThermiqueError  # noqa: E402
 from app.services.thermique_claude_agent import (  # noqa: E402
     claude_executable,
     cli_environment,
+    consignes_de_l_agent,
     render_projection,
 )
 
@@ -73,7 +74,7 @@ def appeler(manifeste: dict, modele: str, delai: int, consigne: str | None = Non
     commande = [
         claude_executable(), "--add-dir", str(Path(manifeste["plan_guide"]).parent), "-p",
         consigne or enveloppe.consigne(manifeste),
-        "--agent", "thermicien-enveloppe", "--model", modele, "--output-format", "json",
+        *consignes_de_l_agent("thermicien-enveloppe"), "--model", modele, "--output-format", "json",
         "--json-schema", json.dumps(enveloppe.schema(), ensure_ascii=False, separators=(",", ":")),
         "--tools", "Read", "--permission-mode", "dontAsk", "--no-session-persistence",
     ]

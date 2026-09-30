@@ -28,7 +28,7 @@ sys.path.insert(0, str(BACKEND))
 from app.services import thermique_consignes_coupes as consignes  # noqa: E402
 from app.services import thermique_lecture_coupes as lecture  # noqa: E402
 from app.services.thermique import ThermiqueError  # noqa: E402
-from app.services.thermique_claude_agent import claude_executable, cli_environment  # noqa: E402
+from app.services.thermique_claude_agent import claude_executable, cli_environment, consignes_de_l_agent  # noqa: E402
 
 AGENT = "thermicien-coupe"
 
@@ -65,7 +65,7 @@ class Agent:
             raise ThermiqueError(f"Aucune réponse enregistrée pour l'étape « {etape} » dans {self.reponses}.")
         commande = [
             claude_executable(), "--add-dir", str(self.dossier), "-p", consigne,
-            "--agent", AGENT, "--model", self.modele, "--output-format", "json",
+            *consignes_de_l_agent(AGENT), "--model", self.modele, "--output-format", "json",
             "--json-schema", json.dumps(schema, ensure_ascii=False, separators=(",", ":")),
             "--tools", "Read", "--permission-mode", "dontAsk", "--no-session-persistence",
         ]

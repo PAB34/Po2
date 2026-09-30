@@ -132,7 +132,7 @@ def passe_globale(etude: Etude) -> int | None:
 
 def appeler_agent(nom: str, consigne: str, schema: dict, dossier_images: Path, modele: str, delai: int = 900) -> dict:
     """Mode cli : un agent du dépôt appelé par Claude Code en ligne de commande (abonnement, pas de clé d'API)."""
-    commande = [agent.claude_executable(), "--add-dir", str(dossier_images), "-p", consigne, "--agent", nom,
+    commande = [agent.claude_executable(), "--add-dir", str(dossier_images), "-p", consigne, *agent.consignes_de_l_agent(nom),
                 "--model", modele, "--output-format", "json",
                 "--json-schema", json.dumps(schema, ensure_ascii=False, separators=(",", ":")),
                 "--tools", "Read", "--permission-mode", "dontAsk", "--no-session-persistence"]
