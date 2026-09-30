@@ -320,11 +320,24 @@ def update_sheet(db: Session, sheet: ThermiqueSheet, changes: dict[str, Any]) ->
 # prod le 2026-09-11 : 1/99,97, 1/100,03, 1/100,09 pour des plans au 1/100).
 STANDARD_SCALES = (1, 2, 5, 10, 20, 25, 50, 75, 100, 125, 150, 200, 250, 500, 1000, 2000, 2500, 5000)
 STANDARD_SCALE_TOLERANCE = 0.01
+# D203 (2026-09-30) : l'arrondi n'est permis que dans la précision du clic. Deux clics zoomés se trompent
+# d'environ 1 pt à eux deux : 1 % sur une cote de 3 m au 1/100, 0,1 % sur une façade de 30 m. Au-delà,
+# l'écart vient du plan (PDF réduit à l'impression…) et l'arrondir fausserait tous les métrés — le calage
+# des niveaux l'a montré : 0,7 % arrondi = 21 cm de décalage sur 30 m.
+PRECISION_CLIC_PT = 1.0
+TOLERANCE_MIN = 0.001
 
 
-def standard_scale_near(denominator: float) -> float | None:
+def precision_de_la_cote(length_pt: float | None) -> float:
+    """Écart relatif qu'explique la seule imprécision du clic sur une cote de cette longueur."""
+    if not length_pt:
+        return STANDARD_SCALE_TOLERANCE
+    return min(STANDARD_SCALE_TOLERANCE, max(TOLERANCE_MIN, PRECISION_CLIC_PT / length_pt))
+
+
+def standard_scale_near(denominator: float, length_pt: float | None = None) -> float | None:
     nearest = min(STANDARD_SCALES, key=lambda scale: abs(denominator - scale) / scale)
-    if abs(denominator - nearest) / nearest <= STANDARD_SCALE_TOLERANCE:
+    if abs(denominator - nearest) / nearest <= precision_de_la_cote(length_pt):
         return float(nearest)
     return None
 
@@ -341,7 +354,7 @@ def calibrate_sheet(
 
     Sans échelle déclarée, l'échelle déduite de la cote est appliquée d'office. Sinon elle
     ne remplace l'échelle déclarée que sur demande (`apply`). Dans les deux cas, elle est
-    ramenée à l'échelle usuelle la plus proche si l'écart est inférieur à 1 %.
+    ramenée à l'échelle usuelle la plus proche si l'écart tient dans la précision du clic (D203).
     """
     length_pt = math.hypot(p2[0] - p1[0], p2[1] - p1[1])
     if length_pt < 1.0:
@@ -356,7 +369,7 @@ def calibrate_sheet(
         }
     )
     if apply or sheet.scale_denominator is None:
-        standard = standard_scale_near(denominator)
+        standard = standard_scale_near(denominator, length_pt)
         sheet.scale_denominator = standard if standard is not None else round(denominator, 2)
         sheet.scale_source = "cote"
     db.commit()
@@ -389,7 +402,8 @@ def sheet_calibration(sheet: ThermiqueSheet) -> dict[str, Any] | None:
         "length_pt": length_pt,
         "real_length_m": real_length_m,
         "denominator_from_cote": round(denominator_from_measure(length_pt, real_length_m), 2),
-        "standard_scale": standard_scale_near(denominator_from_measure(length_pt, real_length_m)),
+        "standard_scale": standard_scale_near(denominator_from_measure(length_pt, real_length_m), length_pt),
+        "precision_pct": round(precision_de_la_cote(length_pt) * 100, 2),
         "measured_m": round(measured_m, 3) if measured_m is not None else None,
         "ecart_pct": round(ecart_pct, 2) if ecart_pct is not None else None,
     }

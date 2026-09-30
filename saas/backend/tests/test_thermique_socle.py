@@ -318,6 +318,19 @@ def test_echelle_de_la_cote_ramenee_a_l_echelle_usuelle(db_session, storage):
     assert calibration["denominator_from_cote"] == pytest.approx(99.97, abs=0.01)
     assert calibration["standard_scale"] == 100
 
+    assert calibration["precision_pct"] == 1.0
+
+    # D203 : sur une façade de 30 m, 0,7 % d'écart dépasse la précision du clic (0,1 %) : pas d'arrondi.
+    clic_long = 30.0 * 1000 / 99.3 / (25.4 / 72)
+    calibrate_sheet(db_session, sheet, [0.0, 0.0], [clic_long, 0.0], 30.0, apply=True)
+    assert sheet.scale_denominator == pytest.approx(99.3, abs=0.01)
+    calibration = serialize_project_detail(project)["documents"][0]["sheets"][0]["calibration"]
+    assert calibration["standard_scale"] is None
+    assert calibration["precision_pct"] == pytest.approx(0.12, abs=0.01)
+    # La même façade cliquée à 0,05 % près reste ramenée au 1/100.
+    calibrate_sheet(db_session, sheet, [0.0, 0.0], [30.0 * 1000 / 100.05 / (25.4 / 72), 0.0], 30.0, apply=True)
+    assert sheet.scale_denominator == 100
+
     # Loin de toute échelle usuelle (1/141,7) : la valeur déduite est gardée telle quelle.
     calibrate_sheet(db_session, sheet, [0.0, 0.0], [0.0, 1000.0], 50.0, apply=True)
     assert sheet.scale_denominator == pytest.approx(141.73, abs=0.01)

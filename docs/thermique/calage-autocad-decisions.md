@@ -59,6 +59,17 @@ Décision :
 - l'écart d'échelle à l'échelle déclarée est affiché ; au-delà de 0,3 %, le bandeau dit qu'une échelle est
   sans doute arrondie. Remplace le bouton « Ajuster aussi la longueur ».
 
+## D203 — L'arrondi de l'échelle limité à la précision du clic (2026-09-30, « Go 1 »)
+
+Existant : une échelle déduite d'une cote était ramenée à l'échelle usuelle si l'écart était < 1 %
+(`standard_scale_near`), pour effacer l'imprécision du clic (constaté : 1/99,97, 1/100,03). Mais 1 % est la
+précision d'une cote de 3 m ; sur une façade de 30 m, le clic est précis à 0,1 % et un écart de 0,7 % vient du
+plan lui-même (PDF réduit à l'impression) : l'arrondir fausse tous les métrés de la planche.
+Décision : tolérance = 1 pt de clic / longueur cliquée, bornée entre 0,1 % et 1 % ; la fiche de la planche
+affiche la précision de la cote, conseille la plus longue cote quand elle dépasse 0,3 %, et propose
+« Appliquer l'échelle exacte de la cote » aux planches déjà arrondies (en rappelant qu'une étude déjà importée
+garde l'ancienne échelle jusqu'à une nouvelle analyse). Aucune planche n'est modifiée en silence.
+
 ## Fait (2026-09-30)
 
 `workspace/alignement.ts` (logique pure, testée dans `guideCalage.test.tsx`), `GuideCalage.tsx` (bandeau en

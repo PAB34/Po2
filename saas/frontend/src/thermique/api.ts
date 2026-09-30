@@ -19,6 +19,8 @@ export type SheetCalibration = {
   denominator_from_cote: number;
   // Échelle usuelle à moins de 1 % de celle déduite de la cote (ex. 99,97 → 100), sinon null.
   standard_scale: number | null;
+  /** Précision de la cote en % (1 pt de clic sur la longueur cliquée, D203). */
+  precision_pct?: number | null;
   measured_m: number | null;
   ecart_pct: number | null;
 };

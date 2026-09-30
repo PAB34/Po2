@@ -208,7 +208,23 @@ export function SheetPanel({
   const measuredM = lengthPt !== null && sheet.scale_denominator ? paperPtToRealM(lengthPt, sheet.scale_denominator) : null;
   const calibration = sheet.calibration;
   const scaleConfirmed = calibration?.standard_scale != null && calibration.standard_scale === sheet.scale_denominator;
-  const scaleOff = calibration?.ecart_pct != null && Math.abs(calibration.ecart_pct) > 1;
+  // D203 : un écart ne se tolère que dans la précision du clic sur la cote (1 % au plus).
+  const precisionPct = calibration?.precision_pct ?? 1;
+  const scaleOff = calibration?.ecart_pct != null && Math.abs(calibration.ecart_pct) > precisionPct;
+  // Planche arrondie avant D203, ou échelle saisie : la cote, assez longue, dit mieux.
+  const exacteDeLaCote =
+    calibration && calibration.standard_scale === null && scaleOff ? calibration.denominator_from_cote : null;
+  const appliquerLaCote = () => {
+    if (!calibration) return;
+    void perform(() =>
+      thermiqueApi.calibrateSheet(token!, sheet.id, {
+        p1: calibration.p1 as PdfPoint,
+        p2: calibration.p2 as PdfPoint,
+        real_length_m: calibration.real_length_m,
+        apply: true,
+      }),
+    );
+  };
   const roundableTo =
     calibration?.standard_scale != null && hasScale && calibration.standard_scale !== sheet.scale_denominator
       ? calibration.standard_scale
@@ -344,6 +360,9 @@ export function SheetPanel({
                 Cote {formatMeters(calibration.real_length_m)}
                 {calibration.measured_m !== null && <> · mesurée {formatMeters(calibration.measured_m)} à {formatScale(sheet.scale_denominator)}</>}
                 {calibration.ecart_pct !== null && <> · écart {calibration.ecart_pct.toLocaleString("fr-FR")} %</>}
+                {calibration.precision_pct != null && (
+                  <> (précision de cette cote : ±{calibration.precision_pct.toLocaleString("fr-FR")} %)</>
+                )}
                 <br />
                 {scaleConfirmed ? (
                   <strong>Échelle {formatScale(sheet.scale_denominator)} confirmée par la cote.</strong>
@@ -356,7 +375,30 @@ export function SheetPanel({
                 {scaleOff && (
                   <>
                     <br />
-                    L'échelle déclarée ne correspond pas à la cote : vérifiez les points ou appliquez l'échelle de la cote.
+                    L'échelle de la planche ne correspond pas à la cote, au-delà de la précision du clic : vérifiez les
+                    points, ou appliquez l'échelle de la cote.
+                  </>
+                )}
+                {precisionPct > 0.3 && (
+                  <>
+                    <br />
+                    Cote courte : pour une échelle au dixième de pour cent, mesurez la plus longue cote du plan (une
+                    façade entière).
+                  </>
+                )}
+                {exacteDeLaCote !== null && (
+                  <>
+                    <br />
+                    <button type="button" className="th-chip" disabled={busy} onClick={appliquerLaCote}>
+                      Appliquer l'échelle exacte de la cote, {formatScale(exacteDeLaCote)}
+                    </button>
+                    {study && (
+                      <>
+                        {" "}
+                        L'étude déjà importée garde l'ancienne échelle : relancez l'analyse du niveau pour en corriger
+                        les métrés.
+                      </>
+                    )}
                   </>
                 )}
               </div>

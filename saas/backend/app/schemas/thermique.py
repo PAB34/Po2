@@ -19,8 +19,10 @@ class SheetCalibration(BaseModel):
     length_pt: float
     real_length_m: float
     denominator_from_cote: float
-    # Échelle usuelle à moins de 1 % de celle déduite de la cote (ex. 99,97 → 100), sinon null.
+    # Échelle usuelle dont l'écart tient dans la précision du clic (ex. 99,97 → 100), sinon null (D203).
     standard_scale: float | None
+    # Précision de la cote, en % : ce qu'un clic de travers explique (1 pt sur la longueur cliquée).
+    precision_pct: float | None = None
     measured_m: float | None
     ecart_pct: float | None
 
