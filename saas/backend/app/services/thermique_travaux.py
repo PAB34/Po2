@@ -239,6 +239,16 @@ def terminer(db: Session, travail: ThermiqueTravail) -> ThermiqueTravail:
     return _clore(db, travail, "fini", None)
 
 
+def clore_si_en_file(db: Session, sheet_id: int, type_travail: str) -> None:
+    """Une analyse importée à la main (D204) vaut le travail en attente : le relais ne la refera pas.
+
+    Un travail déjà pris par le relais reste à lui : il rendra sa propre lecture, qui remplacera celle-ci.
+    """
+    travail = _travail_vivant(db, sheet_id, type_travail)
+    if travail is not None and travail.statut == "en_attente":
+        _clore(db, travail, "fini", "Importé à la main depuis la fiche de la planche.")
+
+
 def echouer(db: Session, travail: ThermiqueTravail, message: str) -> ThermiqueTravail:
     """Un échec de chaîne : pas de réessai automatique (Q5), le message dit ce qu'il faut corriger."""
     return _clore(db, travail, "echec", message)

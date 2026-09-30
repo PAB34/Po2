@@ -523,7 +523,38 @@ def import_sheet_etude(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except ThermiqueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    travaux.clore_si_en_file(db, sheet.id, travaux.NIVEAU)
     return serialize_etude(db, etude)
+
+
+@router.post("/sheets/{sheet_id}/lecture/importer")
+def importer_lecture_de_coupes(
+    sheet_id: int,
+    lecture: LectureCoupes,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Importe à la main la lecture produite par ``run_lecture_coupes.py`` (D204) : les vues d'une planche de
+    coupes ou de façades, ou les traits de coupe d'un plan. Même rangement que « rendre-lecture »."""
+    sheet = _sheet_or_404(db, user, sheet_id)
+    try:
+        if sheet.nature in ("coupe", "facade"):
+            if not lecture.vues:
+                raise ThermiqueError("Ce fichier ne contient aucune vue : est-ce bien la lecture de cette planche ?")
+            lecture_coupes.enregistrer_vues(db, sheet, lecture.vues)
+            travaux.clore_si_en_file(db, sheet.id, travaux.COUPES)
+            background_tasks.add_task(lecture_coupes.preparer_hauteurs, sheet.project_id)
+            return {"vues": len(lecture.vues)}
+        if sheet.nature == "plan":
+            if lecture.traits is None:
+                raise ThermiqueError("Ce fichier ne contient aucun trait de coupe : est-ce bien la lecture de ce plan ?")
+            lecture_coupes.enregistrer_traits(db, sheet, lecture.traits)
+            travaux.clore_si_en_file(db, sheet.id, travaux.TRAITS)
+            return {"traits": len(lecture.traits)}
+        raise ThermiqueError("Seuls un plan, une planche de coupes ou de façades reçoivent une lecture.")
+    except ThermiqueError as exc:
+        raise _bad_request(exc) from exc
 
 
 def _etude_ou_404(db: Session, sheet: ThermiqueSheet) -> ThermiqueEtude:

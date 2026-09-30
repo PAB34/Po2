@@ -527,6 +527,12 @@ export const thermiqueApi = {
     }),
   retirerHauteurs: (token: string, vueId: number) =>
     request<VueCoupe>(token, `/thermique/vues/${vueId}/hauteur`, { method: "DELETE" }),
+  // Lecture d'une planche de coupes ou de façades produite sur le poste (`lecture.json`, D204).
+  importerLecture: (token: string, sheetId: number, lecture: unknown) =>
+    request<{ vues?: number; traits?: number }>(token, `/thermique/sheets/${sheetId}/lecture/importer`, {
+      method: "POST",
+      body: JSON.stringify(lecture),
+    }),
   importStudy: (token: string, sheetId: number, file: File, replace = false) => {
     const form = new FormData();
     form.append("fichier", file);

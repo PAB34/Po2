@@ -245,6 +245,33 @@ def test_des_lectures_rangees_a_la_hauteur_de_chaque_local(db_session):
     assert locaux["piece-008"]["proposee_m"] == 2.88
 
 
+def test_une_lecture_s_importe_a_la_main_et_clot_le_travail_en_file(db_session):
+    """D204 : la lecture produite sur le poste s'importe depuis la fiche, et le relais ne la refait pas."""
+    import pytest
+    from fastapi import BackgroundTasks, HTTPException
+
+    from app.api.routes.thermique import importer_lecture_de_coupes
+    from app.models.thermique import ThermiqueTravail, ThermiqueVue
+    from app.models.user import User
+    from app.schemas.thermique import LectureCoupes
+
+    plan, coupe = _projet_avec_coupe(db_session)
+    user = db_session.query(User).one()
+    travail = ThermiqueTravail(project_id=coupe.project_id, sheet_id=coupe.id, demande_par_user_id=user.id, type="coupes", rang=1001, statut="en_attente")
+    db_session.add(travail)
+    db_session.commit()
+
+    vue = {**VUE_A, "nom": "COUPE A", "nature": "coupe", "cadre": [882, 978, 1573, 2003]}
+    rendu = importer_lecture_de_coupes(coupe.id, LectureCoupes(vues=[vue]), BackgroundTasks(), db_session, user)
+    assert rendu == {"vues": 1}
+    assert [v.nom for v in db_session.query(ThermiqueVue).all()] == ["COUPE A"]
+    db_session.refresh(travail)
+    assert travail.statut == "fini"
+
+    with pytest.raises(HTTPException):
+        importer_lecture_de_coupes(coupe.id, LectureCoupes(traits=[]), BackgroundTasks(), db_session, user)
+
+
 def test_sans_trait_sur_le_plan_il_se_deduit_de_la_coupe(db_session):
     """D190 : le plan ne porte pas le trait ; la coupe A le situe par ses numéros de pièces, une seule fois."""
     import json

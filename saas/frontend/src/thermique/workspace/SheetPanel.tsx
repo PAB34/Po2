@@ -129,6 +129,28 @@ export function SheetPanel({
   const [actionError, setActionError] = useState<string | null>(null);
   const [nordPartout, setNordPartout] = useState(true);
 
+  const [lectureImportee, setLectureImportee] = useState<string | null>(null);
+  async function importerLecture(file: File) {
+    setBusy(true);
+    setActionError(null);
+    setLectureImportee(null);
+    try {
+      let lecture: unknown;
+      try {
+        lecture = JSON.parse(await file.text());
+      } catch {
+        throw new Error("Ce fichier n'est pas un JSON lisible : choisissez le lecture.json produit sur le poste.");
+      }
+      const rendu = await thermiqueApi.importerLecture(token!, sheet.id, lecture);
+      await queryClient.invalidateQueries({ queryKey: ["thermique", "vues"] });
+      setLectureImportee(`${rendu.vues ?? 0} vue${(rendu.vues ?? 0) > 1 ? "s" : ""} importée${(rendu.vues ?? 0) > 1 ? "s" : ""}.`);
+    } catch (actionFailure) {
+      setActionError(actionFailure instanceof Error ? actionFailure.message : "Import de la lecture impossible.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function importStudy(file: File) {
     const replace = study !== null && study !== undefined;
     if (replace && !window.confirm("Une étude existe déjà sur cette planche. La remplacer en conservant sa version précédente ?")) {
@@ -271,6 +293,32 @@ export function SheetPanel({
             />
           </label>
           {sheet.status !== "prete" && <p className="th-muted">Classez la planche et définissez son échelle avant l'import.</p>}
+        </section>
+      )}
+
+      {(sheet.nature === "coupe" || sheet.nature === "facade") && (
+        <section className="th-study-import">
+          <h2>Lecture des vues</h2>
+          <p className="th-muted">
+            Déposez le fichier <code>lecture.json</code> produit sur le poste pour cette planche : ses{" "}
+            {sheet.nature === "coupe" ? "coupes" : "façades"} remplacent celles déjà lues.
+          </p>
+          <label className="po2-button po2-button--primary">
+            Importer la lecture
+            <input
+              type="file"
+              accept=".json,application/json"
+              hidden
+              disabled={busy || sheet.status !== "prete"}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.currentTarget.value = "";
+                if (file) void importerLecture(file);
+              }}
+            />
+          </label>
+          {sheet.status !== "prete" && <p className="th-muted">Mettez d'abord la planche à l'échelle.</p>}
+          {lectureImportee && <p className="th-alert th-alert--ok">{lectureImportee}</p>}
         </section>
       )}
 
