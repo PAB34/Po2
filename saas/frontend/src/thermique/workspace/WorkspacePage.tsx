@@ -929,7 +929,12 @@ export function WorkspacePage() {
                           checked={fantomes[sens]}
                           onChange={() => setFantomes((current) => ({ ...current, [sens]: !current[sens] }))}
                         />
-                        {sens === "inferieur" ? "Voir niveau inférieur" : "Voir niveau supérieur"}
+                        {/* Le nom du voisin dans la case : on sait quel plan va apparaître avant de cocher. */}
+                        {voisin
+                          ? `Voir ${sheetTitle(voisin)} (${sens === "inferieur" ? "dessous" : "dessus"})`
+                          : sens === "inferieur"
+                            ? "Pas de niveau en dessous"
+                            : "Pas de niveau au-dessus"}
                       </label>
                     );
                   })}
