@@ -29,6 +29,13 @@ do_not_auto_read:
 **229 côtés** (et non plus 222 : les côtés contre les 2 terrasses sont distingués depuis F), **170,12 m
 déperditifs**, 289 formes, 77 liaisons. Tout lot qui ne touche pas au calcul doit les laisser intacts.
 
+**2026-09-30 — calage des niveaux refait « comme Aligner d'AutoCAD » ✅ EN PROD (`a601cfe0`), validé par
+l'utilisateur** (`thermique/calage-autocad-decisions.md`, D201–D202) : point de base → rotation (aimant 1°,
+« La rotation est déjà bonne ») → longueur avec ses propres points ; écart à l'échelle déclarée affiché. Les
+cases de superposition nomment le voisin. Découverte : l'échelle d'une planche est **arrondie à l'échelle
+usuelle si l'écart < 1 %** (`standard_scale_near`) → le calage le révèle, et les métrés en héritent (question
+ouverte). **Règle utilisateur depuis ce jour : pousser sur `main` dès chaque modification testée.**
+
 **Fichiers de décisions en cours (lire celui du lot repris) :**
 - `thermique/superposition-niveaux-decisions.md` — 🔥 chantier prioritaire. D168–D173. **S2 calage et S3
   calque fantôme FAITS et en prod** (cases « Voir niveau inférieur / supérieur », calage 4 clics).
