@@ -27,9 +27,9 @@ import { elementDuPont, paroisATrancher, pontAt, pontDeElement, trouverElement, 
 import { etapeCourante, parcours, vueDeLEtape, type EtapeId } from "./parcours";
 import { TYPES_PONT_REATTRIBUABLES } from "./pontsTypes";
 import {
-  ajusterLongueur,
   cliquer as cliquerAlignement,
   debuterAlignement,
+  garderLaRotation,
   pairesAEnregistrer,
   refaireEtape,
   type Alignement,
@@ -323,13 +323,16 @@ export function WorkspacePage() {
   };
 
   // Un clic du calage : point de base, puis rotation, comme la commande Aligner d'AutoCAD (D201).
+  // Rapport des échelles déclarées du voisin et du plan actif ; à défaut, celle de la pose en cours.
+  const echelleDuCalage = (al: Alignement) => {
+    const voisin = voisins[al.sens];
+    const declaree =
+      voisin?.scale_denominator && sheet?.scale_denominator ? voisin.scale_denominator / sheet.scale_denominator : null;
+    return declaree ?? Math.hypot(al.depart.a, al.depart.b);
+  };
   const cliquerCalage = (point: PdfPoint, libre: boolean) => {
     if (!calage || !sheet) return;
-    const voisin = voisins[calage.sens];
-    const declaree =
-      voisin?.scale_denominator && sheet.scale_denominator ? voisin.scale_denominator / sheet.scale_denominator : null;
-    const echelle = declaree ?? Math.hypot(calage.sim.a, calage.sim.b);
-    setCalage(cliquerAlignement(calage, point, echelle, libre));
+    setCalage(cliquerAlignement(calage, point, echelleDuCalage(calage), libre));
   };
 
   const studyQuery = useQuery({
@@ -986,7 +989,7 @@ export function WorkspacePage() {
                     <PointsDeCalage
                       calage={{
                         sens: calage.sens,
-                        paires: [calage.base, calage.second].filter((paire): paire is [PdfPoint, PdfPoint] => paire !== null),
+                        paires: [calage.base, calage.second, calage.longueur].filter((paire): paire is [PdfPoint, PdfPoint] => paire !== null),
                         enAttente: calage.enAttente,
                       }}
                       sim={fantomesAffiches.find((item) => item.sens === calage.sens)?.sim ?? null}
@@ -1045,8 +1048,9 @@ export function WorkspacePage() {
                     voisin={voisins[calage.sens] ? sheetTitle(voisins[calage.sens]!) : "niveau voisin"}
                     plan={sheet ? sheetTitle(sheet) : "plan actif"}
                     couleur={calage.sens === "inferieur" ? "bleu" : "orange"}
+                    echelle={echelleDuCalage(calage)}
                     onEnregistrer={() => void enregistrerCalage(calage)}
-                    onAjuster={() => setCalage(ajusterLongueur(calage))}
+                    onGarderRotation={() => setCalage(garderLaRotation(calage, echelleDuCalage(calage)))}
                     onRefaire={() => setCalage(refaireEtape(calage))}
                   />
                   {calage.message && <span className="th-calage__message">{calage.message}</span>}

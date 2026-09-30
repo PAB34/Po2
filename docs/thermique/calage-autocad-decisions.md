@@ -45,6 +45,20 @@ a) oui (recommandé) ; b) non.
 
 REPONSE : a (recommandation retenue).
 
+## D202 — Étape longueur à part, rotation qu'on peut garder (2026-09-30, retour utilisateur)
+
+Retour : quand la rotation est déjà bonne, l'utilisateur cliquait deux fois au même endroit, et le bouton
+« Ajuster aussi la longueur » (qui réutilisait le second point) n'avait alors rien à ajuster ; or les plans
+divergeaient en échelle alors que les cotes mesurées sur chaque planche « tombent juste ».
+Explication : l'échelle déclarée est ramenée à l'échelle usuelle si l'écart est < 1 % (1/99,3 → 1/100) ;
+sur 30 m de bâtiment, 0,7 % = 21 cm de divergence du calque, alors qu'une cote de 5 m ne bouge que de 3 cm.
+Décision :
+- étape 2 : bouton « La rotation est déjà bonne » (aucun clic) ;
+- étape 3 « Longueur » avec ses **propres** points : un point du calque loin du point de base, puis l'endroit
+  exact où il doit tomber → le calque s'étire depuis le point de base (rotation inchangée) ; refaisable ;
+- l'écart d'échelle à l'échelle déclarée est affiché ; au-delà de 0,3 %, le bandeau dit qu'une échelle est
+  sans doute arrondie. Remplace le bouton « Ajuster aussi la longueur ».
+
 ## Fait (2026-09-30)
 
 `workspace/alignement.ts` (logique pure, testée dans `guideCalage.test.tsx`), `GuideCalage.tsx` (bandeau en

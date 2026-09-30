@@ -3,10 +3,10 @@ import { describe, expect, it } from "vitest";
 
 import type { PdfPoint } from "../api";
 import {
-  ajusterLongueur,
   cliquer,
   debuterAlignement,
-  ecartLongueurPct,
+  ecartEchellePct,
+  garderLaRotation,
   pairesAEnregistrer,
   refaireEtape,
   type Alignement,
@@ -19,6 +19,7 @@ const VRAI: Similitude = { a: 0, b: 2, tx: 400, ty: 50 };
 const POSE_PROVISOIRE: Similitude = { a: 2, b: 0, tx: 0, ty: 0 };
 const A: PdfPoint = [10, 10];
 const B: PdfPoint = [200, 40];
+const C: PdfPoint = [60, 250];
 
 // Le thermicien clique un point du calque là où il est affiché, puis où il doit aller sur le plan.
 function pointer(al: Alignement, surVoisin: PdfPoint, echelle: number, vrai = VRAI, libre = false) {
@@ -30,7 +31,13 @@ const proche = (sim: Similitude, attendu: Similitude) => {
   for (const cle of ["a", "b", "tx", "ty"] as const) expect(sim[cle]).toBeCloseTo(attendu[cle], 6);
 };
 
-describe("le calage comme la commande Aligner d'AutoCAD (D201)", () => {
+// Le serveur recalcule la similitude à partir des deux paires envoyées : ce doit être la pose affichée.
+const commeLeServeur = (al: Alignement) => {
+  const paires = pairesAEnregistrer(al)!;
+  return similitude([paires[0][0], paires[1][0]], [paires[0][1], paires[1][1]])!;
+};
+
+describe("le calage comme la commande Aligner d'AutoCAD (D201, D202)", () => {
   it("le point de base fait seulement glisser le calque", () => {
     const al = pointer(debuterAlignement("inferieur", POSE_PROVISOIRE), A, 2);
     expect(al.etape).toBe("rotation");
@@ -41,12 +48,9 @@ describe("le calage comme la commande Aligner d'AutoCAD (D201)", () => {
 
   it("la rotation autour du point de base retrouve la vraie pose, à l'échelle déclarée", () => {
     const al = pointer(pointer(debuterAlignement("inferieur", POSE_PROVISOIRE), A, 2), B, 2);
-    expect(al.etape).toBe("verification");
+    expect(al.etape).toBe("longueur");
     proche(al.sim, VRAI);
-    expect(ecartLongueurPct(al)).toBeCloseTo(0, 6);
-    // Le serveur recalcule la même similitude à partir des deux paires envoyées.
-    const paires = pairesAEnregistrer(al)!;
-    proche(similitude([paires[0][0], paires[1][0]], [paires[0][1], paires[1][1]])!, VRAI);
+    proche(commeLeServeur(al), VRAI);
   });
 
   it("un clic un peu de travers est aimanté à l'angle droit, sauf avec Alt", () => {
@@ -60,12 +64,25 @@ describe("le calage comme la commande Aligner d'AutoCAD (D201)", () => {
     expect(libre.sim.a).toBeCloseTo(presque.a, 6);
   });
 
-  it("une échelle déclarée fausse laisse un écart, que « Ajuster aussi la longueur » rattrape", () => {
-    const al = pointer(pointer(debuterAlignement("inferieur", POSE_PROVISOIRE), A, 1.9), B, 1.9);
-    expect(ecartLongueurPct(al)).toBeCloseTo((2 / 1.9 - 1) * 100, 6);
-    const ajuste = ajusterLongueur(al);
-    proche(ajuste.sim, VRAI);
-    expect(ajuste.longueurAjustee).toBe(true);
+  it("une échelle déclarée arrondie se rattrape à l'étape longueur, par un point quelconque", () => {
+    // Le vrai rapport est 2 × 100/99,3 : l'une des planches a été arrondie à 1/100.
+    const k = 100 / 99.3;
+    const vrai: Similitude = { a: 0, b: 2 * k, tx: 400, ty: 50 };
+    const tourne = pointer(pointer(debuterAlignement("inferieur", POSE_PROVISOIRE), A, 2, vrai), B, 2, vrai);
+    expect(ecartEchellePct(tourne, 2)).toBeCloseTo(0, 6);
+    const etire = pointer(tourne, C, 2, vrai);
+    proche(etire.sim, vrai);
+    expect(ecartEchellePct(etire, 2)).toBeCloseTo((k - 1) * 100, 6);
+    proche(commeLeServeur(etire), vrai);
+  });
+
+  it("« La rotation est déjà bonne » passe à la longueur sans clic, à l'échelle déclarée", () => {
+    const deja: Similitude = { a: 2, b: 0, tx: 30, ty: -20 };
+    const base = pointer(debuterAlignement("inferieur", { a: 2.1, b: 0, tx: 0, ty: 0 }), A, 2, deja);
+    const garde = garderLaRotation(base, 2);
+    expect(garde.etape).toBe("longueur");
+    proche(garde.sim, deja);
+    proche(commeLeServeur(garde), deja);
   });
 
   it("refuse un second point collé au point de base", () => {
@@ -75,10 +92,14 @@ describe("le calage comme la commande Aligner d'AutoCAD (D201)", () => {
     expect(trop.message).toContain("trop près");
   });
 
-  it("« Refaire l'étape » revient au début de la rotation, puis au point de base", () => {
+  it("« Refaire l'étape » défait la longueur, puis la rotation, puis le point de base", () => {
     const base = pointer(debuterAlignement("inferieur", POSE_PROVISOIRE), A, 2);
-    const fini = pointer(base, B, 2);
-    const rotation = refaireEtape(fini);
+    const tourne = pointer(base, B, 2);
+    const etire = pointer(tourne, C, 2, { ...VRAI, b: 2.1 });
+    const sansLongueur = refaireEtape(etire);
+    expect(sansLongueur.etape).toBe("longueur");
+    expect(sansLongueur.sim).toEqual(tourne.sim);
+    const rotation = refaireEtape(sansLongueur);
     expect(rotation.etape).toBe("rotation");
     expect(rotation.sim).toEqual(base.sim);
     const debut = refaireEtape(rotation);
@@ -97,15 +118,20 @@ describe("le guide du calage", () => {
     expect(etapesDuCalage(rotation, "RDC", "R+1", "bleu").map((etape) => etape.etat)).toEqual(["faite", "en_cours", "a_venir"]);
   });
 
-  it("affiche la rotation et le bouton d'enregistrement une fois les deux points posés", () => {
-    const fini = pointer(pointer(debuterAlignement("inferieur", POSE_PROVISOIRE), A, 2), B, 2);
-    const html = renderToStaticMarkup(
-      <GuideCalage al={fini} voisin="RDC" plan="R+1" couleur="bleu" onEnregistrer={() => {}} onAjuster={() => {}} onRefaire={() => {}} />,
-    );
+  it("propose de garder la rotation, puis d'enregistrer avec l'écart d'échelle affiché", () => {
+    const rendu = (al: Alignement) =>
+      renderToStaticMarkup(
+        <GuideCalage al={al} voisin="RDC" plan="R+1" couleur="bleu" echelle={2} onEnregistrer={() => {}} onGarderRotation={() => {}} onRefaire={() => {}} />,
+      );
+    const rotation = pointer(debuterAlignement("inferieur", POSE_PROVISOIRE), A, 2);
+    expect(rendu(rotation)).toContain("La rotation est déjà bonne");
+    const tourne = pointer(rotation, B, 2);
+    const html = rendu(tourne);
     expect(html).toContain("Caler le RDC sur le R+1");
     expect(html).toContain("Rotation 90,00°");
-    expect(html).toContain("Le second point tombe juste");
+    expect(html).toContain("celle déclarée sur les deux planches");
     expect(html).toContain("Enregistrer le calage");
-    expect(html).not.toContain("Ajuster aussi la longueur");
+    const etire = pointer(tourne, C, 2, { ...VRAI, b: 2 * (100 / 99.3) });
+    expect(rendu(etire)).toContain("sans doute arrondie");
   });
 });
