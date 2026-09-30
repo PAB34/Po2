@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -281,6 +282,22 @@ def claude_executable(explicit: str | None = None) -> str:
     return candidate
 
 
+def _json_dans_le_texte(texte: str) -> Any:
+    """Le JSON d'une réponse rédigée : tel quel, dans un bloc Markdown, ou entre la première accolade et la
+    dernière. L'agent, sans sortie structurée, entoure parfois son JSON d'une phrase (constaté le 2026-09-30)."""
+    try:
+        return json.loads(texte)
+    except json.JSONDecodeError:
+        pass
+    bloc = re.search(r"```(?:json)?\s*(.*?)```", texte, re.DOTALL)
+    for morceau in ([bloc.group(1)] if bloc else []) + [texte[texte.find("{") : texte.rfind("}") + 1]]:
+        try:
+            return json.loads(morceau)
+        except json.JSONDecodeError:
+            continue
+    raise ThermiqueError("La réponse structurée de Claude Code n'est pas un JSON valide.")
+
+
 def parse_cli_output(stdout: str) -> dict[str, Any]:
     try:
         envelope = json.loads(stdout)
@@ -290,12 +307,16 @@ def parse_cli_output(stdout: str) -> dict[str, Any]:
     if candidate is None and isinstance(envelope, dict):
         candidate = envelope.get("result")
     if isinstance(candidate, str):
-        try:
-            candidate = json.loads(candidate)
-        except json.JSONDecodeError as exc:
-            raise ThermiqueError("La réponse structurée de Claude Code n'est pas un JSON valide.") from exc
+        candidate = _json_dans_le_texte(candidate)
     if candidate is None and isinstance(envelope, dict) and "objects" in envelope:
         candidate = envelope
+    # Une liste nue d'objets, ou les objets sous un autre nom : c'est bien un inventaire.
+    if isinstance(candidate, list):
+        candidate = {"objects": candidate}
+    if isinstance(candidate, dict) and not isinstance(candidate.get("objects"), list):
+        listes = [valeur for valeur in candidate.values() if isinstance(valeur, list) and valeur and isinstance(valeur[0], dict) and "points" in valeur[0]]
+        if len(listes) == 1:
+            candidate = {**candidate, "objects": listes[0]}
     if not isinstance(candidate, dict) or not isinstance(candidate.get("objects"), list):
         raise ThermiqueError("Claude Code n'a retourné aucun inventaire d'objets.")
     candidate.setdefault("observations", [])
@@ -362,6 +383,11 @@ def run_agent(
         raise ThermiqueError(
             "Claude Code n'a pas terminé l'analyse dans le délai prévu. Vérifiez la connexion et l'authentification."
         ) from exc
+    # La réponse brute est toujours gardée à côté des images : un échec de lecture doit se diagnostiquer.
+    try:
+        (Path(bundle_directory) / "claude.brut.json").write_text(completed.stdout or "", encoding="utf-8")
+    except OSError:
+        pass
     if completed.returncode != 0:
         detail = (completed.stderr or completed.stdout).strip()[-1200:]
         raise ThermiqueError(f"Claude Code a interrompu l'analyse ({completed.returncode}) : {detail}")

@@ -104,6 +104,20 @@ def test_parse_cli_output_accepte_resultat_json_en_texte():
     assert thermique_claude_agent.parse_cli_output(json.dumps({"result": json.dumps(raw)})) == raw
 
 
+def test_parse_cli_output_tolere_une_phrase_ou_un_bloc_autour_du_json():
+    """Constaté le 2026-09-30 sur le N-1 : l'agent rédige autour de son JSON."""
+    import pytest
+
+    objets = [{"category": "cloison", "points": [[0, 0], [1, 1]]}]
+    texte = "Voici l'inventaire :\n```json\n" + json.dumps({"objects": objets}) + "\n```\nBonne lecture."
+    assert thermique_claude_agent.parse_cli_output(json.dumps({"result": texte}))["objects"] == objets
+    phrase = "Inventaire : " + json.dumps({"objets": objets}) + " fin."
+    assert thermique_claude_agent.parse_cli_output(json.dumps({"result": phrase}))["objects"] == objets
+    assert thermique_claude_agent.parse_cli_output(json.dumps({"result": json.dumps(objets)}))["objects"] == objets
+    with pytest.raises(thermique_claude_agent.ThermiqueError, match="JSON valide"):
+        thermique_claude_agent.parse_cli_output(json.dumps({"result": "Je n'ai pas pu lire le plan."}))
+
+
 def test_cli_environment_retire_la_session_claude_hote():
     hote = {
         "PATH": "x",
