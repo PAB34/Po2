@@ -22,10 +22,12 @@ from app.models.thermique import (
     ThermiqueProject,
     ThermiqueSheet,
     ThermiqueTravail,
+    ThermiqueVue,
 )
 from app.models.user import User
 from app.services.thermique import ThermiqueError
 from app.services.thermique_etudes import MOTIFS_D_IMPORT
+from app.services.thermique_lecture_coupes import vue_a_relire, vues_a_relire
 
 # Statuts d'un travail. `en_attente` et `en_cours` sont vivants ; les trois autres sont des fins de course.
 VIVANTS = ("en_attente", "en_cours")
@@ -61,10 +63,12 @@ def rang_du_niveau(label: str | None) -> int | None:
 
 
 # Types de travail (S5, D181). Les lectures de coupes passent après tous les niveaux.
-NIVEAU, TRAITS, COUPES = "niveau", "traits", "coupes"
-TYPES = (NIVEAU, TRAITS, COUPES)
+# « vues » : relire les seules vues dont le thermicien a corrigé le cadre ou le haut (D205).
+NIVEAU, TRAITS, COUPES, VUES = "niveau", "traits", "coupes", "vues"
+TYPES = (NIVEAU, TRAITS, COUPES, VUES)
 RANG_TRAITS = 1000
 RANG_COUPES = 1001
+RANG_VUES = 1002
 
 
 def _travail_vivant(db: Session, sheet_id: int, type_travail: str = NIVEAU) -> ThermiqueTravail | None:
@@ -133,6 +137,12 @@ def _lectures_de_coupes(db: Session, sheet: ThermiqueSheet, avec_coupes: bool) -
     if sheet.scale_denominator is None:
         return []
     if sheet.nature in ("coupe", "facade"):
+        # Une planche déjà lue n'est pas relue en entier : ce serait effacer les cadres corrigés à la main
+        # (D205). Seules ses vues marquées « à relire » repartent.
+        if db.scalar(select(func.count()).select_from(ThermiqueVue).where(ThermiqueVue.sheet_id == sheet.id)):
+            if vues_a_relire(db, sheet.id) and not _travail_vivant(db, sheet.id, VUES):
+                return [(VUES, RANG_VUES)]
+            return []
         return [] if _travail_vivant(db, sheet.id, COUPES) else [(COUPES, RANG_COUPES)]
     if sheet.nature == "plan" and avec_coupes and not sheet.traits_coupe_json:
         return [] if _travail_vivant(db, sheet.id, TRAITS) else [(TRAITS, RANG_TRAITS)]
@@ -169,7 +179,12 @@ def mettre_en_file(db: Session, project: ThermiqueProject, user: User) -> dict[s
             ajouter(sheet, type_travail, rang)
         if sheet.nature in ("coupe", "facade"):
             if not lectures:
-                motif = "l'échelle n'est pas définie" if sheet.scale_denominator is None else "déjà dans la file"
+                if sheet.scale_denominator is None:
+                    motif = "l'échelle n'est pas définie"
+                elif _travail_vivant(db, sheet.id, COUPES) or _travail_vivant(db, sheet.id, VUES):
+                    motif = "déjà dans la file"
+                else:
+                    motif = "déjà lue : corrigez le cadre d'une vue pour la faire relire"
                 ecartes.append({"sheet_id": sheet.id, "label": sheet.label, "motif": motif})
             continue
         motif = motif_d_exclusion(db, sheet)
@@ -182,6 +197,21 @@ def mettre_en_file(db: Session, project: ThermiqueProject, user: User) -> dict[s
     for travail in ajoutes:
         db.refresh(travail)
     return {"ajoutes": [serialize_travail(db, t) for t in ajoutes], "ecartes": ecartes}
+
+
+def mettre_en_file_la_relecture(db: Session, sheet: ThermiqueSheet, user: User) -> ThermiqueTravail | None:
+    """Après une correction de cadre (D205) : la relecture des vues de la planche part dans la file."""
+    vivant = _travail_vivant(db, sheet.id, VUES)
+    if vivant is not None or not vues_a_relire(db, sheet.id):
+        return vivant
+    travail = ThermiqueTravail(
+        project_id=sheet.project_id, sheet_id=sheet.id, statut="en_attente", type=VUES, rang=RANG_VUES,
+        demande_par_user_id=user.id,
+    )
+    db.add(travail)
+    db.commit()
+    db.refresh(travail)
+    return travail
 
 
 def travaux_du_projet(db: Session, project_id: int) -> list[ThermiqueTravail]:
@@ -306,4 +336,6 @@ def consignes_du_travail(db: Session, travail: ThermiqueTravail) -> dict[str, An
         "page": sheet.page_index + 1,
         "rotation": (360 - int(sheet.rotation_deg)) % 360,
         "echelle": sheet.scale_denominator,
+        # Relecture (D205) : les vues à relire, avec le cadre et le haut donnés par le thermicien.
+        **({"vues": [vue_a_relire(v) for v in vues_a_relire(db, sheet.id)]} if travail.type == VUES else {}),
     }

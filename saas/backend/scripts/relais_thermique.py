@@ -29,7 +29,7 @@ SCRIPTS = Path(__file__).resolve().parent
 CHAINE = SCRIPTS / "run_etude_niveau.py"
 LECTURE_COUPES = SCRIPTS / "run_lecture_coupes.py"
 # Étude d'un niveau, traits de coupe d'un plan, vues d'une planche de coupes (S5, D181).
-TYPES_CONNUS = ("niveau", "traits", "coupes")
+TYPES_CONNUS = ("niveau", "traits", "coupes", "vues")
 REGLAGES = Path.home() / ".thermique-relais.json"
 SITE_PAR_DEFAUT = "https://thermique.patrimoineaucarre.com"
 
@@ -172,13 +172,20 @@ def session_claude_expiree(sortie: str) -> bool:
 
 def lancer_la_lecture(plan: Path, consignes: dict, dossier: Path) -> tuple[int, str]:
     """Lance ``run_lecture_coupes.py`` (traits d'un plan ou vues d'une planche de coupes)."""
+    relecture = consignes["type"] == "vues"
     commande = [
         sys.executable, str(LECTURE_COUPES), str(plan),
-        "--type", consignes["type"], "--page", str(consignes["page"]), "--sorties", str(dossier),
-        "--titre", consignes.get("label") or "",
+        "--type", "coupes" if relecture else consignes["type"], "--page", str(consignes["page"]),
+        "--sorties", str(dossier), "--titre", consignes.get("label") or "",
     ]
     if consignes.get("nature") in ("coupe", "facade"):
         commande += ["--nature", consignes["nature"]]
+    if relecture:
+        # Les vues dont le thermicien a corrigé le cadre (D205) : relues seules, dans leur nouveau cadre.
+        fichier = dossier / "vues-a-relire.json"
+        fichier.write_text(json.dumps(consignes.get("vues") or [], ensure_ascii=False), encoding="utf-8")
+        commande += ["--vues", str(fichier)]
+        (dossier / "lecture.json").unlink(missing_ok=True)
     print(f"    {' '.join(commande[1:])}")
     resultat = subprocess.run(commande, capture_output=True, text=True, encoding="utf-8", errors="replace")
     return resultat.returncode, f"{resultat.stdout}\n{resultat.stderr}".strip()

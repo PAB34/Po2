@@ -346,6 +346,13 @@ class LectureCoupes(BaseModel):
     vues: list[dict[str, Any]] | None = None
 
 
+class VueCorrigee(BaseModel):
+    """Le cadre redessiné (deux coins opposés, points PDF de la planche) et/ou le haut d'une vue (D205)."""
+
+    cadre: list[float] | None = Field(default=None, min_length=4, max_length=4)
+    haut: str | None = None
+
+
 class HauteurConfirmee(BaseModel):
     """Deux clics dans la coupe, en points PDF de sa planche : sol fini puis plafond fini d'une pièce (D191)."""
 

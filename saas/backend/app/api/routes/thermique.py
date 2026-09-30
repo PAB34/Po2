@@ -43,6 +43,7 @@ from app.schemas.thermique import (
     HauteurConfirmee,
     HauteursDuPlan,
     LectureCoupes,
+    VueCorrigee,
     MenuiserieConfirmee,
     MiseEnFileResult,
     CalageRequest,
@@ -542,8 +543,13 @@ def importer_lecture_de_coupes(
         if sheet.nature in ("coupe", "facade"):
             if not lecture.vues:
                 raise ThermiqueError("Ce fichier ne contient aucune vue : est-ce bien la lecture de cette planche ?")
-            lecture_coupes.enregistrer_vues(db, sheet, lecture.vues)
-            travaux.clore_si_en_file(db, sheet.id, travaux.COUPES)
+            if all(isinstance(v, dict) and isinstance(v.get("id"), int) for v in lecture.vues):
+                # Relecture de vues corrigées (D205) : les autres vues de la planche ne bougent pas.
+                lecture_coupes.remplacer_vues_relues(db, sheet, lecture.vues)
+                travaux.clore_si_en_file(db, sheet.id, travaux.VUES)
+            else:
+                lecture_coupes.enregistrer_vues(db, sheet, lecture.vues)
+                travaux.clore_si_en_file(db, sheet.id, travaux.COUPES)
             background_tasks.add_task(lecture_coupes.preparer_hauteurs, sheet.project_id)
             return {"vues": len(lecture.vues)}
         if sheet.nature == "plan":
@@ -1019,6 +1025,9 @@ def rendre_une_lecture_de_coupes(
             lecture_coupes.enregistrer_vues(db, sheet, lecture.vues)
             # Les traits se déduisent des coupes (D190) : plusieurs secondes par coupe, faites tout de suite.
             background_tasks.add_task(lecture_coupes.preparer_hauteurs, sheet.project_id)
+        elif travail.type == travaux.VUES and lecture.vues is not None:
+            lecture_coupes.remplacer_vues_relues(db, sheet, lecture.vues)
+            background_tasks.add_task(lecture_coupes.preparer_hauteurs, sheet.project_id)
         else:
             raise ThermiqueError("La lecture rendue ne correspond pas au type du travail.")
     except ThermiqueError as exc:
@@ -1031,6 +1040,36 @@ def _vue_or_404(db: Session, user: User, vue_id: int) -> ThermiqueVue:
     if vue is None or get_project_for_user(db, user, vue.project_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vue introuvable.")
     return vue
+
+
+@router.patch("/vues/{vue_id}")
+def corriger_une_vue(
+    vue_id: int,
+    correction: VueCorrigee,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Cadre redessiné ou haut donné par le thermicien ; une coupe part aussitôt en relecture (D205)."""
+    vue = _vue_or_404(db, user, vue_id)
+    try:
+        vue = lecture_coupes.corriger_vue(db, vue, correction.cadre, correction.haut)
+    except ThermiqueError as exc:
+        raise _bad_request(exc) from exc
+    sheet = db.get(ThermiqueSheet, vue.sheet_id)
+    if sheet is not None and vue.nature == "coupe":
+        travaux.mettre_en_file_la_relecture(db, sheet, user)
+    return lecture_coupes.serialize_vue(vue)
+
+
+@router.delete("/vues/{vue_id}", status_code=status.HTTP_204_NO_CONTENT)
+def supprimer_une_vue(
+    vue_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> Response:
+    """Une vue que l'agent a inventée (D205)."""
+    lecture_coupes.supprimer_vue(db, _vue_or_404(db, user, vue_id))
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/projects/{project_id}/vues")

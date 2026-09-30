@@ -272,6 +272,56 @@ def test_une_lecture_s_importe_a_la_main_et_clot_le_travail_en_file(db_session):
         importer_lecture_de_coupes(coupe.id, LectureCoupes(traits=[]), BackgroundTasks(), db_session, user)
 
 
+def test_un_cadre_corrige_fait_relire_la_seule_vue_et_garde_le_haut_donne(db_session):
+    """D205 : l'agent a mal encadré la coupe ; le thermicien redessine le cadre, la vue repart seule en lecture."""
+    import json
+
+    import pytest
+
+    from app.models.thermique import ThermiqueTravail, ThermiqueVue
+    from app.models.user import User
+    from app.services import thermique_lecture_coupes as lecture
+    from app.services import thermique_travaux as travaux
+    from app.services.thermique import ThermiqueError
+
+    plan, coupe = _projet_avec_coupe(db_session)
+    user = db_session.query(User).one()
+    a, facade = lecture.enregistrer_vues(db_session, coupe, [
+        {**VUE_A, "nom": "COUPE A", "nature": "coupe", "cadre": [50, 1900, 1650, 2360]},
+        {"nom": "FACADE", "nature": "facade", "cadre": [0, 0, 10, 10], "pieces": []},
+    ])
+    lecture.hauteurs_du_plan(db_session, plan)  # met en cache le trait déduit de la vue A
+
+    with pytest.raises(ThermiqueError, match="trop petit"):
+        lecture.corriger_vue(db_session, a, [0, 0, 5, 5], None)
+    lecture.corriger_vue(db_session, a, [1573, 2003, 882, 978], "droite")
+    lue = json.loads(a.lecture_json)
+    assert json.loads(a.cadre_json) == [882, 978, 1573, 2003]
+    assert lue["pieces"] == [] and lue["a_relire"] and lue["haut"] == [1.0, 0.0]
+    assert not any(t.get("vue_id") == a.id for t in lecture.traits_du_plan(plan))
+
+    travail = travaux.mettre_en_file_la_relecture(db_session, coupe, user)
+    assert travail.type == "vues"
+    consignes = travaux.consignes_du_travail(db_session, travail)
+    assert [v["id"] for v in consignes["vues"]] == [a.id]
+    assert consignes["vues"][0]["haut_impose"] is True
+    # « Analyser » ne relit plus la planche entière : les cadres corrigés seraient perdus.
+    assert travaux._lectures_de_coupes(db_session, coupe, True) == []
+
+    # La relecture remplace la seule vue A, garde le haut donné, et la façade ne bouge pas.
+    relue = {**VUE_A, "id": a.id, "nom": "autre nom", "haut": [0.0, 1.0]}
+    lecture.remplacer_vues_relues(db_session, coupe, [relue])
+    db_session.refresh(a)
+    apres = json.loads(a.lecture_json)
+    assert a.nom == "COUPE A" and apres["haut"] == [1.0, 0.0] and not apres.get("a_relire")
+    assert len(apres["pieces"]) == len(VUE_A["pieces"])
+    assert db_session.get(ThermiqueVue, facade.id) is not None
+
+    lecture.supprimer_vue(db_session, facade)
+    assert [v.nom for v in db_session.query(ThermiqueVue).all()] == ["COUPE A"]
+    assert db_session.query(ThermiqueTravail).count() == 1
+
+
 def test_sans_trait_sur_le_plan_il_se_deduit_de_la_coupe(db_session):
     """D190 : le plan ne porte pas le trait ; la coupe A le situe par ses numéros de pièces, une seule fois."""
     import json

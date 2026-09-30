@@ -145,6 +145,101 @@ def enregistrer_vues(db: Session, sheet: ThermiqueSheet, vues: Any) -> list[Ther
     return rangees
 
 
+def oublier_traits_deduits(db: Session, project_id: int, vue_id: int) -> None:
+    """Le trait déduit d'une vue ne vaut plus quand la vue change : il sera recherché de nouveau (D205)."""
+    for plan in db.scalars(
+        select(ThermiqueSheet).where(ThermiqueSheet.project_id == project_id, ThermiqueSheet.nature == "plan")
+    ).all():
+        traits = traits_du_plan(plan)
+        gardes = [t for t in traits if not (t.get("deduit") and t.get("vue_id") == vue_id)]
+        if len(gardes) != len(traits):
+            plan.traits_coupe_json = json.dumps(gardes, ensure_ascii=False, separators=(",", ":"))
+
+
+SENS_DU_HAUT = {"haut": [0.0, 1.0], "bas": [0.0, -1.0], "gauche": [-1.0, 0.0], "droite": [1.0, 0.0]}
+
+
+def corriger_vue(db: Session, vue: ThermiqueVue, cadre: list[float] | None, haut: str | None) -> ThermiqueVue:
+    """Le thermicien redessine le cadre ou donne le haut d'une vue mal située par l'agent (D205).
+
+    Les pièces lues venaient du mauvais cadre : elles sont vidées et la vue est marquée « à relire » (une
+    façade n'a pas de pièces, elle n'a rien à relire). Le haut donné l'emporte sur celui déduit des cotes.
+    """
+    lecture = json.loads(vue.lecture_json)
+    if cadre is not None:
+        if len(cadre) != 4:
+            raise ThermiqueError("Le cadre d'une vue se donne par deux coins opposés.")
+        x0, y0, x1, y1 = (float(v) for v in cadre)
+        propre = [min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)]
+        if propre[2] - propre[0] < 20 or propre[3] - propre[1] < 20:
+            raise ThermiqueError("Ce cadre est trop petit : cliquez deux coins opposés de la vue entière.")
+        vue.cadre_json = json.dumps(propre)
+    if haut is not None:
+        if haut not in SENS_DU_HAUT:
+            raise ThermiqueError("Le haut d'une vue est en haut, en bas, à gauche ou à droite de la page.")
+        lecture["haut"] = SENS_DU_HAUT[haut]
+        lecture["haut_impose"] = True
+    if vue.nature == "coupe":
+        lecture.update({"niveaux": [], "pieces": [], "a_relire": True})
+    vue.lecture_json = json.dumps(lecture, ensure_ascii=False, separators=(",", ":"))
+    oublier_traits_deduits(db, vue.project_id, vue.id)
+    db.commit()
+    db.refresh(vue)
+    return vue
+
+
+def supprimer_vue(db: Session, vue: ThermiqueVue) -> None:
+    oublier_traits_deduits(db, vue.project_id, vue.id)
+    db.delete(vue)
+    db.commit()
+
+
+def vues_a_relire(db: Session, sheet_id: int) -> list[ThermiqueVue]:
+    return [
+        vue
+        for vue in db.scalars(select(ThermiqueVue).where(ThermiqueVue.sheet_id == sheet_id).order_by(ThermiqueVue.id)).all()
+        if json.loads(vue.lecture_json).get("a_relire")
+    ]
+
+
+def vue_a_relire(vue: ThermiqueVue) -> dict[str, Any]:
+    """Ce que le script de lecture reçoit pour relire une vue : son cadre et, s'il a été donné, son haut."""
+    lecture = json.loads(vue.lecture_json)
+    return {
+        "id": vue.id,
+        "nom": vue.nom,
+        "nature": vue.nature,
+        "cadre": json.loads(vue.cadre_json),
+        "haut": lecture.get("haut", [0.0, 1.0]),
+        "haut_impose": bool(lecture.get("haut_impose")),
+    }
+
+
+def remplacer_vues_relues(db: Session, sheet: ThermiqueSheet, vues: Any) -> list[ThermiqueVue]:
+    """Range la relecture de vues désignées par leur identifiant ; les autres vues de la planche ne bougent pas."""
+    if not isinstance(vues, list):
+        raise ThermiqueError("Les vues doivent former une liste.")
+    rangees = []
+    for brute in vues:
+        identifiant = brute.get("id") if isinstance(brute, dict) else None
+        vue = db.get(ThermiqueVue, identifiant) if isinstance(identifiant, int) else None
+        if vue is None or vue.sheet_id != sheet.id:
+            raise ThermiqueError(f"La vue relue « {brute.get('nom') if isinstance(brute, dict) else '?'} » n'est pas sur cette planche.")
+        [propre] = valider_vues([{**brute, "nom": vue.nom, "nature": vue.nature, "cadre": json.loads(vue.cadre_json)}])
+        ancienne = json.loads(vue.lecture_json)
+        lecture = {k: propre[k] for k in ("haut", "niveaux", "pieces")}
+        if ancienne.get("haut_impose"):
+            lecture.update({"haut": ancienne["haut"], "haut_impose": True})
+        for garde in ("corrections", "menuiseries"):
+            if garde in ancienne:
+                lecture[garde] = ancienne[garde]
+        vue.lecture_json = json.dumps(lecture, ensure_ascii=False, separators=(",", ":"))
+        oublier_traits_deduits(db, vue.project_id, vue.id)
+        rangees.append(vue)
+    db.commit()
+    return rangees
+
+
 def serialize_vue(vue: ThermiqueVue) -> dict[str, Any]:
     return {
         "id": vue.id,

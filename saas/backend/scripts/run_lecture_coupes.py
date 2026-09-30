@@ -42,6 +42,8 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--reponses", type=Path, help="Rejoue les réponses d'agent de ce dossier (<etape>.json)")
     result.add_argument("--titre", default="", help="Libellé de la planche sur le site (aide l'agent à nommer les vues)")
     result.add_argument("--nature", choices=("coupe", "facade"), default="coupe", help="Classement de la planche")
+    result.add_argument("--vues", type=Path,
+                        help="Relecture (D205) : fichier JSON des vues à relire, cadre et haut donnés par le thermicien")
     result.add_argument("--model", default="opus")
     result.add_argument("--timeout", type=int, default=1800)
     return result
@@ -145,6 +147,16 @@ def lire_traits(source: Path, page: int, dossier: Path, agent: Agent, titre: str
     return {"traits": lecture.valider_traits(traits)}
 
 
+def lire_une_vue(source: Path, page: int, dossier: Path, agent: Agent, vue: dict, etape: str) -> dict:
+    images = [
+        consignes.rendre_quadrille(source, page, cadre, consignes.PAS_TUILE_PT, consignes.COTE_IMAGE_PX,
+                                   dossier / f"{etape}-tuile-{i:02d}.png")
+        for i, cadre in enumerate(consignes.tuiles(vue["cadre"]))
+    ]
+    brut = agent(etape, consignes.consigne_lecture_vue(vue, images), consignes.schema_lecture_vue())
+    return consignes.lecture_de_vue(vue, brut)
+
+
 def lire_coupes(source: Path, page: int, dossier: Path, agent: Agent, titre: str, nature: str) -> dict:
     ensemble = consignes.rendre_ensemble(source, page, taille_de_page(source, page), dossier, "ensemble")
     reperes = agent("vues-ensemble", consignes.consigne_vues_ensemble(ensemble, titre, nature),
@@ -155,14 +167,23 @@ def lire_coupes(source: Path, page: int, dossier: Path, agent: Agent, titre: str
             # Façades et détails sont gardés (repérage, S5e) mais pas lus pièce par pièce.
             vues.append(consignes.lecture_de_vue(vue, {"niveaux": [], "pieces": []}))
             continue
-        images = [
-            consignes.rendre_quadrille(source, page, cadre, consignes.PAS_TUILE_PT, consignes.COTE_IMAGE_PX,
-                                       dossier / f"vue-{rang:02d}-tuile-{i:02d}.png")
-            for i, cadre in enumerate(consignes.tuiles(vue["cadre"]))
-        ]
-        brut = agent(f"vue-{rang:02d}", consignes.consigne_lecture_vue(vue, images), consignes.schema_lecture_vue())
-        vues.append(consignes.lecture_de_vue(vue, brut))
+        vues.append(lire_une_vue(source, page, dossier, agent, vue, f"vue-{rang:02d}"))
     return {"vues": lecture.valider_vues(vues)}
+
+
+def relire_vues(source: Path, page: int, dossier: Path, agent: Agent, a_relire: list[dict]) -> dict:
+    """Relecture des vues dont le thermicien a corrigé le cadre (D205) : pas de repérage d'ensemble.
+
+    Chaque vue garde son identifiant ; le site ne remplace qu'elle. Une réponse d'une relecture précédente
+    du même cadre n'est pas rejouée : l'étape porte le cadre dans son nom.
+    """
+    vues = []
+    for vue in a_relire:
+        x0, y0, x1, y1 = (round(float(v)) for v in vue["cadre"])
+        lue = lire_une_vue(source, page, dossier, agent, vue, f"relue-{vue['id']}-{x0}-{y0}-{x1}-{y1}")
+        [propre] = lecture.valider_vues([lue])
+        vues.append({**propre, "id": vue["id"]})
+    return {"vues": vues}
 
 
 def main() -> int:
@@ -174,6 +195,9 @@ def main() -> int:
         source = args.source.expanduser().resolve()
         if args.type == "traits":
             resultat = lire_traits(source, args.page - 1, dossier, agent, args.titre)
+        elif args.vues is not None:
+            a_relire = json.loads(args.vues.read_text(encoding="utf-8"))
+            resultat = relire_vues(source, args.page - 1, dossier, agent, a_relire)
         else:
             resultat = lire_coupes(source, args.page - 1, dossier, agent, args.titre, args.nature)
     except (ThermiqueError, KeyError, ValueError) as exc:

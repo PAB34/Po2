@@ -449,7 +449,12 @@ def lecture_de_vue(vue: dict[str, Any], brut: dict[str, Any]) -> dict[str, Any]:
         {**n, "point": point_lu(n.get("point"))} for n in brut.get("niveaux", []) if isinstance(n, dict) and n.get("nom")
     ]
     deduit = haut_par_les_cotes(niveaux_bruts)
-    hx, hy = deduit or SENS.get(vue.get("haut") or "haut", (0.0, 1.0))
+    if vue.get("haut_impose") and isinstance(vue.get("haut"), (list, tuple)):
+        # Le haut donné par le thermicien l'emporte sur celui des cotes (D205).
+        deduit = None
+        hx, hy = (float(v) for v in vue["haut"])
+    else:
+        hx, hy = deduit or SENS.get(vue.get("haut") or "haut", (0.0, 1.0))
     dx, dy = hy, -hx
 
     def sur_le_haut(point: Any) -> float:
