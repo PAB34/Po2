@@ -1047,10 +1047,14 @@ export function WorkspacePage() {
                     {calage.busy
                       ? "Enregistrement…"
                       : calage.enAttente
-                        ? `${calage.paires.length * 2 + 2}/4 · Cliquez le même point sur le plan actif.`
-                        : `${calage.paires.length * 2 + 1}/4 · Cliquez un point repérable du calque ${
-                            calage.sens === "inferieur" ? "bleu" : "orange"
-                          } : croisement d'axes, angle de cage d'escalier, poteau.`}
+                        ? `Repère ${calage.paires.length + 1} sur 2 · Cliquez maintenant ce même point sur le plan actif (en noir).`
+                        : calage.paires.length
+                          ? `Repère 2 sur 2 · Un second point, à l'autre bout du bâtiment, sur le calque ${
+                              calage.sens === "inferieur" ? "bleu" : "orange"
+                            } : le premier a posé le calque, celui-ci règle sa rotation et son échelle.`
+                          : `Repère 1 sur 2 · Cliquez sur le calque ${
+                              calage.sens === "inferieur" ? "bleu" : "orange"
+                            } un point facile à retrouver sur les deux plans : croisement d'axes, angle de cage d'escalier, poteau.`}
                   </span>
                   {calage.message && <span className="th-calage__message">{calage.message}</span>}
                   <button type="button" className="th-link" onClick={() => setCalage(null)} title="Raccourci : Échap">
