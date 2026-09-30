@@ -182,6 +182,8 @@ export function FenetreCoupe({
       <div
         className="th-fenetre-coupe__titre"
         onPointerDown={(event) => {
+          // Capturer le pointeur sur un bouton (la croix) volerait son clic : la fenêtre ne se fermait pas.
+          if ((event.target as HTMLElement).closest("button")) return;
           glisse.current = { x: event.clientX, y: event.clientY, px: position.x, py: position.y };
           event.currentTarget.setPointerCapture(event.pointerId);
         }}

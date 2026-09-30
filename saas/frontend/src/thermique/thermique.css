@@ -2512,6 +2512,12 @@ circle.th-seg--measure {
   min-height: 0;
 }
 
+/* La visionneuse n'a pas de hauteur propre : sans ceci, la coupe tient dans 0 px (fenêtre blanche). */
+.th-fenetre-coupe__plan > .th-viewer {
+  position: absolute;
+  inset: 0;
+}
+
 /* L'en-tête du côté est un bouton qui le montre sur le plan (sujet 2, D146). */
 .th-study-side__viser {
   display: grid;
