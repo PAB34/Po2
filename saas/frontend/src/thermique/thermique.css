@@ -2499,6 +2499,70 @@ circle.th-seg--measure {
   gap: 0.4rem;
 }
 
+/* Cadres des vues d'une planche de coupes ou de façades (D205). Le plan est toujours blanc : couleurs fixes. */
+.th-cadre-vue rect {
+  fill: rgb(26 89 242 / 6%);
+  stroke: #1a59f2;
+  stroke-width: 2;
+  stroke-dasharray: 8 4;
+}
+
+.th-cadre-vue text {
+  fill: #1a59f2;
+  font-size: 13px;
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 3px;
+}
+
+.th-cadre-vue.is-choisie rect {
+  stroke-width: 3;
+  stroke-dasharray: none;
+  fill: rgb(26 89 242 / 12%);
+}
+
+.th-cadre-vue.is-a-relire rect {
+  stroke: #d97706;
+}
+
+.th-cadre-vue.is-a-relire text {
+  fill: #b45309;
+}
+
+.th-cadre-vue__trace {
+  fill: none;
+  stroke: #d97706;
+  stroke-width: 2;
+}
+
+.th-vues {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.th-vues li {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--po2-color-line);
+  border-radius: var(--po2-radius-sm);
+}
+
+.th-vues li.is-choisie {
+  border-color: #1a59f2;
+}
+
+.th-vues__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 /* Baie d'une menuiserie dans sa fiche (S5e, D199). */
 .th-baie {
   display: grid;

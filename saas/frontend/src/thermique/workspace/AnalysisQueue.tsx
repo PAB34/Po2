@@ -24,6 +24,7 @@ const TYPE_LABELS: Record<NonNullable<Work["type"]>, string> = {
   niveau: "étude du niveau",
   traits: "traits de coupe",
   coupes: "lecture des vues",
+  vues: "relecture des vues corrigées",
 };
 
 export function worksQueryKey(projectId: number) {

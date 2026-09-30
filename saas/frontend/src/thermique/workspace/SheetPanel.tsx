@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { useAuth } from "../../providers/AuthProvider";
@@ -107,6 +107,8 @@ type Props = {
   onStudyImported: (study: Study) => void;
   /** Matrice du rendu de la planche : sert à lire le nord dans le repère affiché. */
   transform: number[] | null;
+  /** Planche de coupes ou de façades : ses vues, leurs cadres et leur correction (D205). */
+  vuesDeLaPlanche?: ReactNode;
 };
 
 // Panneau « Planche » : réglages de la planche affichée (type, niveau, orientation, échelle) et outils de mesure.
@@ -121,6 +123,7 @@ export function SheetPanel({
   study,
   onStudyImported,
   transform,
+  vuesDeLaPlanche,
 }: Props) {
   const { token } = useAuth();
   const queryClient = useQueryClient();
@@ -319,6 +322,7 @@ export function SheetPanel({
           </label>
           {sheet.status !== "prete" && <p className="th-muted">Mettez d'abord la planche à l'échelle.</p>}
           {lectureImportee && <p className="th-alert th-alert--ok">{lectureImportee}</p>}
+          {vuesDeLaPlanche}
         </section>
       )}
 

@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../../providers/AuthProvider";
-import { thermiqueApi, type PdfPoint, type ProjectDetail, type Sheet, type Study } from "../api";
+import { thermiqueApi, type HautDeVue, type PdfPoint, type ProjectDetail, type Sheet, type Study, type VueCoupe } from "../api";
 import { TileSheetViewer, type ViewerTool, type ViewerView } from "../components/TileSheetViewer";
 import { STATUS_LABELS } from "../natures";
 import { allSheets, projectQueryKey, projectsQueryKey } from "../projectCache";
@@ -35,6 +35,7 @@ import {
   type Alignement,
 } from "./alignement";
 import { GuideCalage } from "./GuideCalage";
+import { CadresDesVues, ListeDesVues, cadreDeDeuxCoins, type CadreEnCours } from "./CadresDesVues";
 import { NiveauFantome, PointsDeCalage } from "./NiveauFantome";
 import { appliquer, calageAEnregistrer, correspondance, inverser, niveauxVoisins } from "./superposition";
 import { useStudyEdition } from "./useStudyEdition";
@@ -250,6 +251,7 @@ export function WorkspacePage() {
       if (event.key === "Escape") {
         setPoints([]);
         setCalage(null);
+        setCadreVue(null);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -362,6 +364,52 @@ export function WorkspacePage() {
     enabled: Boolean(token && projectId),
   });
   const facades = (vues.data ?? []).filter((vue) => vue.nature === "facade").map((vue) => ({ id: vue.id, nom: vue.nom }));
+  // Cadres des vues de cette planche (D205) : montrés, choisis, redessinés en deux clics.
+  const vuesDeLaPlanche = (vues.data ?? []).filter((vue) => vue.sheet_id === sheet?.id);
+  const [vueChoisie, setVueChoisie] = useState<number | null>(null);
+  const [cadreVue, setCadreVue] = useState<CadreEnCours | null>(null);
+  const [vuesEtat, setVuesEtat] = useState<{ busy: boolean; message: string | null }>({ busy: false, message: null });
+  useEffect(() => setCadreVue(null), [sheetId]);
+  const corrigerUneVue = async (vueId: number, correction: { cadre?: number[]; haut?: HautDeVue }) => {
+    if (!token) return;
+    setVuesEtat({ busy: true, message: null });
+    try {
+      const vue = await thermiqueApi.corrigerVue(token, vueId, correction);
+      await queryClient.invalidateQueries({ queryKey: ["thermique", "vues"] });
+      await queryClient.invalidateQueries({ queryKey: ["thermique", "hauteurs"] });
+      setVuesEtat({
+        busy: false,
+        message:
+          vue.nature === "coupe"
+            ? `« ${vue.nom} » corrigée : elle repart en lecture (relais, ou « Importer la lecture » après une relecture sur le poste).`
+            : `« ${vue.nom} » corrigée.`,
+      });
+    } catch (echec) {
+      setVuesEtat({ busy: false, message: echec instanceof Error ? echec.message : "La correction a échoué." });
+    }
+  };
+  const cliquerCadreVue = (point: PdfPoint) => {
+    if (!cadreVue) return;
+    if (!cadreVue.premier) {
+      setCadreVue({ ...cadreVue, premier: point });
+      return;
+    }
+    const cadre = cadreDeDeuxCoins(cadreVue.premier, point);
+    setCadreVue(null);
+    void corrigerUneVue(cadreVue.vueId, { cadre });
+  };
+  const supprimerUneVue = async (vue: VueCoupe) => {
+    if (!token || !window.confirm(`Supprimer la vue « ${vue.nom} » de cette planche ?`)) return;
+    setVuesEtat({ busy: true, message: null });
+    try {
+      await thermiqueApi.supprimerVue(token, vue.id);
+      await queryClient.invalidateQueries({ queryKey: ["thermique", "vues"] });
+      await queryClient.invalidateQueries({ queryKey: ["thermique", "hauteurs"] });
+      setVuesEtat({ busy: false, message: `« ${vue.nom} » supprimée.` });
+    } catch (echec) {
+      setVuesEtat({ busy: false, message: echec instanceof Error ? echec.message : "La suppression a échoué." });
+    }
+  };
   // Case « Voir les coupes » (D171) : les traits, relevés ou déduits, en lignes épaisses cliquables.
   const [voirCoupes, setVoirCoupes] = useState(false);
   // Les façades aussi (S5e, D182) : le long de l'enveloppe, du côté que le nom de l'élévation désigne.
@@ -733,11 +781,15 @@ export function WorkspacePage() {
               key={viewKey}
               manifest={raster.data}
               tileTemplate={thermiqueApi.apiUrl(raster.data.tile_url)}
-              tool={editionState.draft ? "edition" : calage ? "calage" : tool}
-              points={points}
+              tool={editionState.draft ? "edition" : calage || cadreVue ? "calage" : tool}
+              points={cadreVue?.premier ? [cadreVue.premier] : points}
               segments={editionState.draft ? [] : sheetSegments(sheet, tool, points)}
               onAddPoint={(point, event) => {
                 if (editionState.handlers.onAddPoint(point)) return;
+                if (cadreVue) {
+                  cliquerCadreVue(point);
+                  return;
+                }
                 if (calage) {
                   cliquerCalage(point, event.altKey);
                   return;
@@ -997,6 +1049,9 @@ export function WorkspacePage() {
                     />
                   )}
                   <NorthOverlay nord={sheet.nord} enCours={points} toScreen={toScreen} actif={tool === "nord"} />
+                  {vuesDeLaPlanche.length > 0 && (
+                    <CadresDesVues vues={vuesDeLaPlanche} toScreen={toScreen} choisie={vueChoisie} enCours={cadreVue} survol={null} />
+                  )}
                   {traitsAffiches.length > 0 && <TraitsDeCoupe traits={traitsAffiches} toScreen={toScreen} />}
                   {shownStudy && (
                     <>
@@ -1091,6 +1146,25 @@ export function WorkspacePage() {
                 study={study}
                 transform={raster.data?.transform ?? null}
                 onStudyImported={(imported) => queryClient.setQueryData<Study>(studyQueryKey(sheet.id), imported)}
+                vuesDeLaPlanche={
+                  <>
+                    <ListeDesVues
+                      vues={vuesDeLaPlanche}
+                      choisie={vueChoisie}
+                      enCours={cadreVue}
+                      busy={vuesEtat.busy}
+                      onChoisir={setVueChoisie}
+                      onRedessiner={(vueId) => {
+                        setVueChoisie(vueId);
+                        setCalage(null);
+                        setCadreVue({ vueId, premier: null });
+                      }}
+                      onHaut={(vueId, haut) => void corrigerUneVue(vueId, { haut })}
+                      onSupprimer={(vue) => void supprimerUneVue(vue)}
+                    />
+                    {vuesEtat.message && <p className="th-alert th-alert--ok">{vuesEtat.message}</p>}
+                  </>
+                }
               />
             ) : (
               <p className="th-muted">Aucune planche : déposez les plans dans « Documents ».</p>

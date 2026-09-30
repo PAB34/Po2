@@ -272,7 +272,14 @@ export type VueCoupe = {
   corrections?: { sol: number; plafond: number; hauteur_m: number }[];
   /** Hauteurs de menuiserie mesurées sur cette façade (S5e, D193). */
   menuiseries?: { composant: string; largeur_cm: number | null; hauteur_m: number }[];
+  /** Pièces lues dans la vue (vide tant qu'une vue au cadre corrigé n'est pas relue, D205). */
+  pieces?: unknown[];
+  /** Cadre ou haut corrigé par le thermicien : la vue attend sa relecture (D205). */
+  a_relire?: boolean;
+  haut_impose?: boolean;
 };
+
+export type HautDeVue = "haut" | "bas" | "gauche" | "droite";
 
 export type StudyRoom = {
   id: string;
@@ -402,7 +409,7 @@ export type Work = {
   label: string;
   level_label: string | null;
   /** « niveau » : étude d'un plan ; « traits » : traits de coupe d'un plan ; « coupes » : vues d'une planche (S5). */
-  type?: "niveau" | "traits" | "coupes";
+  type?: "niveau" | "traits" | "coupes" | "vues";
   statut: "en_attente" | "en_cours" | "fini" | "refuse" | "echec";
   rang: number;
   message: string | null;
@@ -527,6 +534,11 @@ export const thermiqueApi = {
     }),
   retirerHauteurs: (token: string, vueId: number) =>
     request<VueCoupe>(token, `/thermique/vues/${vueId}/hauteur`, { method: "DELETE" }),
+  // Cadre redessiné ou haut donné d'une vue mal située par l'agent ; une coupe repart en relecture (D205).
+  corrigerVue: (token: string, vueId: number, correction: { cadre?: number[]; haut?: HautDeVue }) =>
+    request<VueCoupe>(token, `/thermique/vues/${vueId}`, { method: "PATCH", body: JSON.stringify(correction) }),
+  supprimerVue: (token: string, vueId: number) =>
+    request<void>(token, `/thermique/vues/${vueId}`, { method: "DELETE" }),
   // Lecture d'une planche de coupes ou de façades produite sur le poste (`lecture.json`, D204).
   importerLecture: (token: string, sheetId: number, lecture: unknown) =>
     request<{ vues?: number; traits?: number }>(token, `/thermique/sheets/${sheetId}/lecture/importer`, {
