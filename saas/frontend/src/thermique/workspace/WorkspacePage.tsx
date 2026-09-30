@@ -26,6 +26,7 @@ import { coteAt, empreinteCote, milieuCote, rangVise, type CoteVisee } from "./c
 import { elementDuPont, paroisATrancher, pontAt, pontDeElement, trouverElement, viserSurLePlan } from "./elements";
 import { etapeCourante, parcours, vueDeLEtape, type EtapeId } from "./parcours";
 import { TYPES_PONT_REATTRIBUABLES } from "./pontsTypes";
+import { GuideCalage } from "./GuideCalage";
 import { NiveauFantome, PointsDeCalage } from "./NiveauFantome";
 import { appliquer, calageAEnregistrer, correspondance, inverser, niveauxVoisins } from "./superposition";
 import { useStudyEdition } from "./useStudyEdition";
@@ -1042,20 +1043,13 @@ export function WorkspacePage() {
             <div className="th-calage" role="status">
               {calage ? (
                 <>
-                  <strong>Calage de {voisins[calage.sens] ? sheetTitle(voisins[calage.sens]!) : "niveau"}</strong>
-                  <span>
-                    {calage.busy
-                      ? "Enregistrement…"
-                      : calage.enAttente
-                        ? `Repère ${calage.paires.length + 1} sur 2 · Cliquez maintenant ce même point sur le plan actif (en noir).`
-                        : calage.paires.length
-                          ? `Repère 2 sur 2 · Un second point, à l'autre bout du bâtiment, sur le calque ${
-                              calage.sens === "inferieur" ? "bleu" : "orange"
-                            } : le premier a posé le calque, celui-ci règle sa rotation et son échelle.`
-                          : `Repère 1 sur 2 · Cliquez sur le calque ${
-                              calage.sens === "inferieur" ? "bleu" : "orange"
-                            } un point facile à retrouver sur les deux plans : croisement d'axes, angle de cage d'escalier, poteau.`}
-                  </span>
+                  <GuideCalage
+                    voisin={voisins[calage.sens] ? sheetTitle(voisins[calage.sens]!) : "niveau voisin"}
+                    plan={sheet ? sheetTitle(sheet) : "plan actif"}
+                    couleur={calage.sens === "inferieur" ? "bleu" : "orange"}
+                    clics={calage.paires.length * 2 + (calage.enAttente ? 1 : 0)}
+                    busy={calage.busy}
+                  />
                   {calage.message && <span className="th-calage__message">{calage.message}</span>}
                   <button type="button" className="th-link" onClick={() => setCalage(null)} title="Raccourci : Échap">
                     {calage.busy || calage.paires.length || calage.enAttente ? "Annuler" : "Fermer"}

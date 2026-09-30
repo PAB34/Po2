@@ -1112,6 +1112,30 @@ circle.th-seg--measure {
   font-weight: 600;
 }
 
+.th-calage__but {
+  margin: 0;
+  line-height: 1.4;
+}
+
+.th-calage__etapes {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.th-calage__etape.is-faite {
+  color: var(--po2-color-muted, #6b7280);
+}
+
+.th-calage__etape.is-en_cours {
+  font-weight: 700;
+}
+
+.th-calage__etape.is-a_venir {
+  opacity: 0.6;
+}
+
 /* Les points cliqués : croix de couleur sur le calque, croix noire sur le plan, reliées d'un trait. Le plan
    est toujours blanc : des couleurs fixes, pas les jetons du thème. */
 .th-calage-points line,
