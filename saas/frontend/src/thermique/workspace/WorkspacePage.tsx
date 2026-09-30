@@ -26,6 +26,14 @@ import { coteAt, empreinteCote, milieuCote, rangVise, type CoteVisee } from "./c
 import { elementDuPont, paroisATrancher, pontAt, pontDeElement, trouverElement, viserSurLePlan } from "./elements";
 import { etapeCourante, parcours, vueDeLEtape, type EtapeId } from "./parcours";
 import { TYPES_PONT_REATTRIBUABLES } from "./pontsTypes";
+import {
+  ajusterLongueur,
+  cliquer as cliquerAlignement,
+  debuterAlignement,
+  pairesAEnregistrer,
+  refaireEtape,
+  type Alignement,
+} from "./alignement";
 import { GuideCalage } from "./GuideCalage";
 import { NiveauFantome, PointsDeCalage } from "./NiveauFantome";
 import { appliquer, calageAEnregistrer, correspondance, inverser, niveauxVoisins } from "./superposition";
@@ -171,15 +179,8 @@ export function WorkspacePage() {
   const [validation, setValidation] = useState<{ busy: boolean; message: string | null }>({ busy: false, message: null });
   // Superposition des niveaux (S3, D168, D169) : les deux cases « Voir niveau inférieur / supérieur ».
   const [fantomes, setFantomes] = useState<{ inferieur: boolean; superieur: boolean }>({ inferieur: false, superieur: false });
-  // Calage en cours (S2, D173) : paires [point du voisin, point du plan actif], puis le point du voisin en
-  // attente de son jumeau sur le plan actif.
-  const [calage, setCalage] = useState<{
-    sens: "inferieur" | "superieur";
-    paires: [PdfPoint, PdfPoint][];
-    enAttente: PdfPoint | null;
-    message: string | null;
-    busy: boolean;
-  } | null>(null);
+  // Calage en cours (S2, D173 ; méthode Aligner d'AutoCAD, D201) : voir `alignement.ts`.
+  const [calage, setCalage] = useState<Alignement | null>(null);
 
   const { data: project, error } = useQuery({
     queryKey: projectQueryKey(projectId),
@@ -289,59 +290,46 @@ export function WorkspacePage() {
     const voisin = voisins[sens];
     const image = sens === "inferieur" ? rasterInferieur.data : rasterSuperieur.data;
     if (!voisin || !image || !sheet || !(fantomes[sens] || calage?.sens === sens)) return [];
-    return [{ sens, voisin, image, ...correspondance(voisin, sheet, referenceProjet) }];
+    const pose = correspondance(voisin, sheet, referenceProjet);
+    // Pendant un calage, le calque suit la pose en cours : il bouge après chaque étape (D201).
+    return [{ sens, voisin, image, ...pose, ...(calage?.sens === sens ? { sim: calage.sim } : {}) }];
   });
   // Changer de planche abandonne un calage commencé : ses points n'ont de sens que sur ce plan-ci.
   useEffect(() => setCalage(null), [sheetId]);
 
-  const enregistrerCalage = async (sens: "inferieur" | "superieur", paires: [PdfPoint, PdfPoint][]) => {
-    const voisin = voisins[sens];
-    if (!voisin || !sheet || !token) return;
+  const enregistrerCalage = async (al: Alignement) => {
+    const voisin = voisins[al.sens];
+    const paires = pairesAEnregistrer(al);
+    if (!voisin || !sheet || !token || !paires) return;
     const geste = calageAEnregistrer(voisin, sheet, referenceProjet, paires);
     if ("refus" in geste) {
-      setCalage({ sens, paires: [], enAttente: null, message: geste.refus, busy: false });
+      setCalage({ ...al, message: geste.refus });
       return;
     }
-    setCalage({ sens, paires, enAttente: null, message: "Enregistrement du calage…", busy: true });
+    setCalage({ ...al, busy: true, message: null });
     try {
-      const calee = await thermiqueApi.calerPlanche(token, geste.planche, {
+      await thermiqueApi.calerPlanche(token, geste.planche, {
         cible_sheet_id: geste.cible,
         points: geste.points,
         points_cible: geste.points_cible,
       });
       await queryClient.invalidateQueries({ queryKey: projectQueryKey(projectId) });
-      const ecart = calee.calage?.ecart_echelle_pct;
-      setFantomes((current) => ({ ...current, [sens]: true }));
-      setCalage({
-        sens,
-        paires: [],
-        enAttente: null,
-        busy: false,
-        message:
-          ecart != null && Math.abs(ecart) > 2
-            ? `Calage enregistré, mais l'échelle trouvée s'écarte de ${ecart.toLocaleString("fr-FR")} % des échelles déclarées : un point est sans doute mal placé. Recommencez si le calque ne tombe pas juste.`
-            : "Calage enregistré : le niveau voisin se pose maintenant sur ce plan.",
-      });
+      setFantomes((current) => ({ ...current, [al.sens]: true }));
+      // Les croix restent jusqu'à la fermeture du bandeau, pour vérifier que tout tombe juste (Q51).
+      setCalage({ ...al, etape: "enregistre", busy: false, message: "Calage enregistré." });
     } catch (echec) {
-      setCalage({ sens, paires: [], enAttente: null, busy: false, message: echec instanceof Error ? echec.message : "Le calage a échoué." });
+      setCalage({ ...al, busy: false, message: echec instanceof Error ? echec.message : "Le calage a échoué." });
     }
   };
 
-  // Un clic du calage : d'abord un point repérable du calque, puis le même point sur le plan actif (D173).
-  const cliquerCalage = (point: PdfPoint) => {
-    if (!calage || calage.busy) return;
-    const fantome = fantomesAffiches.find((item) => item.sens === calage.sens);
-    if (!fantome) return;
-    if (!calage.enAttente) {
-      setCalage({ ...calage, enAttente: appliquer(inverser(fantome.sim), point), message: null });
-      return;
-    }
-    const paires: [PdfPoint, PdfPoint][] = [...calage.paires, [calage.enAttente, point]];
-    if (paires.length < 2) {
-      setCalage({ ...calage, paires, enAttente: null });
-      return;
-    }
-    void enregistrerCalage(calage.sens, paires);
+  // Un clic du calage : point de base, puis rotation, comme la commande Aligner d'AutoCAD (D201).
+  const cliquerCalage = (point: PdfPoint, libre: boolean) => {
+    if (!calage || !sheet) return;
+    const voisin = voisins[calage.sens];
+    const declaree =
+      voisin?.scale_denominator && sheet.scale_denominator ? voisin.scale_denominator / sheet.scale_denominator : null;
+    const echelle = declaree ?? Math.hypot(calage.sim.a, calage.sim.b);
+    setCalage(cliquerAlignement(calage, point, echelle, libre));
   };
 
   const studyQuery = useQuery({
@@ -745,10 +733,10 @@ export function WorkspacePage() {
               tool={editionState.draft ? "edition" : calage ? "calage" : tool}
               points={points}
               segments={editionState.draft ? [] : sheetSegments(sheet, tool, points)}
-              onAddPoint={(point) => {
+              onAddPoint={(point, event) => {
                 if (editionState.handlers.onAddPoint(point)) return;
                 if (calage) {
-                  cliquerCalage(point);
+                  cliquerCalage(point, event.altKey);
                   return;
                 }
                 setPoints((current) => (current.length >= 2 ? [point] : [...current, point]));
@@ -991,7 +979,11 @@ export function WorkspacePage() {
                   ))}
                   {calage && (
                     <PointsDeCalage
-                      calage={calage}
+                      calage={{
+                        sens: calage.sens,
+                        paires: [calage.base, calage.second].filter((paire): paire is [PdfPoint, PdfPoint] => paire !== null),
+                        enAttente: calage.enAttente,
+                      }}
                       sim={fantomesAffiches.find((item) => item.sens === calage.sens)?.sim ?? null}
                       toScreen={toScreen}
                     />
@@ -1038,21 +1030,23 @@ export function WorkspacePage() {
             </div>
           )}
           {menu && <PlanMenu x={menu.x} y={menu.y} actions={menu.actions} onClose={() => setMenu(null)} />}
-          {/* Calage des niveaux (S2, D173) : dit si le calque tombe juste, et guide les quatre clics. */}
+          {/* Calage des niveaux (S2, D173, D201) : dit si le calque tombe juste, et guide point de base puis rotation. */}
           {(fantomesAffiches.length > 0 || calage) && (
             <div className="th-calage" role="status">
               {calage ? (
                 <>
                   <GuideCalage
+                    al={calage}
                     voisin={voisins[calage.sens] ? sheetTitle(voisins[calage.sens]!) : "niveau voisin"}
                     plan={sheet ? sheetTitle(sheet) : "plan actif"}
                     couleur={calage.sens === "inferieur" ? "bleu" : "orange"}
-                    clics={calage.paires.length * 2 + (calage.enAttente ? 1 : 0)}
-                    busy={calage.busy}
+                    onEnregistrer={() => void enregistrerCalage(calage)}
+                    onAjuster={() => setCalage(ajusterLongueur(calage))}
+                    onRefaire={() => setCalage(refaireEtape(calage))}
                   />
                   {calage.message && <span className="th-calage__message">{calage.message}</span>}
                   <button type="button" className="th-link" onClick={() => setCalage(null)} title="Raccourci : Échap">
-                    {calage.busy || calage.paires.length || calage.enAttente ? "Annuler" : "Fermer"}
+                    {calage.etape === "enregistre" || (calage.etape === "base" && !calage.enAttente) ? "Fermer" : "Annuler"}
                   </button>
                 </>
               ) : (
@@ -1062,7 +1056,7 @@ export function WorkspacePage() {
                     <button
                       type="button"
                       className="th-link"
-                      onClick={() => setCalage({ sens: fantome.sens, paires: [], enAttente: null, message: null, busy: false })}
+                      onClick={() => setCalage(debuterAlignement(fantome.sens, fantome.sim))}
                     >
                       {fantome.calee ? "Recaler" : "Caler ce niveau"}
                     </button>

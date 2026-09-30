@@ -1136,6 +1136,17 @@ circle.th-seg--measure {
   opacity: 0.6;
 }
 
+.th-calage__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.th-calage__actions:empty {
+  display: none;
+}
+
 /* Les points cliqués : croix de couleur sur le calque, croix noire sur le plan, reliées d'un trait. Le plan
    est toujours blanc : des couleurs fixes, pas les jetons du thème. */
 .th-calage-points line,
