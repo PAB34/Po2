@@ -3284,3 +3284,40 @@ circle.th-seg--measure {
   box-shadow: var(--po2-shadow-card);
   font-size: 0.88rem;
 }
+/* Fenêtre « Coupes et élévations » : choix de la vue (D214). */
+.th-fenetre-coupe__choix-vue {
+  max-width: 14rem;
+  font-weight: 700;
+}
+
+/* « Affecter aussi à » une menuiserie (D217). */
+.th-affecter {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+}
+
+.th-affecter__liste {
+  display: grid;
+  gap: 0.25rem;
+  max-height: 16rem;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--po2-color-line);
+  border-radius: var(--po2-radius-sm);
+}
+
+.th-affecter__liste label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.th-affecter__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.3rem;
+}

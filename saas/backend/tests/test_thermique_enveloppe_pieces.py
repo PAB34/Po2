@@ -49,6 +49,32 @@ def test_paroi_coupee_au_droit_du_refend_et_ponts_partages():
     assert math.isclose(b["facade_m"], b["liaison_plancher_m"]) and b["facade_m"] > 1.2
 
 
+def test_une_baie_affectee_aussi_a_une_autre_piece_s_y_partage_a_parts_egales():
+    """D217 : « Affecter aussi à » — la baie de Bureau B éclaire aussi Bureau A, comptée une seule fois."""
+    from app.services import thermique_elements as elements
+
+    analyse = _analyse()
+    manifeste = _manifeste(analyse)
+    t = manifeste["troncons"][1]
+    baie = _element(t, t["fin_m"] - 1.2, t["fin_m"], "menuiserie", composant="M1")
+    contenu = {"enveloppe": {"releve_brut": {"elements": [baie]}}}
+    elements.corriger(contenu, elements.reference(baie), {"pieces_en_plus": [" Bureau A ", "Bureau A"]})
+    assert baie["pieces_en_plus"] == ["Bureau A"]
+
+    brut = {"catalogue": [], "observations": [], "elements": [_element(t, t["debut_m"], t["fin_m"] - 1.2), baie]}
+    synthese = {f["piece"]: f for f in pieces.synthese_pieces(pieces.decouper_par_piece(brut, manifeste, analyse), manifeste)}
+    a, b = synthese["Bureau A"]["menuiseries"][0], synthese["Bureau B"]["menuiseries"][0]
+    assert math.isclose(a["lineaire_m"] + b["lineaire_m"], 1.2, abs_tol=0.02)
+    assert math.isclose(a["lineaire_m"], b["lineaire_m"], abs_tol=0.01)
+    assert b["largeurs_cm"] == [120] and a["largeurs_cm"] == [] and a["partagee"]
+
+    paroi = _element(t, t["debut_m"], 4.0)
+    import pytest
+
+    with pytest.raises(Exception, match="Seule une menuiserie"):
+        elements.corriger({"enveloppe": {"releve_brut": {"elements": [paroi]}}}, elements.reference(paroi), {"pieces_en_plus": ["Bureau A"]})
+
+
 def test_une_baie_a_cheval_sur_deux_pieces_est_coupee_et_recalee_sur_la_cloison():
     analyse = _analyse()
     manifeste = _manifeste(analyse)

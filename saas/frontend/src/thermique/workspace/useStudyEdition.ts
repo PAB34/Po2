@@ -304,10 +304,14 @@ export function useStudyEdition({
     [busy, draft, natureBlockedReason, pendingOperations.length, queryClient, sheetId, study, token, versions],
   );
 
-  /** Hauteur sous plafond saisie (D178), ou retirée (`null`) au profit de celle des coupes. */
+  /** Hauteur sous plafond saisie (D178), ou retirée (`null`) au profit de celle des coupes. Plusieurs locaux
+   * d'un coup (D214) : « Appliquer aux locaux sans hauteur » se fait en un seul enregistrement. */
   const changeHauteur = useCallback(
-    async (roomId: string, hauteur: number | null) => {
-      if (!token || !sheetId || busy) {
+    async (roomIds: string | string[], hauteur: number | null) => {
+      const ids = typeof roomIds === "string" ? [roomIds] : roomIds;
+      // Pas de garde sur `busy` : les poses successives (D215) sont mises en file par l'appelant ; les
+      // boutons de la fiche, eux, sont désactivés pendant un enregistrement.
+      if (!token || !sheetId || ids.length === 0) {
         return;
       }
       if (draft) {
@@ -322,15 +326,21 @@ export function useStudyEdition({
       setMessage(null);
       try {
         const enregistre = await thermiqueApi.saveStudy(token, sheetId, {
-          operations: [changeLocalHauteurOperation(roomId, hauteur)],
-          local_id: roomId,
+          operations: ids.map((id) => changeLocalHauteurOperation(id, hauteur)),
+          local_id: ids.length === 1 ? ids[0] : null,
           motif: "hauteur_local",
           valider: false,
         });
         queryClient.setQueryData<Study>(studyQueryKey(sheetId), enregistre);
         void queryClient.invalidateQueries({ queryKey: hauteursQueryKey(sheetId) });
         setPreview(null);
-        setMessage(hauteur === null ? "Hauteur des coupes rétablie." : "Hauteur enregistrée.");
+        setMessage(
+          hauteur === null
+            ? "Hauteur des coupes rétablie."
+            : ids.length > 1
+              ? `Hauteur enregistrée pour ${ids.length} locaux.`
+              : "Hauteur enregistrée.",
+        );
         void versions.refetch();
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "L'enregistrement de la hauteur a échoué.");
@@ -338,7 +348,7 @@ export function useStudyEdition({
         setBusy(false);
       }
     },
-    [busy, draft, pendingOperations.length, queryClient, sheetId, token, versions],
+    [draft, pendingOperations.length, queryClient, sheetId, token, versions],
   );
 
   const selectedShownRoom = selectedRoom

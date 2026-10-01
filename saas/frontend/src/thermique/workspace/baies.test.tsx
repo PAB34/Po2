@@ -82,13 +82,14 @@ describe("baies et hauteur des menuiseries (S5e, D193 à D200)", () => {
     expect(provenanceBaie(menuiseries.composants[1].baies[1])).toBe("à lire sur une élévation");
   });
 
-  it("la fiche d'une menuiserie montre sa baie et propose d'ouvrir les façades", () => {
-    const html = renderToStaticMarkup(
-      <BaieDeLaMenuiserie baie={menuiseries.composants[1].baies[0]} facades={[{ id: 3, nom: "FACADE EST" }]} onVoirFacade={() => undefined} />,
-    );
+  it("la fiche d'une menuiserie montre sa baie et propose de la mesurer (D214)", () => {
+    const html = renderToStaticMarkup(<BaieDeLaMenuiserie baie={menuiseries.composants[1].baies[0]} onMesurer={() => undefined} />);
     expect(html).toContain("271 cm");
     expect(html).toContain("2,15 m");
-    expect(html).toContain("Voir la façade FACADE EST");
+    expect(html).toContain("Mesurer de nouveau (coupes et élévations)");
+    expect(renderToStaticMarkup(<BaieDeLaMenuiserie baie={menuiseries.composants[1].baies[1]} onMesurer={() => undefined} />)).toContain(
+      "Mesurer sa hauteur",
+    );
     const morceau = renderToStaticMarkup(<BaieDeLaMenuiserie baie={baie({ largeur_cm: 8, morceau_a_verifier: true })} />);
     expect(morceau).toContain("Morceau de 8 cm");
   });

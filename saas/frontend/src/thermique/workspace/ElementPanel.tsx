@@ -175,8 +175,7 @@ function Detail({
   onMotif,
   onOperation,
   baie = null,
-  facades = [],
-  onVoirFacade,
+  onMesurerBaie,
 }: {
   element: StudyReleveElement;
   content: StudyContent;
@@ -186,8 +185,7 @@ function Detail({
   onMotif: (valeur: string) => void;
   onOperation: (operation: StudyOperation) => void;
   baie?: Baie | null;
-  facades?: { id: number; nom: string }[];
-  onVoirFacade?: (vueId: number) => void;
+  onMesurerBaie?: () => void;
 }) {
   return (
     <>
@@ -217,7 +215,18 @@ function Detail({
           </ul>
         )}
 
-        {element.type === "menuiserie" && baie && <BaieDeLaMenuiserie baie={baie} facades={facades} onVoirFacade={onVoirFacade} />}
+        {element.type === "menuiserie" && baie && <BaieDeLaMenuiserie baie={baie} onMesurer={onMesurerBaie} />}
+        {element.type === "menuiserie" && !element.exclu && (
+          <AffecterAussiA
+            element={element}
+            pieces={content.locaux.map((local) => local.nom)}
+            piece={room?.nom ?? null}
+            busy={busy}
+            onAffecter={(noms) =>
+              onOperation({ type: "element_corriger", element: refDeElement(element), changes: { pieces_en_plus: noms } })
+            }
+          />
+        )}
 
         {element.exclu ? (
           <>
@@ -278,15 +287,83 @@ function Detail({
   );
 }
 
-/** La baie d'une menuiserie (S5e, D199) : largeur réunie, hauteur et sa provenance, façades à ouvrir. */
+/** « Affecter aussi à… » (D217) : la menuiserie se partage, à parts égales, avec les pièces cochées. */
+export function AffecterAussiA({
+  element,
+  pieces,
+  piece,
+  busy,
+  onAffecter,
+}: {
+  element: StudyReleveElement;
+  /** Noms des pièces du niveau. */
+  pieces: string[];
+  /** La pièce à laquelle le plan rattache déjà la menuiserie. */
+  piece: string | null;
+  busy: boolean;
+  onAffecter: (noms: string[]) => void;
+}) {
+  const actuelles = element.pieces_en_plus ?? [];
+  const [ouvert, setOuvert] = useState(false);
+  const [cochees, setCochees] = useState<string[]>(actuelles);
+  useEffect(() => setCochees(element.pieces_en_plus ?? []), [element.pieces_en_plus]);
+  const autres = pieces.filter((nom) => nom !== piece);
+  const parts = 1 + actuelles.length;
+  return (
+    <div className="th-affecter">
+      {actuelles.length > 0 && (
+        <p className="th-muted">
+          Partagée avec {actuelles.join(", ")} : 1/{parts} de la baie à chaque pièce.
+        </p>
+      )}
+      {!ouvert ? (
+        <button type="button" className="po2-button po2-button--ghost" disabled={busy} onClick={() => setOuvert(true)}>
+          Affecter aussi à…
+        </button>
+      ) : (
+        <fieldset className="th-affecter__liste">
+          <legend>Pièces qui partagent cette menuiserie{piece ? ` avec « ${piece} »` : ""}</legend>
+          {autres.map((nom) => (
+            <label key={nom}>
+              <input
+                type="checkbox"
+                checked={cochees.includes(nom)}
+                onChange={() => setCochees((liste) => (liste.includes(nom) ? liste.filter((n) => n !== nom) : [...liste, nom]))}
+              />
+              {nom}
+            </label>
+          ))}
+          <div className="th-affecter__actions">
+            <button
+              type="button"
+              className="po2-button po2-button--primary"
+              disabled={busy}
+              onClick={() => {
+                onAffecter(cochees);
+                setOuvert(false);
+              }}
+            >
+              Enregistrer l'affectation
+            </button>
+            <button type="button" className="th-link" onClick={() => setOuvert(false)}>
+              Annuler
+            </button>
+          </div>
+          <small className="th-muted">La baie est répartie à parts égales entre ses pièces : elle n'est jamais comptée deux fois.</small>
+        </fieldset>
+      )}
+    </div>
+  );
+}
+
+/** La baie d'une menuiserie (S5e, D199) : largeur réunie, hauteur et sa provenance, mesure à faire (D214). */
 export function BaieDeLaMenuiserie({
   baie,
-  facades = [],
-  onVoirFacade,
+  onMesurer,
 }: {
   baie: Baie;
-  facades?: { id: number; nom: string }[];
-  onVoirFacade?: (vueId: number) => void;
+  /** Ouvre « Coupes et élévations », prête à mesurer une menuiserie. */
+  onMesurer?: () => void;
 }) {
   return (
     <div className="th-baie">
@@ -302,14 +379,10 @@ export function BaieDeLaMenuiserie({
           relevée. Corrigez ses bornes ou écartez-le.
         </p>
       )}
-      {onVoirFacade && facades.length > 0 && !baie.mur_rideau && (
-        <div className="th-hauteur__coupes">
-          {facades.map((facade) => (
-            <button key={facade.id} type="button" className="po2-button po2-button--ghost" onClick={() => onVoirFacade(facade.id)}>
-              Voir la façade {facade.nom}
-            </button>
-          ))}
-        </div>
+      {onMesurer && !baie.mur_rideau && (
+        <button type="button" className="po2-button po2-button--ghost" onClick={onMesurer}>
+          {baie.hauteur_m === null ? "Mesurer sa hauteur" : "Mesurer de nouveau"} (coupes et élévations)
+        </button>
       )}
     </div>
   );
@@ -332,8 +405,7 @@ export function ElementPanel({
   parois = false,
   menuiseries,
   sheetId = null,
-  facades = [],
-  onVoirFacade,
+  onMesurerBaie,
 }: {
   content: StudyContent;
   room: StudyRoom | null;
@@ -347,8 +419,8 @@ export function ElementPanel({
   /** Baies du projet et façades lues (S5e) : hauteur de la menuiserie désignée. */
   menuiseries?: MenuiseriesDuProjet;
   sheetId?: number | null;
-  facades?: { id: number; nom: string }[];
-  onVoirFacade?: (vueId: number) => void;
+  /** Ouvre « Coupes et élévations » prête à mesurer la menuiserie (D214). */
+  onMesurerBaie?: () => void;
 }) {
   const [motif, setMotif] = useState("");
   const liste = elementsDuLocal(content, room).filter((item) => !parois || !estPont(item));
@@ -379,8 +451,7 @@ export function ElementPanel({
           onMotif={setMotif}
           onOperation={onOperation}
           baie={baieDeElement(menuiseries, sheetId, element)}
-          facades={facades}
-          onVoirFacade={onVoirFacade}
+          onMesurerBaie={onMesurerBaie}
         />
         {message && <p className="th-alert">{message}</p>}
       </section>

@@ -483,6 +483,7 @@ export function HauteurLocal({
   onHauteur,
   coupes = [],
   onVoirCoupe,
+  onMesurerHauteur,
 }: {
   hauteur?: LocalHauteur;
   /** Hauteur déjà saisie dans l'étude : elle fait foi même si les coupes n'ont pas encore été lues. */
@@ -492,6 +493,8 @@ export function HauteurLocal({
   /** Coupes situées sur ce niveau, pour les ouvrir et y confirmer la hauteur (D183, D191). */
   coupes?: { vue_id: number; vue: string }[];
   onVoirCoupe?: (vueId: number) => void;
+  /** Ouvre « Coupes et élévations » prête à mesurer ; la hauteur va d'abord à ce local (D214, D215). */
+  onMesurerHauteur?: () => void;
 }) {
   // Les coupes qui traversent ce local d'abord ; à défaut, toutes celles du niveau.
   const lues = new Set((hauteur?.lectures ?? []).map((lecture) => lecture.vue));
@@ -544,6 +547,16 @@ export function HauteurLocal({
         </div>
       )}
       {erreur && <small className="th-alert th-alert--warn">{erreur}</small>}
+      {onMesurerHauteur && (
+        <button
+          type="button"
+          className={`po2-button ${valeur === null ? "po2-button--primary" : "po2-button--ghost"}`}
+          disabled={busy}
+          onClick={onMesurerHauteur}
+        >
+          Mesurer la hauteur (coupes et élévations)
+        </button>
+      )}
       {onVoirCoupe && proposees.length > 0 && (
         <div className="th-hauteur__coupes">
           {proposees.map((coupe) => (
@@ -572,6 +585,7 @@ export function StudyRoomPanel({
   hauteur,
   coupes,
   onVoirCoupe,
+  onMesurerHauteur,
 }: {
   room: StudyRoom | null;
   state?: Study["local_states"][string];
@@ -584,6 +598,7 @@ export function StudyRoomPanel({
   hauteur?: LocalHauteur;
   coupes?: { vue_id: number; vue: string }[];
   onVoirCoupe?: (vueId: number) => void;
+  onMesurerHauteur?: () => void;
 }) {
   if (!room) {
     return <p className="th-muted">Sélectionnez un local sur le plan ou dans la liste pour ouvrir sa fiche.</p>;
@@ -623,6 +638,7 @@ export function StudyRoomPanel({
             onHauteur={edition && !edition.draft ? edition.onHauteur : undefined}
             coupes={coupes}
             onVoirCoupe={onVoirCoupe}
+            onMesurerHauteur={onMesurerHauteur}
           />
         )}
         {/* Le linéaire déperditif est ce qu'un recadrage fait varier sans le dire : il est annoncé ici,

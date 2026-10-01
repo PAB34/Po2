@@ -152,6 +152,8 @@ export type StudyReleveElement = {
   ajoute?: boolean;
   /** Angle saisi par le thermicien ; sans lui, c'est la mesure du tracé qui vaut (D160). */
   angle_deg?: number;
+  /** Autres pièces qui partagent cette menuiserie, à parts égales (D217). */
+  pieces_en_plus?: string[];
 };
 /** Un pont type du tableau C.2 de la NF EN ISO 14683 (D158). */
 export type PontType = {
@@ -364,6 +366,8 @@ export type StudyElementChanges = Partial<{
   nu_interieur_cm: number;
   nu_exterieur_fin_cm: number;
   nu_interieur_fin_cm: number;
+  /** Menuiserie partagée avec d'autres pièces (D217). */
+  pieces_en_plus: string[];
 }>;
 export type StudyElementScope = "cet_element" | "partout";
 export type StudyOperation =

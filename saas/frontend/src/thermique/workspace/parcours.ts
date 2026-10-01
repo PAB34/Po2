@@ -1,4 +1,4 @@
-import type { Sheet, Study, StudyContent, StudyReleveElement, VueCoupe } from "../api";
+import type { HauteursDuPlan, Sheet, Study, StudyContent, StudyReleveElement, StudyRoom, VueCoupe } from "../api";
 import { estPont } from "./elements";
 import type { MetricsShow } from "./StudyMetrics";
 import { validatedRoomCount } from "./study";
@@ -115,9 +115,7 @@ function parcoursDesVues(sheet: Sheet, vues: VueCoupe[]): Etape[] {
         ? "après la lecture"
         : confirmees
           ? `${pluriel(confirmees, facade ? "menuiserie mesurée" : "étage confirmé")}`
-          : facade
-            ? "depuis le plan : fiche d'une menuiserie → « Voir la façade »"
-            : "depuis le plan : fiche d'un local → « Voir la coupe »",
+          : "depuis le plan d'un niveau : « Coupes et élévations »",
       etat: !lues.length ? "attente" : confirmees ? "fait" : "en_cours",
       panneau: "planche",
       calques: null,
@@ -125,7 +123,27 @@ function parcoursDesVues(sheet: Sheet, vues: VueCoupe[]): Etape[] {
   ];
 }
 
-export function parcours(sheet: Sheet | null, study: Study | undefined, vues: VueCoupe[] = []): Etape[] {
+/** Un local qui doit avoir une hauteur pour être validé (D213) : tout sauf un espace extérieur. */
+export function demandeUneHauteur(room: StudyRoom): boolean {
+  return room.nature !== "exterieur";
+}
+
+/** La hauteur connue d'un local : lue dans les coupes, mesurée ou saisie. */
+export function hauteurConnue(room: StudyRoom, hauteurs?: HauteursDuPlan): number | null {
+  return hauteurs?.locaux[room.id]?.hauteur_m ?? room.hauteur_m ?? null;
+}
+
+/** Les locaux du niveau à qui il manque une hauteur (D213, D215). */
+export function locauxSansHauteur(content: StudyContent, hauteurs?: HauteursDuPlan): StudyRoom[] {
+  return content.locaux.filter((room) => demandeUneHauteur(room) && hauteurConnue(room, hauteurs) === null);
+}
+
+export function parcours(
+  sheet: Sheet | null,
+  study: Study | undefined,
+  vues: VueCoupe[] = [],
+  hauteurs?: HauteursDuPlan,
+): Etape[] {
   if (sheet && (sheet.nature === "coupe" || sheet.nature === "facade")) {
     return parcoursDesVues(sheet, vues.filter((vue) => vue.sheet_id === sheet.id));
   }
@@ -162,15 +180,15 @@ export function parcours(sheet: Sheet | null, study: Study | undefined, vues: Vu
   if (!content) {
     return [
       ...etapes,
-      { id: "locaux", titre: "Locaux", reste: "après l'analyse", etat: "attente", panneau: "fiche", calques: null },
+      { id: "locaux", titre: "Locaux et hauteur", reste: "après l'analyse", etat: "attente", panneau: "fiche", calques: null },
       { id: "enveloppe", titre: "Parois et menuiseries", reste: "après l'analyse", etat: "attente", panneau: "fiche", calques: null },
       { id: "ponts", titre: "Ponts thermiques", reste: "après l'analyse", etat: "attente", panneau: "fiche", calques: null },
-      { id: "hauteurs", titre: "Hauteurs (coupes)", reste: "à venir", etat: "attente", panneau: "fiche", calques: null },
     ];
   }
 
   const locaux = content.locaux.length;
   const valides = study ? validatedRoomCount(study) : 0;
+  const sansHauteur = locauxSansHauteur(content, hauteurs).length;
   const parois = avancement(paroisDuNiveau(content));
   // Les ponts se jugent un par un, sans exception : voir `avancement`.
   const ponts = avancement(pontsDuNiveau(content), true);
@@ -178,9 +196,11 @@ export function parcours(sheet: Sheet | null, study: Study | undefined, vues: Vu
   etapes.push(
     {
       id: "locaux",
-      titre: "Locaux",
-      reste: valides >= locaux ? `${locaux} validés` : `${valides} sur ${locaux} validés`,
-      etat: valides >= locaux ? "fait" : "en_cours",
+      titre: "Locaux et hauteur",
+      reste:
+        (valides >= locaux ? `${locaux} validés` : `${valides} sur ${locaux} validés`) +
+        (sansHauteur > 0 ? ` · ${pluriel(sansHauteur, "hauteur")} à mesurer` : ""),
+      etat: valides >= locaux && sansHauteur === 0 ? "fait" : "en_cours",
       panneau: "fiche",
       // Les contours seuls : à cette étape on juge des pièces, pas de la maçonnerie.
       calques: TOUT_ETEINT,
@@ -207,14 +227,6 @@ export function parcours(sheet: Sheet | null, study: Study | undefined, vues: Vu
       panneau: "fiche",
       // Les ponts seuls : c'est l'étape où l'on veut les distinguer un à un (Q4, Q6).
       calques: { metres: false, ponts: true, elements: false, toutesCotes: false },
-    },
-    {
-      id: "hauteurs",
-      titre: "Hauteurs (coupes)",
-      reste: "à venir",
-      etat: "attente",
-      panneau: "fiche",
-      calques: null,
     },
   );
   return etapes;
@@ -262,5 +274,9 @@ export function vueDeLEtape(etape: EtapeId): VueEtape {
  * on reste sur les ponts, dernière étape réellement travaillable.
  */
 export function etapeCourante(etapes: Etape[]): EtapeId {
-  return (etapes.find((etape) => etape.etat === "en_cours") ?? etapes[etapes.length - 2]).id;
+  return (
+    etapes.find((etape) => etape.etat === "en_cours") ??
+    etapes.find((etape) => etape.id === "ponts") ??
+    etapes[etapes.length - 2]
+  ).id;
 }

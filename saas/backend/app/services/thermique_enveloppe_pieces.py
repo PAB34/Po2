@@ -349,6 +349,23 @@ def synthese_pieces(brut: dict[str, Any], manifeste: dict[str, Any]) -> list[dic
             continue
         fiche = fiche_de(element["piece"])
         longueur = longueur_interieure(element, troncon, px_par_m)
+        if genre == "menuiserie" and element.get("pieces_en_plus"):
+            # D217 : baie partagée à parts égales avec les pièces cochées, jamais comptée deux fois.
+            parts = [element["piece"]] + [nom for nom in element["pieces_en_plus"] if nom != element["piece"]]
+            cle_longueur = "sur_non_chauffe_m" if troncon.get("ligne") == "face_interieure" else "facade_m"
+            cle = composant or element.get("menuiserie_type") or "menuiserie"
+            for rang, nom in enumerate(parts):
+                part = fiche_de(nom)
+                ligne = part["menuiseries"].setdefault(cle, {"composant": composant, "type": element.get("menuiserie_type", ""),
+                                                             "largeurs_cm": [], "lineaire_m": 0.0})
+                if cle_longueur == "sur_non_chauffe_m":
+                    ligne["sur_non_chauffe"] = True
+                if rang == 0:
+                    ligne["largeurs_cm"].append(round(longueur * 100))
+                ligne["lineaire_m"] += longueur / len(parts)
+                ligne["partagee"] = True
+                part[cle_longueur] += longueur / len(parts)
+            continue
         # D46 : paroi ou baie sur local non chauffé ou vide, lue depuis la face intérieure : hors façade
         cle_longueur = "sur_non_chauffe_m" if troncon.get("ligne") == "face_interieure" else "facade_m"
         if genre in ("paroi", "menuiserie", "poteau") and cle_longueur == "sur_non_chauffe_m":

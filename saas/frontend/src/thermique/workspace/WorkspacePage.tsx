@@ -17,14 +17,12 @@ import { PlanMenu, type PlanAction } from "./PlanMenu";
 import { METRICS_DEFAUT, StudyMetrics, type MetricsShow } from "./StudyMetrics";
 import { StudyCoherenceReport, StudyCoverageBanner, StudyOverlay, StudyRoomCreationPanel, StudyRoomList, StudyRoomPanel } from "./StudyPanel";
 import { ElementPanel } from "./ElementPanel";
-import { FenetreCoupe } from "./FenetreCoupe";
+import { FenetreCoupe, type OutilDeMesure } from "./FenetreCoupe";
 import { menuiseriesQueryKey } from "./baies";
-import { traitsDeFacade } from "./facades";
-import { traitAt, TraitsDeCoupe, traitsCliquables } from "./TraitsDeCoupe";
 import { PontsPanel } from "./PontsPanel";
 import { coteAt, empreinteCote, milieuCote, rangVise, type CoteVisee } from "./cotes";
 import { elementDuPont, paroisATrancher, pontAt, pontDeElement, trouverElement, viserSurLePlan } from "./elements";
-import { etapeCourante, parcours, vueDeLEtape, type EtapeId } from "./parcours";
+import { demandeUneHauteur, etapeCourante, hauteurConnue, locauxSansHauteur, parcours, vueDeLEtape, type EtapeId } from "./parcours";
 import { TYPES_PONT_REATTRIBUABLES } from "./pontsTypes";
 import {
   cliquer as cliquerAlignement,
@@ -36,7 +34,6 @@ import {
 } from "./alignement";
 import { GuideCalage } from "./GuideCalage";
 import { CadresDesVues, ListeDesVues, cadreDeDeuxCoins, type CadreEnCours } from "./CadresDesVues";
-import { PlacerCoupes, sensDuTrait, type TraitEnCours } from "./PlacerCoupes";
 import { NiveauFantome, PointsDeCalage } from "./NiveauFantome";
 import { appliquer, calageAEnregistrer, correspondance, inverser, niveauxVoisins } from "./superposition";
 import { useStudyEdition } from "./useStudyEdition";
@@ -93,8 +90,6 @@ const PRISE_ELEMENT_PX = 6;
 const PRISE_ELEMENT_PAROIS_PX = 10;
 // La pastille d'un pont fait 5 px de rayon : on vise un peu plus large pour l'attraper sans peine.
 const PRISE_PONT_PX = 8;
-// Un trait de coupe est dessiné épais : il s'attrape large (D171).
-const PRISE_TRAIT_COUPE_PX = 10;
 // À l'étape des ponts, rien d'autre n'est attrapable : on vise large (D156).
 const PRISE_PONT_ETAPE_PX = 18;
 // Serrage du plan sur le pont en cours, en multiple du cadrage ajusté : de quoi voir le coin et ses
@@ -253,7 +248,6 @@ export function WorkspacePage() {
         setPoints([]);
         setCalage(null);
         setCadreVue(null);
-        setTraitCoupe(null);
         setHauteurAPoser(null);
       }
     };
@@ -366,7 +360,6 @@ export function WorkspacePage() {
     queryFn: () => thermiqueApi.getMenuiseries(token!, projectId),
     enabled: Boolean(token && projectId),
   });
-  const facades = (vues.data ?? []).filter((vue) => vue.nature === "facade").map((vue) => ({ id: vue.id, nom: vue.nom }));
   // Cadres des vues de cette planche (D205) : montrés, choisis, redessinés en deux clics.
   const vuesDeLaPlanche = (vues.data ?? []).filter((vue) => vue.sheet_id === sheet?.id);
   const [vueChoisie, setVueChoisie] = useState<number | null>(null);
@@ -420,29 +413,6 @@ export function WorkspacePage() {
   const [hauteurAPoser, setHauteurAPoser] = useState<{ valeur: number; poses: string[] } | null>(null);
   useEffect(() => setHauteurAPoser(null), [sheetId]);
   const fileHauteurs = useRef<Promise<void>>(Promise.resolve());
-  // Trait d'une coupe tracé à la main sur ce plan (D209).
-  const [traitCoupe, setTraitCoupe] = useState<TraitEnCours | null>(null);
-  const [traitMessage, setTraitMessage] = useState<string | null>(null);
-  useEffect(() => setTraitCoupe(null), [sheetId]);
-  const coupesDuProjet = (vues.data ?? []).filter((vue) => vue.nature === "coupe");
-  const cliquerTraitCoupe = async (point: PdfPoint) => {
-    if (!traitCoupe || !token || !sheet) return;
-    if (traitCoupe.points.length < 2) {
-      setTraitCoupe({ ...traitCoupe, points: [...traitCoupe.points, point] });
-      return;
-    }
-    const [a, b] = traitCoupe.points;
-    const nom = coupesDuProjet.find((vue) => vue.id === traitCoupe.vueId)?.nom ?? "La coupe";
-    setTraitCoupe(null);
-    try {
-      await thermiqueApi.tracerTraitDeCoupe(token, sheet.id, { vue_id: traitCoupe.vueId, points: [a, b], sens: sensDuTrait(a, b, point) });
-      await queryClient.invalidateQueries({ queryKey: ["thermique", "hauteurs"] });
-      setVoirCoupes(true);
-      setTraitMessage(`${nom} est placée : cliquez son trait pour ouvrir la coupe.`);
-    } catch (echec) {
-      setTraitMessage(echec instanceof Error ? echec.message : "Le trait n'a pas été enregistré.");
-    }
-  };
   const supprimerUneVue = async (vue: VueCoupe) => {
     if (!token || !window.confirm(`Supprimer la vue « ${vue.nom} » de cette planche ?`)) return;
     setVuesEtat({ busy: true, message: null });
@@ -455,12 +425,24 @@ export function WorkspacePage() {
       setVuesEtat({ busy: false, message: echec instanceof Error ? echec.message : "La suppression a échoué." });
     }
   };
-  // Case « Voir les coupes » (D171) : les traits, relevés ou déduits, en lignes épaisses cliquables.
-  const [voirCoupes, setVoirCoupes] = useState(false);
-  // Les façades aussi (S5e, D182) : le long de l'enveloppe, du côté que le nom de l'élévation désigne.
-  const traitsFacades = traitsDeFacade(study?.content, sheet?.nord, vues.data ?? []);
-  const traitsAffiches = voirCoupes ? [...traitsCliquables(hauteurs.data), ...traitsFacades] : [];
-  const coupesOuFacades = (hauteurs.data?.coupes.length ?? 0) + traitsFacades.length;
+  // Fenêtre « Coupes et élévations » (D214) : on y choisit la vue, sans trait sur le plan (D216). Elle
+  // garde la dernière vue choisie ; ouverte depuis une fiche, elle est prête à mesurer.
+  const vuesDuProjet = (vues.data ?? []).filter((vue) => vue.nature !== "detail");
+  const [derniereVue, setDerniereVue] = useState<number | null>(null);
+  const [outilArme, setOutilArme] = useState<{ outil: OutilDeMesure; fois: number } | null>(null);
+  const ouvrirLaFenetre = (outil?: OutilDeMesure, vueId?: number) => {
+    const preferee = outil === "menuiserie" ? "facade" : "coupe";
+    const choisie =
+      vueId ??
+      (derniereVue !== null && vuesDuProjet.some((vue) => vue.id === derniereVue) ? derniereVue : null) ??
+      vuesDuProjet.find((vue) => vue.nature === preferee)?.id ??
+      vuesDuProjet[0]?.id ??
+      null;
+    if (choisie === null) return;
+    setCoupeOuverte(choisie);
+    setDerniereVue(choisie);
+    setOutilArme(outil ? { outil, fois: (outilArme?.fois ?? 0) + 1 } : null);
+  };
   const vueOuverte = vues.data?.find((vue) => vue.id === coupeOuverte) ?? null;
   const plancheOuverte = vueOuverte ? sheets.find((s) => s.id === vueOuverte.sheet_id) ?? null : null;
   const selectedLocalId = searchParams.get("local");
@@ -529,7 +511,7 @@ export function WorkspacePage() {
   const selectedRoom = shownStudy?.content.locaux.find((room) => room.id === selectedLocalId) ?? null;
 
   // Le parcours (F2, D106) : il se déduit de l'étude, et c'est lui qui règle le panneau et les calques.
-  const etapes = parcours(sheet ?? null, shownStudy, vues.data ?? []);
+  const etapes = parcours(sheet ?? null, shownStudy, vues.data ?? [], hauteurs.data);
   const demandee = searchParams.get("etape");
   const etape = (etapes.find((item) => item.id === demandee)?.id ?? etapeCourante(etapes)) as EtapeId;
   const etapeActive = etapes.find((item) => item.id === etape) ?? etapes[0];
@@ -569,7 +551,23 @@ export function WorkspacePage() {
       ? "Enregistrez d'abord les corrections d'éléments en attente."
       : editionState.pending > 0
         ? "Enregistrez ou abandonnez d'abord les modifications de locaux en attente."
-        : null;
+        : selectedRoom && demandeUneHauteur(selectedRoom) && hauteurConnue(selectedRoom, hauteurs.data) === null
+          ? "Donnez d'abord sa hauteur sous plafond : « Mesurer la hauteur » dans une coupe, ou saisissez-la."
+          : null;
+  // D215 : la hauteur mesurée va d'abord au local ouvert, puis aux locaux cliqués ou à tous ceux qui n'en ont pas.
+  const enfiler = (ids: string | string[], valeur: number) => {
+    const changer = editionState.changeHauteur;
+    fileHauteurs.current = fileHauteurs.current.then(() => changer(ids, valeur));
+  };
+  const poserHauteur = (valeur: number) => {
+    const premier = etape === "locaux" && selectedRoom && demandeUneHauteur(selectedRoom) ? selectedRoom.id : null;
+    if (premier) enfiler(premier, valeur);
+    setHauteurAPoser({ valeur, poses: premier ? [premier] : [] });
+  };
+  const sansHauteurRestants =
+    hauteurAPoser && shownStudy
+      ? locauxSansHauteur(shownStudy.content, hauteurs.data).filter((local) => !hauteurAPoser.poses.includes(local.id))
+      : [];
   const validerLocal = async () => {
     if (!token || !sheetId || !selectedRoom) return;
     setValidation({ busy: true, message: null });
@@ -822,12 +820,27 @@ export function WorkspacePage() {
               <span>
                 Hauteur <strong>{hauteurAPoser.valeur.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} m</strong> : cliquez
                 les locaux concernés sur le plan
-                {hauteurAPoser.poses.length > 0 &&
-                  ` (${hauteurAPoser.poses
-                    .map((id) => shownStudy?.content.locaux.find((local) => local.id === id)?.nom ?? id)
-                    .join(", ")})`}
+                {hauteurAPoser.poses.length > 4
+                  ? ` (${hauteurAPoser.poses.length} locaux posés)`
+                  : hauteurAPoser.poses.length > 0 &&
+                    ` (${hauteurAPoser.poses
+                      .map((id) => shownStudy?.content.locaux.find((local) => local.id === id)?.nom ?? id)
+                      .join(", ")})`}
                 .
               </span>
+              {sansHauteurRestants.length > 0 && (
+                <button
+                  type="button"
+                  className="po2-button po2-button--ghost"
+                  onClick={() => {
+                    const ids = sansHauteurRestants.map((local) => local.id);
+                    enfiler(ids, hauteurAPoser.valeur);
+                    setHauteurAPoser({ ...hauteurAPoser, poses: [...hauteurAPoser.poses, ...ids] });
+                  }}
+                >
+                  Appliquer aux {sansHauteurRestants.length} locaux sans hauteur
+                </button>
+              )}
               <button type="button" className="po2-button po2-button--primary" onClick={() => setHauteurAPoser(null)}>
                 Terminé
               </button>
@@ -842,17 +855,13 @@ export function WorkspacePage() {
               key={viewKey}
               manifest={raster.data}
               tileTemplate={thermiqueApi.apiUrl(raster.data.tile_url)}
-              tool={editionState.draft ? "edition" : calage || cadreVue || traitCoupe ? "calage" : hauteurAPoser ? "pan" : tool}
-              points={cadreVue?.premier ? [cadreVue.premier] : traitCoupe ? traitCoupe.points : points}
+              tool={editionState.draft ? "edition" : calage || cadreVue ? "calage" : hauteurAPoser ? "pan" : tool}
+              points={cadreVue?.premier ? [cadreVue.premier] : points}
               segments={editionState.draft ? [] : sheetSegments(sheet, tool, points)}
               onAddPoint={(point, event) => {
                 if (editionState.handlers.onAddPoint(point)) return;
                 if (cadreVue) {
                   cliquerCadreVue(point);
-                  return;
-                }
-                if (traitCoupe) {
-                  void cliquerTraitCoupe(point);
                   return;
                 }
                 if (calage) {
@@ -867,17 +876,9 @@ export function WorkspacePage() {
                   const local = shownStudy ? roomAt(shownStudy.content.locaux, point) : null;
                   if (local && !hauteurAPoser.poses.includes(local.id)) {
                     // Les enregistrements se suivent : deux clics rapides ne se marchent pas dessus.
-                    const changer = editionState.changeHauteur;
-                    const valeur = hauteurAPoser.valeur;
-                    fileHauteurs.current = fileHauteurs.current.then(() => changer(local.id, valeur));
+                    enfiler(local.id, hauteurAPoser.valeur);
                     setHauteurAPoser({ ...hauteurAPoser, poses: [...hauteurAPoser.poses, local.id] });
                   }
-                  return;
-                }
-                // Traits de coupe montrés : un clic dessus ouvre la coupe, avant tout autre objet (D171).
-                const trait = traitAt(traitsAffiches, point, PRISE_TRAIT_COUPE_PX / pixelsPerPt);
-                if (trait) {
-                  setCoupeOuverte(trait.vueId);
                   return;
                 }
                 // Dans le local ouvert, un clic sur un élément d'enveloppe l'attrape en priorité : c'est
@@ -1070,35 +1071,16 @@ export function WorkspacePage() {
                       </label>
                     );
                   })}
-                  <label title={
-                    coupesOuFacades > 0
-                      ? "Traits de coupe (relevés ou situés d'après la coupe) et façades lues : un clic ouvre la vue"
-                      : sheet.nord
-                        ? "Aucune coupe ni façade lue pour ce niveau"
-                        : "Aucune coupe lue ; les façades se repèrent une fois le nord posé"
-                  }>
-                    <input
-                      type="checkbox"
-                      disabled={coupesOuFacades === 0}
-                      checked={voirCoupes}
-                      onChange={() => setVoirCoupes((actuel) => !actuel)}
-                    />
-                    Voir les coupes et façades
-                  </label>
-                  {sheet.nature === "plan" && study && coupesDuProjet.length > 0 && (
-                    <PlacerCoupes
-                      coupes={coupesDuProjet}
-                      hauteurs={hauteurs.data}
-                      enCours={traitCoupe}
-                      busy={Boolean(calage || cadreVue || editionState.draft)}
-                      message={traitMessage}
-                      onTracer={(vueId) => {
-                        setTraitMessage(null);
-                        setPoints([]);
-                        setTraitCoupe({ vueId, points: [] });
-                      }}
-                      onAnnuler={() => setTraitCoupe(null)}
-                    />
+                  {sheet.nature === "plan" && (
+                    <button
+                      type="button"
+                      className="po2-button po2-button--ghost th-ouvrir-vues"
+                      disabled={vuesDuProjet.length === 0}
+                      title={vuesDuProjet.length ? "Ouvrir une coupe ou une élévation pour y mesurer" : "Aucune coupe ni élévation lue dans le projet"}
+                      onClick={() => ouvrirLaFenetre(etape === "enveloppe" ? "menuiserie" : etape === "locaux" ? "hauteur" : undefined)}
+                    >
+                      Coupes et élévations
+                    </button>
                   )}
                   {shownStudy &&
                     METRICS_CASES.map((item) => (
@@ -1144,7 +1126,6 @@ export function WorkspacePage() {
                   {vuesDeLaPlanche.length > 0 && (
                     <CadresDesVues vues={vuesDeLaPlanche} toScreen={toScreen} choisie={vueChoisie} enCours={cadreVue} survol={null} />
                   )}
-                  {traitsAffiches.length > 0 && <TraitsDeCoupe traits={traitsAffiches} toScreen={toScreen} />}
                   {shownStudy && (
                     <>
                         <StudyOverlay
@@ -1316,7 +1297,8 @@ export function WorkspacePage() {
                       }
                       hauteur={selectedRoom ? hauteurs.data?.locaux[selectedRoom.id] : undefined}
                       coupes={hauteurs.data?.coupes}
-                      onVoirCoupe={setCoupeOuverte}
+                      onVoirCoupe={(vueId) => ouvrirLaFenetre("hauteur", vueId)}
+                      onMesurerHauteur={vuesDuProjet.length ? () => ouvrirLaFenetre("hauteur") : undefined}
                     />
                   )}
                   {/* Les éléments du local, sous sa fiche et jamais en carte flottante (F4, Q8). À l'étape des
@@ -1333,8 +1315,7 @@ export function WorkspacePage() {
                       onOperation={elementsState.apply}
                       menuiseries={menuiseries.data}
                       sheetId={sheetId}
-                      facades={facades}
-                      onVoirFacade={setCoupeOuverte}
+                      onMesurerBaie={vuesDuProjet.length ? () => ouvrirLaFenetre("menuiserie") : undefined}
                     />
                   )}
                 </>
@@ -1397,15 +1378,19 @@ export function WorkspacePage() {
       </div>
       {token && vueOuverte && plancheOuverte && (
         <FenetreCoupe
-          key={vueOuverte.id}
           token={token}
           vue={vueOuverte}
+          vues={vuesDuProjet}
+          onChoisirVue={(vueId) => {
+            setCoupeOuverte(vueId);
+            setDerniereVue(vueId);
+          }}
           planche={plancheOuverte}
           planSheetId={sheetId}
           menuiseries={menuiseries.data}
-          onPoserHauteur={
-            sheet?.nature === "plan" && study ? (valeur) => setHauteurAPoser({ valeur, poses: [] }) : undefined
-          }
+          outilPrefere={etape === "enveloppe" ? "menuiserie" : etape === "locaux" ? "hauteur" : undefined}
+          outilArme={outilArme}
+          onPoserHauteur={sheet?.nature === "plan" && study ? poserHauteur : undefined}
           onClose={() => setCoupeOuverte(null)}
         />
       )}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { Sheet, Study, StudyContent, StudyReleveElement, VueCoupe } from "../api";
+import type { HauteursDuPlan, Sheet, Study, StudyContent, StudyReleveElement, VueCoupe } from "../api";
 import { avancement, etapeCourante, parcours, paroisDuNiveau, pontsDuNiveau } from "./parcours";
 
 const element = (reste: Partial<StudyReleveElement> = {}): StudyReleveElement => ({
@@ -76,8 +76,8 @@ describe("le parcours du niveau", () => {
       "locaux",
       "enveloppe",
       "ponts",
-      "hauteurs",
     ]);
+    expect(etapes[2].titre).toBe("Locaux et hauteur");
     expect(etapes[1].etat).toBe("en_cours");
     expect(etapes[2].etat).toBe("attente");
     // L'entrée proposée est l'analyse : la planche est prête, le relevé manque.
@@ -141,9 +141,15 @@ describe("le parcours du niveau", () => {
     expect(etapes.every((item) => item.etat !== "attente" || item.id === "hauteurs")).toBe(true);
   });
 
-  it("tout étant fini, on se pose sur les ponts et non sur les hauteurs, qui n'existent pas encore", () => {
-    const etapes = parcours(planche(), etude([element()], ["Bureau"], ["L0"]));
-    expect(etapeCourante(etapes)).toBe("ponts");
+  it("un local sans hauteur garde l'étape des locaux ouverte ; tout étant fini, on se pose sur les ponts (D213)", () => {
+    const study = etude([element()], ["Bureau"], ["L0"]);
+    const sans = parcours(planche(), study);
+    expect(etapeCourante(sans)).toBe("locaux");
+    expect(sans[2].reste).toContain("hauteur à mesurer");
+    const hauteurs = {
+      locaux: Object.fromEntries(study.content.locaux.map((room) => [room.id, { hauteur_m: 2.7 }])),
+    } as unknown as HauteursDuPlan;
+    expect(etapeCourante(parcours(planche(), study, [], hauteurs))).toBe("ponts");
   });
 });
 
@@ -163,7 +169,7 @@ describe("le parcours d'une planche de coupes ou de façades (S5)", () => {
   it("façades lues puis menuiseries mesurées", () => {
     const lue = parcours(planche({ nature: "facade" }), undefined, [vue(), vue({ id: 8, nom: "Détail", nature: "detail" })]);
     expect(lue[1]).toMatchObject({ etat: "fait", reste: "1 façade lue" });
-    expect(lue[2].reste).toContain("Voir la façade");
+    expect(lue[2].reste).toContain("Coupes et élévations");
     const mesuree = parcours(planche({ nature: "facade" }), undefined, [
       vue({ menuiseries: [{ composant: "M4", largeur_cm: null, hauteur_m: 2.15 }] }),
     ]);

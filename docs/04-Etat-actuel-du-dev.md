@@ -29,6 +29,12 @@ do_not_auto_read:
 **229 côtés** (et non plus 222 : les côtés contre les 2 terrasses sont distingués depuis F), **170,12 m
 déperditifs**, 289 formes, 77 liaisons. Tout lot qui ne touche pas au calcul doit les laisser intacts.
 
+**2026-10-01 (suite) — parcours à 5 étapes et fenêtre « Coupes et élévations » ✅ EN PROD** (D213–D217,
+`docs/thermique/coupes-elevations-fenetre-decisions.md`). Étape 3 « Locaux et hauteur » (hauteur obligatoire
+pour valider) ; plus de traits de coupe sur le plan ; la fenêtre choisit la vue et mesure hauteur ou
+menuiserie ; hauteur posée sur le local ouvert, les locaux cliqués ou tous ceux sans hauteur ; menuiserie
+« Affecter aussi à » d'autres pièces (parts égales). **À éprouver par le thermicien sur le R+1.**
+
 **2026-10-01 — coupes et façades : le thermicien d'abord, l'IA ensuite ✅ EN PROD** (D206–D212,
 `docs/thermique/vues-manuelles-decisions.md`). Vue renommable et reclassable ; haut choisi tel que vu à
 l'écran ; fenêtre de vue ouverte à l'endroit ; « Placer les coupes » trace un trait à la main sur le plan ;

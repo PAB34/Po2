@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 
 import { thermiqueApi, type HautDeVue, type MenuiseriesDuProjet, type PdfPoint, type Sheet, type VueCoupe } from "../api";
@@ -94,22 +94,69 @@ type Etat =
   // Hauteur mesurée, montrée avant d'être appliquée (D211) : on la vérifie, puis on choisit où la poser.
   | { etape: "hauteur"; sol: PdfPoint; plafond: PdfPoint; hauteur_m: number };
 
-/** La coupe dans une fenêtre flottante au-dessus du plan (D183) ; deux clics y mesurent la hauteur (D191, D211). */
+/** Ce qui se mesure dans la fenêtre (D214) : une hauteur d'étage ou une menuiserie, sur n'importe quelle vue. */
+export type OutilDeMesure = "hauteur" | "menuiserie";
+
+const CONSIGNES: Record<OutilDeMesure, string> = {
+  hauteur: "Cliquez le sol fini d'une pièce coupée, puis son plafond fini.",
+  menuiserie: "Cliquez un coin d'une menuiserie, puis le coin opposé.",
+};
+
+/** La liste des vues du projet, rangées en coupes et élévations (D214). */
+export function ChoixDeLaVue({ vues, vueId, onChoisir }: { vues: VueCoupe[]; vueId: number; onChoisir: (vueId: number) => void }) {
+  const groupes: { label: string; vues: VueCoupe[] }[] = [
+    { label: "Coupes", vues: vues.filter((v) => v.nature === "coupe") },
+    { label: "Élévations", vues: vues.filter((v) => v.nature === "facade") },
+  ];
+  return (
+    <select
+      className="th-fenetre-coupe__choix-vue"
+      aria-label="Vue affichée"
+      value={vueId}
+      onChange={(event) => onChoisir(Number(event.target.value))}
+    >
+      {groupes
+        .filter((groupe) => groupe.vues.length > 0)
+        .map((groupe) => (
+          <optgroup key={groupe.label} label={groupe.label}>
+            {groupe.vues.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.nom}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+    </select>
+  );
+}
+
+/** La fenêtre « Coupes et élévations » au-dessus du plan (D183, D214) : choisir une vue, y mesurer. */
 export function FenetreCoupe({
   token,
   vue,
+  vues = [],
+  onChoisirVue,
   planche,
   planSheetId,
   menuiseries,
+  outilPrefere,
+  outilArme = null,
   onPoserHauteur,
   onClose,
 }: {
   token: string;
   vue: VueCoupe;
+  /** Toutes les vues du projet, au choix (D214). */
+  vues?: VueCoupe[];
+  onChoisirVue?: (vueId: number) => void;
   planche: Sheet;
   planSheetId: number | null;
   /** Baies du projet, pour proposer le composant de la menuiserie mesurée sur une façade (S5e). */
   menuiseries?: MenuiseriesDuProjet;
+  /** La mesure de l'étape en cours, mise en avant (D214). */
+  outilPrefere?: OutilDeMesure;
+  /** Ouverte depuis une fiche : la mesure démarre aussitôt ; `fois` change à chaque demande. */
+  outilArme?: { outil: OutilDeMesure; fois: number } | null;
   /** Pose la hauteur mesurée sur les locaux que le thermicien cliquera sur le plan (D211). */
   onPoserHauteur?: (hauteur: number) => void;
   onClose: () => void;
@@ -136,6 +183,25 @@ export function FenetreCoupe({
   const glisse = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
   const cadrage = cadrageDeLaVue(vue, planche, rotation);
   const echelle = planche.scale_denominator;
+
+  const demarrer = (outil: OutilDeMesure) => {
+    setEtat(outil === "hauteur" ? { etape: "sol" } : { etape: "coin1" });
+    setMessage(CONSIGNES[outil]);
+  };
+  // Demandée depuis une fiche, la mesure démarre aussitôt (D214).
+  useEffect(() => {
+    if (outilArme) demarrer(outilArme.outil);
+  }, [outilArme?.fois]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Une autre vue choisie : la mesure commencée repart de zéro, avec le même outil.
+  const vuePrecedente = useRef(vue.id);
+  useEffect(() => {
+    if (vuePrecedente.current === vue.id) return;
+    vuePrecedente.current = vue.id;
+    setSurvol(null);
+    if (etat.etape === "sol" || etat.etape === "plafond" || etat.etape === "hauteur") demarrer("hauteur");
+    else if (etat.etape === "coin1" || etat.etape === "coin2" || etat.etape === "choix") demarrer("menuiserie");
+    else setMessage(null);
+  }, [vue.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const redresser = async (cote: HautDeVue) => {
     if (!raster.data || cote === "haut") return;
@@ -233,12 +299,12 @@ export function FenetreCoupe({
   };
 
   return (
-    <div className="th-fenetre-coupe" style={{ left: position.x, top: position.y }} role="dialog" aria-label={`Coupe ${vue.nom}`}>
+    <div className="th-fenetre-coupe" style={{ left: position.x, top: position.y }} role="dialog" aria-label="Coupes et élévations">
       <div
         className="th-fenetre-coupe__titre"
         onPointerDown={(event) => {
-          // Capturer le pointeur sur un bouton (la croix) volerait son clic : la fenêtre ne se fermait pas.
-          if ((event.target as HTMLElement).closest("button")) return;
+          // Capturer le pointeur sur un bouton (la croix) ou la liste volerait son clic.
+          if ((event.target as HTMLElement).closest("button, select")) return;
           glisse.current = { x: event.clientX, y: event.clientY, px: position.x, py: position.y };
           event.currentTarget.setPointerCapture(event.pointerId);
         }}
@@ -247,30 +313,32 @@ export function FenetreCoupe({
           glisse.current = null;
         }}
       >
-        <strong>{vue.nom}</strong>
+        {vues.length > 1 && onChoisirVue ? (
+          <ChoixDeLaVue vues={vues} vueId={vue.id} onChoisir={onChoisirVue} />
+        ) : (
+          <strong>{vue.nom}</strong>
+        )}
         <span className="th-muted"> · {planche.label}</span>
-        <button type="button" className="po2-button po2-button--ghost" onClick={onClose} aria-label="Fermer la coupe">
+        <button type="button" className="po2-button po2-button--ghost" onClick={onClose} aria-label="Fermer la fenêtre">
           ×
         </button>
       </div>
       <div className="th-fenetre-coupe__outils">
-        <button
-          type="button"
-          className="po2-button po2-button--ghost"
-          disabled={busy || !echelle}
-          title={echelle ? undefined : "L'échelle de la planche n'est pas définie."}
-          onClick={() => {
-            if (facade) {
-              setEtat({ etape: "coin1" });
-              setMessage("Cliquez un coin d'une menuiserie, puis le coin opposé.");
-            } else {
-              setEtat({ etape: "sol" });
-              setMessage("Cliquez le sol fini d'une pièce coupée, puis son plafond fini.");
-            }
-          }}
-        >
-          {facade ? "Mesurer une menuiserie" : "Mesurer une hauteur"}
-        </button>
+        {(["hauteur", "menuiserie"] as OutilDeMesure[]).map((outil) => {
+          const prefere = outilPrefere ? outil === outilPrefere : outil === (facade ? "menuiserie" : "hauteur");
+          return (
+            <button
+              key={outil}
+              type="button"
+              className={`po2-button ${prefere ? "po2-button--primary" : "po2-button--ghost"}`}
+              disabled={busy || !echelle}
+              title={echelle ? undefined : "L'échelle de la planche n'est pas définie."}
+              onClick={() => demarrer(outil)}
+            >
+              {outil === "hauteur" ? "Mesurer une hauteur" : "Mesurer une menuiserie"}
+            </button>
+          );
+        })}
         <label className="th-inline" title="Si le dessin s'affiche couché ou à l'envers, dites où se trouve son haut : la vue se redresse.">
           Dessin de travers ? Son haut est
           <select value="haut" disabled={busy || !raster.data} onChange={(event) => void redresser(event.target.value as HautDeVue)}>
