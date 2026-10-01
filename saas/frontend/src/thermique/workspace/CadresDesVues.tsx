@@ -1,5 +1,8 @@
-import type { HautDeVue, PdfPoint, VueCoupe } from "../api";
+import { useState } from "react";
+
+import type { CorrectionDeVue, HautDeVue, PdfPoint, VueCoupe } from "../api";
 import type { ToScreen } from "../components/TileSheetViewer";
+import { coteEcran, cotePage, pageDuCoteEcran } from "./orientation";
 
 // Cadres des vues d'une planche de coupes ou de façades (D205) : l'agent les place mal, le thermicien les
 // voit sur la planche et les redessine en deux clics.
@@ -13,9 +16,7 @@ export function cadreDeDeuxCoins(a: PdfPoint, b: PdfPoint): [number, number, num
 
 /** Le côté de la page vers lequel pointe le haut de la vue. */
 export function hautDeLaVue(haut: [number, number]): HautDeVue {
-  const [x, y] = haut;
-  if (Math.abs(x) > Math.abs(y)) return x > 0 ? "droite" : "gauche";
-  return y < 0 ? "bas" : "haut";
+  return cotePage(haut);
 }
 
 /** Ce qu'on sait de la vue, en clair. */
@@ -67,53 +68,119 @@ export function CadresDesVues({
   );
 }
 
-const HAUTS: { id: HautDeVue; label: string }[] = [
+export const HAUTS: { id: HautDeVue; label: string }[] = [
   { id: "haut", label: "en haut" },
   { id: "droite", label: "à droite" },
   { id: "bas", label: "en bas" },
   { id: "gauche", label: "à gauche" },
 ];
 
+/** Le nom d'une vue, modifiable sur place (D206) : Entrée enregistre, Échap abandonne. */
+function NomDeLaVue({ vue, busy, onChoisir, onRenommer }: {
+  vue: VueCoupe;
+  busy: boolean;
+  onChoisir: () => void;
+  onRenommer: (nom: string) => void;
+}) {
+  const [saisie, setSaisie] = useState<string | null>(null);
+  if (saisie === null) {
+    return (
+      <span className="th-vues__nom">
+        <button type="button" className="th-link" onClick={onChoisir}>
+          <strong>{vue.nom}</strong>
+        </button>
+        <button type="button" className="th-link" disabled={busy} onClick={() => setSaisie(vue.nom)} title="Renommer la vue">
+          Renommer
+        </button>
+      </span>
+    );
+  }
+  const valider = () => {
+    const nom = saisie.trim();
+    setSaisie(null);
+    if (nom && nom !== vue.nom) onRenommer(nom);
+  };
+  return (
+    <input
+      className="th-vues__saisie"
+      aria-label={`Nouveau nom de ${vue.nom}`}
+      autoFocus
+      value={saisie}
+      onChange={(event) => setSaisie(event.target.value)}
+      onBlur={valider}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") valider();
+        if (event.key === "Escape") setSaisie(null);
+      }}
+    />
+  );
+}
+
 export function ListeDesVues({
   vues,
   choisie,
   enCours,
   busy,
+  transform,
   onChoisir,
   onRedessiner,
-  onHaut,
+  onCorriger,
   onSupprimer,
 }: {
   vues: VueCoupe[];
   choisie: number | null;
   enCours: CadreEnCours | null;
   busy: boolean;
+  /** Transformation du raster affiché : le haut se choisit tel qu'on le voit à l'écran (D207). */
+  transform?: number[];
   onChoisir: (vueId: number) => void;
   onRedessiner: (vueId: number) => void;
-  onHaut: (vueId: number, haut: HautDeVue) => void;
+  onCorriger: (vueId: number, correction: CorrectionDeVue) => void;
   onSupprimer: (vue: VueCoupe) => void;
 }) {
   if (!vues.length) return <p className="th-muted">Aucune vue lue sur cette planche.</p>;
   return (
     <>
       <p className="th-muted">
-        Chaque vue est encadrée sur la planche. Si un cadre ne couvre pas toute la vue (bâtiment, cotes de niveau),
-        redessinez-le : la coupe sera relue dans le bon cadre.
+        Vérifiez chaque vue sur la planche : son nom (celui du trait sur le plan), sa nature, son cadre (tout le
+        bâtiment et les cotes de niveau) et le côté où se trouve le haut du dessin, tel que vous le voyez.
       </p>
       <ul className="th-vues">
         {vues.map((vue) => (
           <li key={vue.id} className={vue.id === choisie ? "is-choisie" : undefined}>
-            <button type="button" className="th-link" onClick={() => onChoisir(vue.id)}>
-              <strong>{vue.nom}</strong>
-            </button>
+            <NomDeLaVue
+              vue={vue}
+              busy={busy}
+              onChoisir={() => onChoisir(vue.id)}
+              onRenommer={(nom) => onCorriger(vue.id, { nom })}
+            />
             <span className="th-muted">{etatDeLaVue(vue)}</span>
             <span className="th-vues__actions">
+              <label className="th-inline">
+                Nature
+                <select
+                  value={vue.nature}
+                  disabled={busy || vue.nature === "detail"}
+                  onChange={(event) => onCorriger(vue.id, { nature: event.target.value as "coupe" | "facade" })}
+                >
+                  <option value="coupe">coupe</option>
+                  <option value="facade">façade</option>
+                  {vue.nature === "detail" && <option value="detail">détail</option>}
+                </select>
+              </label>
               <button type="button" className="po2-button po2-button--ghost" disabled={busy} onClick={() => onRedessiner(vue.id)}>
                 {enCours?.vueId === vue.id ? (enCours.premier ? "Cliquez le coin opposé…" : "Cliquez un coin…") : "Redessiner le cadre"}
               </button>
               <label className="th-inline">
-                Haut de la vue
-                <select value={hautDeLaVue(vue.haut)} disabled={busy} onChange={(event) => onHaut(vue.id, event.target.value as HautDeVue)}>
+                Haut du dessin
+                <select
+                  value={transform ? coteEcran(vue.haut, transform) : hautDeLaVue(vue.haut)}
+                  disabled={busy}
+                  onChange={(event) => {
+                    const cote = event.target.value as HautDeVue;
+                    onCorriger(vue.id, { haut: transform ? pageDuCoteEcran(cote, transform) : cote });
+                  }}
+                >
                   {HAUTS.map((h) => (
                     <option key={h.id} value={h.id}>
                       {h.label}

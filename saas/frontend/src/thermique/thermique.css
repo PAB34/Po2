@@ -1,5 +1,26 @@
 /* Outil de métré thermique — s'appuie sur les jetons du design-system Po2. */
 
+/* Mode sombre (D210) : des règles de l'outil citaient des jetons absents du design-system (surface, bordure,
+   ambre). Leur repli clair restait blanc en sombre, sous un texte devenu clair : illisible. Alias déclarés ici,
+   suivis par le thème. */
+:root {
+  --po2-surface: var(--po2-color-paper);
+  --po2-border: var(--po2-color-line);
+  --po2-color-border: var(--po2-color-line);
+  --po2-color-amber: #d98a00;
+}
+
+/* Le bouton principal est blanc sur l'encre : en sombre, l'encre devient claire. Son texte prend le papier. */
+.th-app .po2-button--primary,
+.th-fenetre-coupe .po2-button--primary {
+  color: var(--po2-color-paper);
+}
+
+.th-app .po2-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 body {
   margin: 0;
   background: var(--po2-color-canvas);
@@ -3176,4 +3197,64 @@ circle.th-seg--measure {
 .th-element-retour {
   justify-self: start;
   font-size: 0.86rem;
+}
+
+/* Placer les coupes sur le plan (D209). */
+.th-placer-coupes {
+  position: relative;
+  font-size: 0.85rem;
+}
+
+.th-placer-coupes > summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.th-placer-coupes[open] {
+  flex-basis: 100%;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--po2-color-line);
+  border-radius: var(--po2-radius-sm);
+  background: var(--po2-color-paper);
+}
+
+.th-placer-coupes ul {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.th-placer-coupes li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.th-placer-coupes__consigne {
+  margin: 0.4rem 0 0;
+  padding: 0.35rem 0.5rem;
+  border-radius: var(--po2-radius-sm);
+  background: var(--po2-color-blue-soft);
+}
+
+.th-placer-coupes__etat {
+  color: var(--po2-color-muted);
+}
+
+.th-placer-coupes__etat.is-non_situee {
+  color: var(--po2-color-ink);
+  font-weight: 700;
+}
+
+.th-vues__nom {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.th-vues__saisie {
+  max-width: 12rem;
 }

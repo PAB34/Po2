@@ -229,7 +229,7 @@ export type HauteursDuPlan = {
   coupes: { trait: string; deduit: boolean; vue_id: number; vue: string; vue_sheet_id: number; alertes: string[] }[];
   traits_sans_vue: string[];
   coupes_non_situees?: string[];
-  traits: { nom: string; points: PdfPoint[]; sens: [number, number]; deduit?: boolean; vue_id?: number }[];
+  traits: { nom: string; points: PdfPoint[]; sens: [number, number]; deduit?: boolean; vue_id?: number; manuel?: boolean }[];
 };
 
 /** D'où vient la hauteur d'une baie (S5e, D196, D200). */
@@ -280,6 +280,9 @@ export type VueCoupe = {
 };
 
 export type HautDeVue = "haut" | "bas" | "gauche" | "droite";
+
+/** Ce que le thermicien corrige d'une vue (D205, D206) ; le haut est exprimé dans la page PDF. */
+export type CorrectionDeVue = { cadre?: number[]; haut?: HautDeVue; nom?: string; nature?: "coupe" | "facade" };
 
 export type StudyRoom = {
   id: string;
@@ -535,10 +538,13 @@ export const thermiqueApi = {
   retirerHauteurs: (token: string, vueId: number) =>
     request<VueCoupe>(token, `/thermique/vues/${vueId}/hauteur`, { method: "DELETE" }),
   // Cadre redessiné ou haut donné d'une vue mal située par l'agent ; une coupe repart en relecture (D205).
-  corrigerVue: (token: string, vueId: number, correction: { cadre?: number[]; haut?: HautDeVue }) =>
+  corrigerVue: (token: string, vueId: number, correction: CorrectionDeVue) =>
     request<VueCoupe>(token, `/thermique/vues/${vueId}`, { method: "PATCH", body: JSON.stringify(correction) }),
   supprimerVue: (token: string, vueId: number) =>
     request<void>(token, `/thermique/vues/${vueId}`, { method: "DELETE" }),
+  // Trait d'une coupe tracé à la main sur le plan (D209).
+  tracerTraitDeCoupe: (token: string, planId: number, trait: { vue_id: number; points: PdfPoint[]; sens: [number, number] }) =>
+    request<unknown>(token, `/thermique/sheets/${planId}/traits-coupe`, { method: "POST", body: JSON.stringify(trait) }),
   // Lecture d'une planche de coupes ou de façades produite sur le poste (`lecture.json`, D204).
   importerLecture: (token: string, sheetId: number, lecture: unknown) =>
     request<{ vues?: number; traits?: number }>(token, `/thermique/sheets/${sheetId}/lecture/importer`, {

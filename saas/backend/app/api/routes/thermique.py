@@ -44,6 +44,7 @@ from app.schemas.thermique import (
     HauteursDuPlan,
     LectureCoupes,
     VueCorrigee,
+    TraitTrace,
     MenuiserieConfirmee,
     MiseEnFileResult,
     CalageRequest,
@@ -1049,16 +1050,35 @@ def corriger_une_vue(
     db: Session = Depends(get_db),
     user: User = Depends(get_authenticated_user),
 ) -> dict:
-    """Cadre redessiné ou haut donné par le thermicien ; une coupe part aussitôt en relecture (D205)."""
+    """Cadre, haut, nom ou nature corrigés par le thermicien (D205, D206) ; une coupe dont le cadre ou le
+    haut change est mise en file de relecture."""
     vue = _vue_or_404(db, user, vue_id)
     try:
-        vue = lecture_coupes.corriger_vue(db, vue, correction.cadre, correction.haut)
+        vue = lecture_coupes.corriger_vue(
+            db, vue, correction.cadre, correction.haut, correction.nom, correction.nature
+        )
     except ThermiqueError as exc:
         raise _bad_request(exc) from exc
     sheet = db.get(ThermiqueSheet, vue.sheet_id)
-    if sheet is not None and vue.nature == "coupe":
+    if sheet is not None and vue.nature == "coupe" and json.loads(vue.lecture_json).get("a_relire"):
         travaux.mettre_en_file_la_relecture(db, sheet, user)
     return lecture_coupes.serialize_vue(vue)
+
+
+@router.post("/sheets/{sheet_id}/traits-coupe")
+def tracer_un_trait_de_coupe(
+    sheet_id: int,
+    trait: TraitTrace,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Le trait d'une coupe tracé à la main sur le plan (D209)."""
+    plan = _sheet_or_404(db, user, sheet_id)
+    vue = _vue_or_404(db, user, trait.vue_id)
+    try:
+        return lecture_coupes.tracer_trait(db, plan, vue, trait.points, trait.sens)
+    except ThermiqueError as exc:
+        raise _bad_request(exc) from exc
 
 
 @router.delete("/vues/{vue_id}", status_code=status.HTTP_204_NO_CONTENT)

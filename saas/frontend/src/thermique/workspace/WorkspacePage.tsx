@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../../providers/AuthProvider";
-import { thermiqueApi, type HautDeVue, type PdfPoint, type ProjectDetail, type Sheet, type Study, type VueCoupe } from "../api";
+import { thermiqueApi, type CorrectionDeVue, type PdfPoint, type ProjectDetail, type Sheet, type Study, type VueCoupe } from "../api";
 import { TileSheetViewer, type ViewerTool, type ViewerView } from "../components/TileSheetViewer";
 import { STATUS_LABELS } from "../natures";
 import { allSheets, projectQueryKey, projectsQueryKey } from "../projectCache";
@@ -36,6 +36,7 @@ import {
 } from "./alignement";
 import { GuideCalage } from "./GuideCalage";
 import { CadresDesVues, ListeDesVues, cadreDeDeuxCoins, type CadreEnCours } from "./CadresDesVues";
+import { PlacerCoupes, sensDuTrait, type TraitEnCours } from "./PlacerCoupes";
 import { NiveauFantome, PointsDeCalage } from "./NiveauFantome";
 import { appliquer, calageAEnregistrer, correspondance, inverser, niveauxVoisins } from "./superposition";
 import { useStudyEdition } from "./useStudyEdition";
@@ -252,6 +253,7 @@ export function WorkspacePage() {
         setPoints([]);
         setCalage(null);
         setCadreVue(null);
+        setTraitCoupe(null);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -370,7 +372,7 @@ export function WorkspacePage() {
   const [cadreVue, setCadreVue] = useState<CadreEnCours | null>(null);
   const [vuesEtat, setVuesEtat] = useState<{ busy: boolean; message: string | null }>({ busy: false, message: null });
   useEffect(() => setCadreVue(null), [sheetId]);
-  const corrigerUneVue = async (vueId: number, correction: { cadre?: number[]; haut?: HautDeVue }) => {
+  const corrigerUneVue = async (vueId: number, correction: CorrectionDeVue) => {
     if (!token) return;
     setVuesEtat({ busy: true, message: null });
     try {
@@ -379,10 +381,9 @@ export function WorkspacePage() {
       await queryClient.invalidateQueries({ queryKey: ["thermique", "hauteurs"] });
       setVuesEtat({
         busy: false,
-        message:
-          vue.nature === "coupe"
-            ? `« ${vue.nom} » corrigée : elle repart en lecture (relais, ou « Importer la lecture » après une relecture sur le poste).`
-            : `« ${vue.nom} » corrigée.`,
+        message: vue.a_relire
+          ? `« ${vue.nom} » corrigée : ses pièces seront relues. Placez-la sur le plan du niveau (« Placer les coupes ») si elle n'y apparaît plus.`
+          : `« ${vue.nom} » corrigée.`,
       });
     } catch (echec) {
       setVuesEtat({ busy: false, message: echec instanceof Error ? echec.message : "La correction a échoué." });
@@ -397,6 +398,29 @@ export function WorkspacePage() {
     const cadre = cadreDeDeuxCoins(cadreVue.premier, point);
     setCadreVue(null);
     void corrigerUneVue(cadreVue.vueId, { cadre });
+  };
+  // Trait d'une coupe tracé à la main sur ce plan (D209).
+  const [traitCoupe, setTraitCoupe] = useState<TraitEnCours | null>(null);
+  const [traitMessage, setTraitMessage] = useState<string | null>(null);
+  useEffect(() => setTraitCoupe(null), [sheetId]);
+  const coupesDuProjet = (vues.data ?? []).filter((vue) => vue.nature === "coupe");
+  const cliquerTraitCoupe = async (point: PdfPoint) => {
+    if (!traitCoupe || !token || !sheet) return;
+    if (traitCoupe.points.length < 2) {
+      setTraitCoupe({ ...traitCoupe, points: [...traitCoupe.points, point] });
+      return;
+    }
+    const [a, b] = traitCoupe.points;
+    const nom = coupesDuProjet.find((vue) => vue.id === traitCoupe.vueId)?.nom ?? "La coupe";
+    setTraitCoupe(null);
+    try {
+      await thermiqueApi.tracerTraitDeCoupe(token, sheet.id, { vue_id: traitCoupe.vueId, points: [a, b], sens: sensDuTrait(a, b, point) });
+      await queryClient.invalidateQueries({ queryKey: ["thermique", "hauteurs"] });
+      setVoirCoupes(true);
+      setTraitMessage(`${nom} est placée : cliquez son trait pour ouvrir la coupe.`);
+    } catch (echec) {
+      setTraitMessage(echec instanceof Error ? echec.message : "Le trait n'a pas été enregistré.");
+    }
   };
   const supprimerUneVue = async (vue: VueCoupe) => {
     if (!token || !window.confirm(`Supprimer la vue « ${vue.nom} » de cette planche ?`)) return;
@@ -781,13 +805,17 @@ export function WorkspacePage() {
               key={viewKey}
               manifest={raster.data}
               tileTemplate={thermiqueApi.apiUrl(raster.data.tile_url)}
-              tool={editionState.draft ? "edition" : calage || cadreVue ? "calage" : tool}
-              points={cadreVue?.premier ? [cadreVue.premier] : points}
+              tool={editionState.draft ? "edition" : calage || cadreVue || traitCoupe ? "calage" : tool}
+              points={cadreVue?.premier ? [cadreVue.premier] : traitCoupe ? traitCoupe.points : points}
               segments={editionState.draft ? [] : sheetSegments(sheet, tool, points)}
               onAddPoint={(point, event) => {
                 if (editionState.handlers.onAddPoint(point)) return;
                 if (cadreVue) {
                   cliquerCadreVue(point);
+                  return;
+                }
+                if (traitCoupe) {
+                  void cliquerTraitCoupe(point);
                   return;
                 }
                 if (calage) {
@@ -1008,6 +1036,21 @@ export function WorkspacePage() {
                     />
                     Voir les coupes et façades
                   </label>
+                  {sheet.nature === "plan" && study && coupesDuProjet.length > 0 && (
+                    <PlacerCoupes
+                      coupes={coupesDuProjet}
+                      hauteurs={hauteurs.data}
+                      enCours={traitCoupe}
+                      busy={Boolean(calage || cadreVue || editionState.draft)}
+                      message={traitMessage}
+                      onTracer={(vueId) => {
+                        setTraitMessage(null);
+                        setPoints([]);
+                        setTraitCoupe({ vueId, points: [] });
+                      }}
+                      onAnnuler={() => setTraitCoupe(null)}
+                    />
+                  )}
                   {shownStudy &&
                     METRICS_CASES.map((item) => (
                       <label key={item.cle} title={item.titre}>
@@ -1153,13 +1196,14 @@ export function WorkspacePage() {
                       choisie={vueChoisie}
                       enCours={cadreVue}
                       busy={vuesEtat.busy}
+                      transform={raster.data?.transform}
                       onChoisir={setVueChoisie}
                       onRedessiner={(vueId) => {
                         setVueChoisie(vueId);
                         setCalage(null);
                         setCadreVue({ vueId, premier: null });
                       }}
-                      onHaut={(vueId, haut) => void corrigerUneVue(vueId, { haut })}
+                      onCorriger={(vueId, correction) => void corrigerUneVue(vueId, correction)}
                       onSupprimer={(vue) => void supprimerUneVue(vue)}
                     />
                     {vuesEtat.message && <p className="th-alert th-alert--ok">{vuesEtat.message}</p>}

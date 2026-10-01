@@ -2,9 +2,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 
-import { thermiqueApi, type MenuiseriesDuProjet, type PdfPoint, type Sheet, type VueCoupe } from "../api";
+import { thermiqueApi, type HautDeVue, type MenuiseriesDuProjet, type PdfPoint, type Sheet, type VueCoupe } from "../api";
 import { TileSheetViewer } from "../components/TileSheetViewer";
 import { mesureDeDeuxCoins, proposerComposants } from "./baies";
+import { pageDuCoteEcran, rotationALEndroit } from "./orientation";
 import { hauteursQueryKey } from "./study";
 
 const M_PAR_PT = 0.0254 / 72;
@@ -18,9 +19,9 @@ export function hauteurEntreClics(sol: PdfPoint, plafond: PdfPoint, haut: [numbe
 }
 
 /** Cadrage d'une vue : son centre, et le zoom (multiple du cadrage ajusté) qui la fait tenir dans la fenêtre. */
-export function cadrageDeLaVue(vue: VueCoupe, planche: Sheet): { point: PdfPoint; zoom: number } {
+export function cadrageDeLaVue(vue: VueCoupe, planche: Sheet, rotation = planche.rotation_deg): { point: PdfPoint; zoom: number } {
   const [x0, y0, x1, y1] = vue.cadre;
-  const tourne = planche.rotation_deg % 180 !== 0;
+  const tourne = rotation % 180 !== 0;
   const largeur = tourne ? planche.page_height_pt : planche.page_width_pt;
   const hauteur = tourne ? planche.page_width_pt : planche.page_height_pt;
   const w = Math.abs(x1 - x0) || 1;
@@ -108,17 +109,42 @@ export function FenetreCoupe({
 }) {
   const facade = vue.nature === "facade";
   const queryClient = useQueryClient();
-  const raster = useQuery({
+  const base = useQuery({
     queryKey: ["thermique", "raster", planche.id, planche.rotation_deg],
     queryFn: () => thermiqueApi.getRaster(token, planche.id, planche.rotation_deg),
   });
+  // La vue s'ouvre à l'endroit, son haut en haut de l'écran (D208) : largeur à l'horizontale, hauteur à la verticale.
+  const rotation = base.data ? rotationALEndroit(vue.haut, base.data.transform, planche.rotation_deg) : planche.rotation_deg;
+  const tournee = useQuery({
+    queryKey: ["thermique", "raster", planche.id, rotation],
+    queryFn: () => thermiqueApi.getRaster(token, planche.id, rotation),
+    enabled: Boolean(base.data) && rotation !== planche.rotation_deg,
+  });
+  const raster = rotation === planche.rotation_deg ? base : tournee;
   const [etat, setEtat] = useState<Etat>({ etape: "aucune" });
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [position, setPosition] = useState({ x: 80, y: 90 });
   const glisse = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
-  const cadrage = cadrageDeLaVue(vue, planche);
+  const cadrage = cadrageDeLaVue(vue, planche, rotation);
   const echelle = planche.scale_denominator;
+
+  const redresser = async (cote: HautDeVue) => {
+    if (!raster.data || cote === "haut") return;
+    if (!facade && !window.confirm("Changer le haut d'une coupe efface les pièces lues : elle devra être relue. Continuer ?")) return;
+    setBusy(true);
+    try {
+      await thermiqueApi.corrigerVue(token, vue.id, { haut: pageDuCoteEcran(cote, raster.data.transform) });
+      await queryClient.invalidateQueries({ queryKey: ["thermique", "vues"] });
+      void queryClient.invalidateQueries({ queryKey: ["thermique", "hauteurs"] });
+      setMessage("Vue remise à l'endroit.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Le haut n'a pas été enregistré.");
+    } finally {
+      setBusy(false);
+      setEtat({ etape: "aucune" });
+    }
+  };
 
   const confirmerMenuiserie = async (coins: [PdfPoint, PdfPoint], composant: string, largeurCm: number | null) => {
     setBusy(true);
@@ -216,6 +242,15 @@ export function FenetreCoupe({
         >
           {facade ? "Mesurer une menuiserie" : "Confirmer la hauteur"}
         </button>
+        <label className="th-inline" title="Si le dessin s'affiche couché ou à l'envers, dites où se trouve son haut : la vue se redresse.">
+          Dessin de travers ? Son haut est
+          <select value="haut" disabled={busy || !raster.data} onChange={(event) => void redresser(event.target.value as HautDeVue)}>
+            <option value="haut">en haut (bon sens)</option>
+            <option value="droite">à droite</option>
+            <option value="bas">en bas</option>
+            <option value="gauche">à gauche</option>
+          </select>
+        </label>
         {!facade && (vue.corrections ?? []).length > 0 && (
           <small className="th-muted">
             Confirmé : {(vue.corrections ?? []).map((c) => `${c.hauteur_m.toLocaleString("fr-FR")} m`).join(", ")}
@@ -244,7 +279,7 @@ export function FenetreCoupe({
             tool={etat.etape === "aucune" || etat.etape === "choix" ? "pan" : "measure"}
             points={etat.etape === "plafond" ? [etat.sol] : etat.etape === "coin2" ? [etat.a] : etat.etape === "choix" ? etat.coins : []}
             onAddPoint={(point) => void cliquer(point)}
-            focus={{ point: cadrage.point, cle: `vue-${vue.id}`, zoom: cadrage.zoom }}
+            focus={{ point: cadrage.point, cle: `vue-${vue.id}-${rotation}`, zoom: cadrage.zoom }}
           />
         ) : (
           <p className="th-muted">Chargement de la coupe…</p>

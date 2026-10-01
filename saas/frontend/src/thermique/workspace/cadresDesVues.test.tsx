@@ -35,7 +35,7 @@ describe("les cadres des vues (D205)", () => {
           busy={false}
           onChoisir={() => {}}
           onRedessiner={() => {}}
-          onHaut={() => {}}
+          onCorriger={() => {}}
           onSupprimer={() => {}}
         />,
       );

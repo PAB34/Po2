@@ -159,13 +159,37 @@ def oublier_traits_deduits(db: Session, project_id: int, vue_id: int) -> None:
 SENS_DU_HAUT = {"haut": [0.0, 1.0], "bas": [0.0, -1.0], "gauche": [-1.0, 0.0], "droite": [1.0, 0.0]}
 
 
-def corriger_vue(db: Session, vue: ThermiqueVue, cadre: list[float] | None, haut: str | None) -> ThermiqueVue:
-    """Le thermicien redessine le cadre ou donne le haut d'une vue mal située par l'agent (D205).
+def corriger_vue(
+    db: Session,
+    vue: ThermiqueVue,
+    cadre: list[float] | None,
+    haut: str | None,
+    nom: str | None = None,
+    nature: str | None = None,
+) -> ThermiqueVue:
+    """Le thermicien redessine le cadre, donne le haut, renomme ou reclasse une vue (D205, D206).
 
     Les pièces lues venaient du mauvais cadre : elles sont vidées et la vue est marquée « à relire » (une
     façade n'a pas de pièces, elle n'a rien à relire). Le haut donné l'emporte sur celui déduit des cotes.
+    Renommer seul ne touche pas à la lecture : l'agent avait seulement inversé les noms.
     """
     lecture = json.loads(vue.lecture_json)
+    if nom is not None:
+        propre = _nom(nom, "La vue")
+        autres = db.scalars(
+            select(ThermiqueVue.nom).where(ThermiqueVue.sheet_id == vue.sheet_id, ThermiqueVue.id != vue.id)
+        ).all()
+        if propre in autres:
+            raise ThermiqueError(f"Une autre vue de cette planche s'appelle déjà « {propre} ».")
+        vue.nom = propre
+    relire = cadre is not None or haut is not None
+    if nature is not None and nature != vue.nature:
+        if nature not in ("coupe", "facade"):
+            raise ThermiqueError("Une vue est une coupe ou une façade.")
+        vue.nature = nature
+        lecture.pop("menuiseries", None)
+        lecture.pop("corrections", None)
+        relire = True
     if cadre is not None:
         if len(cadre) != 4:
             raise ThermiqueError("Le cadre d'une vue se donne par deux coins opposés.")
@@ -179,17 +203,54 @@ def corriger_vue(db: Session, vue: ThermiqueVue, cadre: list[float] | None, haut
             raise ThermiqueError("Le haut d'une vue est en haut, en bas, à gauche ou à droite de la page.")
         lecture["haut"] = SENS_DU_HAUT[haut]
         lecture["haut_impose"] = True
-    if vue.nature == "coupe":
-        lecture.update({"niveaux": [], "pieces": [], "a_relire": True})
+    if relire:
+        lecture.update({"niveaux": [], "pieces": []})
+        if vue.nature == "coupe":
+            lecture["a_relire"] = True
+        else:
+            lecture.pop("a_relire", None)
     vue.lecture_json = json.dumps(lecture, ensure_ascii=False, separators=(",", ":"))
-    oublier_traits_deduits(db, vue.project_id, vue.id)
+    if vue.nature != "coupe":
+        _oublier_traits_de_la_vue(db, vue.project_id, vue.id)
+    elif relire or nom is not None:
+        oublier_traits_deduits(db, vue.project_id, vue.id)
     db.commit()
     db.refresh(vue)
     return vue
 
 
+def tracer_trait(db: Session, plan: ThermiqueSheet, vue: ThermiqueVue, points: Any, sens: Any) -> dict[str, Any]:
+    """Le trait d'une coupe tracé à la main sur le plan (D209) : il fait foi pour cette vue.
+
+    Rangé avec les traits relevés, il porte l'identifiant de la vue : un renommage ne le perd pas, et il
+    remplace un trait déduit ou un autre trait manuel de la même vue.
+    """
+    if plan.nature != "plan" or plan.project_id != vue.project_id:
+        raise ThermiqueError("Le trait d'une coupe se trace sur un plan de niveau du même projet.")
+    if vue.nature != "coupe":
+        raise ThermiqueError("Seule une coupe se place par un trait sur le plan.")
+    [trait] = valider_traits([{"nom": vue.nom, "points": points, "sens": sens}])
+    if len(trait["points"]) != 2 or trait["points"][0] == trait["points"][1]:
+        raise ThermiqueError("Le trait d'une coupe se trace par deux points distincts.")
+    trait.update({"vue_id": vue.id, "manuel": True})
+    gardes = [t for t in traits_du_plan(plan) if t.get("vue_id") != vue.id]
+    plan.traits_coupe_json = json.dumps(gardes + [trait], ensure_ascii=False, separators=(",", ":"))
+    db.commit()
+    return trait
+
+
+def _oublier_traits_de_la_vue(db: Session, project_id: int, vue_id: int) -> None:
+    for plan in db.scalars(
+        select(ThermiqueSheet).where(ThermiqueSheet.project_id == project_id, ThermiqueSheet.nature == "plan")
+    ).all():
+        traits = traits_du_plan(plan)
+        gardes = [t for t in traits if t.get("vue_id") != vue_id]
+        if len(gardes) != len(traits):
+            plan.traits_coupe_json = json.dumps(gardes, ensure_ascii=False, separators=(",", ":"))
+
+
 def supprimer_vue(db: Session, vue: ThermiqueVue) -> None:
-    oublier_traits_deduits(db, vue.project_id, vue.id)
+    _oublier_traits_de_la_vue(db, vue.project_id, vue.id)
     db.delete(vue)
     db.commit()
 
@@ -296,8 +357,13 @@ def hauteurs_du_plan(db: Session, sheet: ThermiqueSheet) -> dict[str, Any]:
         echelle_vue = echelles.get(vue.sheet_id)
         if not echelle_vue or not sheet.scale_denominator:
             continue
-        # Le trait relevé sur le plan fait foi ; sinon celui déduit de la coupe (D190), calculé une fois.
-        trait = next((t for t in releves if meme_coupe(t["nom"], vue.nom)), None) or deduits.get(vue.id)
+        # Le trait tracé à la main fait foi (D209), puis celui relevé sur le plan ; sinon celui déduit de la
+        # coupe (D190), calculé une fois.
+        trait = (
+            next((t for t in releves if t.get("vue_id") == vue.id), None)
+            or next((t for t in releves if not t.get("vue_id") and meme_coupe(t["nom"], vue.nom)), None)
+            or deduits.get(vue.id)
+        )
         if trait is None:
             trait = coupes.deduire_trait(serialize_vue(vue), locaux, sheet.scale_denominator, echelle_vue)
             trait = {**trait, "nom": vue.nom, "vue_id": vue.id} if trait else {"nom": vue.nom, "vue_id": vue.id, "deduit": True, "points": None}
@@ -313,11 +379,13 @@ def hauteurs_du_plan(db: Session, sheet: ThermiqueSheet) -> dict[str, Any]:
             else:
                 non_situees.append(vue.nom)
             continue
+        if trait.get("vue_id") == vue.id:
+            trait = {**trait, "nom": vue.nom}
         r = coupes.rattacher(trait, sheet.scale_denominator, locaux, serialize_vue(vue), echelle_vue)
         rattachements[vue.nom] = r
         lectures.append({"trait": trait["nom"], "deduit": bool(trait.get("deduit")), "vue_id": vue.id,
                          "vue_sheet_id": vue.sheet_id, "vue": vue.nom, **r})
-    sans_vue = [t["nom"] for t in releves if not any(meme_coupe(t["nom"], v.nom) for v in vues)]
+    sans_vue = [t["nom"] for t in releves if not t.get("vue_id") and not any(meme_coupe(t["nom"], v.nom) for v in vues)]
     if nouveaux:
         # Un trait déduit est gardé avec la planche : la recherche prend plusieurs secondes par coupe.
         # Seuls restent les traits déduits de vues encore présentes (une relecture de planche change les vues).
@@ -325,7 +393,10 @@ def hauteurs_du_plan(db: Session, sheet: ThermiqueSheet) -> dict[str, Any]:
         gardes = [t for vue_id, t in deduits.items() if vue_id in presentes]
         sheet.traits_coupe_json = json.dumps(releves + gardes, ensure_ascii=False, separators=(",", ":"))
         db.commit()
-    traits = releves + [t for t in deduits.values() if t.get("points")]
+    # Un trait tracé à la main suit le nom de sa vue, renommée après coup (D206).
+    noms = {vue.id: vue.nom for vue in vues}
+    traits = [{**t, "nom": noms.get(t["vue_id"], t["nom"])} if t.get("vue_id") else t for t in releves]
+    traits += [t for t in deduits.values() if t.get("points")]
 
     proposees = coupes.hauteurs_des_locaux(locaux, rattachements)
     saisies = {l["id"]: l.get("hauteur_m") for l in contenu.get("locaux", [])}

@@ -351,6 +351,17 @@ class VueCorrigee(BaseModel):
 
     cadre: list[float] | None = Field(default=None, min_length=4, max_length=4)
     haut: str | None = None
+    # Renommage et reclassement par le thermicien (D206).
+    nom: str | None = None
+    nature: str | None = None
+
+
+class TraitTrace(BaseModel):
+    """Le trait d'une coupe tracé à la main sur le plan : deux points et le côté regardé (D209)."""
+
+    vue_id: int
+    points: list[list[float]] = Field(min_length=2, max_length=2)
+    sens: list[float] = Field(min_length=2, max_length=2)
 
 
 class HauteurConfirmee(BaseModel):

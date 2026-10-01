@@ -322,6 +322,47 @@ def test_un_cadre_corrige_fait_relire_la_seule_vue_et_garde_le_haut_donne(db_ses
     assert db_session.query(ThermiqueTravail).count() == 1
 
 
+def test_une_vue_corrigee_se_renomme_et_reste_sur_le_plan_par_son_trait_trace(db_session):
+    """D206, D209 (test du 2026-10-01) : C et D inversées, cadre corrigé, la coupe disparaissait du plan."""
+    import json
+
+    import pytest
+
+    from app.services import thermique_lecture_coupes as lecture
+    from app.services.thermique import ThermiqueError
+
+    plan, coupe = _projet_avec_coupe(db_session)
+    a, d = lecture.enregistrer_vues(db_session, coupe, [
+        {**VUE_A, "nom": "COUPE A", "nature": "coupe", "cadre": [50, 1900, 1650, 2360]},
+        {"nom": "COUPE D", "nature": "coupe", "cadre": [0, 0, 100, 100], "pieces": []},
+    ])
+    # Renommer seul ne fait rien relire ; un nom déjà pris est refusé.
+    with pytest.raises(ThermiqueError, match="déjà"):
+        lecture.corriger_vue(db_session, d, None, None, nom="COUPE A")
+    lecture.corriger_vue(db_session, d, None, None, nom="COUPE C")
+    assert d.nom == "COUPE C" and not json.loads(d.lecture_json).get("a_relire")
+
+    # Le cadre corrigé vide la lecture : sans trait, la coupe A n'est plus située.
+    lecture.corriger_vue(db_session, a, [882, 978, 1573, 2003], None)
+    assert "COUPE A" in lecture.hauteurs_du_plan(db_session, plan)["coupes_non_situees"]
+
+    # Tracé à la main, le trait la remet sur le plan, et suit son nom.
+    with pytest.raises(ThermiqueError, match="distincts"):
+        lecture.tracer_trait(db_session, plan, a, [[1, 1], [1, 1]], [0, 1])
+    lecture.tracer_trait(db_session, plan, a, TRAIT_A["points"][:2], TRAIT_A["sens"])
+    lecture.corriger_vue(db_session, a, None, None, nom="COUPE AA")
+    resultat = lecture.hauteurs_du_plan(db_session, plan)
+    assert [t["nom"] for t in resultat["traits"] if t.get("manuel")] == ["COUPE AA"]
+    assert [c["vue_id"] for c in resultat["coupes"]] == [a.id]
+    assert resultat["coupes_non_situees"] == ["COUPE C"]
+    assert resultat["traits_sans_vue"] == []
+
+    # Devenue façade, la vue perd son trait.
+    lecture.corriger_vue(db_session, a, None, None, nature="facade")
+    assert a.nature == "facade"
+    assert not any(t.get("vue_id") == a.id for t in lecture.traits_du_plan(plan))
+
+
 def test_sans_trait_sur_le_plan_il_se_deduit_de_la_coupe(db_session):
     """D190 : le plan ne porte pas le trait ; la coupe A le situe par ses numéros de pièces, une seule fois."""
     import json
