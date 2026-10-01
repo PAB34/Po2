@@ -290,6 +290,31 @@ def test_un_mur_retrace_remplace_les_morceaux_et_garde_menuiseries_et_angles():
     assert par_bornes[("T02", 7.0)]["fin_m"] == 9.0  # rogné : il commence où finit le mur retracé
 
 
+def test_le_mur_retrace_passe_la_porte_d_entree_du_serveur():
+    """Erreur 422 du 2026-10-01 : le geste n'était pas déclaré dans le schéma des opérations. On le fait passer
+    par le même chemin que le site : schéma, puis `model_dump(exclude_none=True)`, puis le calcul."""
+    from app.schemas.thermique import EtudeEnregistrement
+    from app.services.thermique_etude_edition import retracer_paroi
+
+    corps = {
+        "operations": [
+            {"type": "paroi_retracer", "debut_m": 1.0, "fin_m": 3.0,
+             "modele": {"composant": "P1", "couches": [{"nature": "mur", "epaisseur_cm": 20}], "nu_exterieur_cm": 44,
+                        "nu_interieur_cm": 0, "libelle": "P1 · 44 cm"}},
+            {"type": "element_corriger", "element": {"troncon": "T01", "debut_m": 0.0, "fin_m": 1.0},
+             "changes": {"composant": "P1", "couches": [{"nature": "mur", "epaisseur_cm": 20}], "nu_exterieur_cm": 44}},
+        ],
+        "motif": "mur_retrace",
+        "valider": False,
+    }
+    gestes = [op.model_dump(exclude_none=True) for op in EtudeEnregistrement.model_validate(corps).operations]
+    assert gestes[0]["debut_m"] == 1.0 and gestes[0]["modele"]["composant"] == "P1"
+    assert gestes[1]["changes"]["couches"][0]["epaisseur_cm"] == 20
+    releve = {"elements": [{**_e("T01", 0.0, 4.0, "paroi"), "composant": "P9"}]}
+    nouveaux = retracer_paroi(releve, {"troncons": [{"id": "T01", "debut_m": 0.0, "fin_m": 4.0}]}, gestes[0])
+    assert [(n["debut_m"], n["fin_m"]) for n in nouveaux] == [(1.0, 3.0)]
+
+
 def test_l_exposition_d_une_menuiserie_suit_le_nord():
     """D225 : normale sortante du tronçon (repère image) par rapport au nord ; sans nord, « à caler »."""
     from app.services.thermique_etude_edition import exposer_menuiseries

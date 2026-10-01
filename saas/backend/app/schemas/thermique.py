@@ -236,8 +236,13 @@ class EtudeOperation(BaseModel):
         "element_ecarter",
         "element_reactiver",
         "pont_ajouter",
+        "paroi_retracer",
     ]
     id: str | None = None
+    # Mur retracé (D240) : début et fin le long de la façade, et la composition copiée.
+    debut_m: float | None = None
+    fin_m: float | None = None
+    modele: dict[str, Any] | None = None
     # Pont posé par le thermicien (remarque C) : son point et son type.
     point_pdf: list[float] | None = None
     type_pont: Literal["angle_sortant", "angle_rentrant", "about_refend"] | None = None
