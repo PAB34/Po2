@@ -156,6 +156,57 @@ def test_une_hauteur_confirmee_vaut_pour_tout_le_composant_puis_une_baie_se_corr
     assert apres["a_lire"] == 2
 
 
+def test_un_modele_mesure_et_pose_donne_sa_largeur_et_sa_hauteur_a_la_baie(db_session, tmp_path, monkeypatch):
+    """D219 à D222 (test du 2026-10-01) : le nom « M4 » de l'IA couvre deux largeurs ; le thermicien mesure
+    un modèle, le pose sur une menuiserie, et la baie hérite de ses dimensions. La capture est gardée."""
+    import pypdfium2 as pdfium
+
+    from app.core.config import settings
+    from app.models.thermique import ThermiqueEtude
+    from app.services import thermique_elements as elements
+
+    monkeypatch.setattr(settings, "thermique_storage_dir", str(tmp_path))
+    document = pdfium.PdfDocument.new()
+    for _ in range(2):
+        document.new_page(1684, 2384)
+    pdf = tmp_path / "planches.pdf"
+    document.save(str(pdf))
+    projet, vue = _projet(db_session)
+
+    with pytest.raises(ThermiqueError, match="en diagonale"):
+        men.enregistrer_modele(db_session, vue, _coins(0.02, 1.83), "M4 2", "t", pdf)
+    modele = men.enregistrer_modele(db_session, vue, _coins(1.20, 2.15), "M4 120x215", "2026-10-01T10:00:00", pdf)
+    assert modele["largeur_mesuree_cm"] == pytest.approx(120) and modele["capture"]
+    assert men.capture_du_modele(db_session, projet.id, "M4 120x215").is_file()
+
+    # Le modèle se pose sur la baie M4 de 3,52 m (T23) : elle n'est plus réunie à rien et hérite du modèle.
+    etude = db_session.query(ThermiqueEtude).one()
+    contenu = json.loads(etude.content_json)
+    cible = next(e for e in contenu["enveloppe"]["releve_brut"]["elements"] if e["troncon"] == "T23")
+    elements.corriger(contenu, elements.reference(cible), {"modele": "M4 120x215"})
+    etude.content_json = json.dumps(contenu)
+    db_session.commit()
+
+    projet_men = men.menuiseries_du_projet(db_session, projet.id)
+    m4 = next(f for f in projet_men["composants"] if f["composant"] == "M4")
+    posee = next(b for b in m4["baies"] if b.get("modele"))
+    assert posee["source"] == "modele" and posee["largeur_retenue_cm"] == pytest.approx(120)
+    assert posee["hauteur_m"] == pytest.approx(2.15) and posee["surface_m2"] == pytest.approx(2.58)
+    assert posee["ecart_modele_cm"] == pytest.approx(232, abs=0.5)
+    autre = next(b for b in m4["baies"] if not b.get("modele"))
+    assert autre["source"] == "a_lire" and autre["largeur_retenue_cm"] == 271.0
+    assert [(m["nom"], m["poses"], m["capture"]) for m in projet_men["modeles"]] == [("M4 120x215", 1, True)]
+
+    # Une seconde mesure du même nom remplace la première ; retirer le modèle le sort de la bibliothèque.
+    men.enregistrer_modele(db_session, vue, _coins(1.25, 2.20), "M4 120x215", "2026-10-01T11:00:00")
+    assert men.menuiseries_du_projet(db_session, projet.id)["modeles"][0]["largeur_cm"] == pytest.approx(125)
+    men.retirer_modele(db_session, projet.id, "M4 120x215")
+    assert men.menuiseries_du_projet(db_session, projet.id)["modeles"] == []
+
+    with pytest.raises(ThermiqueError, match="Seule une menuiserie"):
+        elements.corriger(contenu, elements.reference(RELEVE[1]), {"modele": "X"})
+
+
 def test_une_menuiserie_de_mauvaise_largeur_est_refusee(db_session):
     projet, vue = _projet(db_session)
     with pytest.raises(ThermiqueError, match="pas la même menuiserie"):

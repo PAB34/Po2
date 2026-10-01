@@ -386,9 +386,12 @@ def synthese_pieces(brut: dict[str, Any], manifeste: dict[str, Any]) -> list[dic
             ligne["lineaire_m"] += longueur
             fiche["facade_m"] += longueur
         elif genre == "menuiserie":
-            cle = composant or element.get("menuiserie_type") or "menuiserie"
+            # D220 : une menuiserie posée sur un modèle se range sous son modèle, pas sous le nom lu par l'IA.
+            cle = element.get("modele") or composant or element.get("menuiserie_type") or "menuiserie"
             ligne = fiche["menuiseries"].setdefault(cle, {"composant": composant, "type": element.get("menuiserie_type", ""),
                                                           "largeurs_cm": [], "lineaire_m": 0.0})
+            if element.get("modele"):
+                ligne["modele"] = element["modele"]
             ligne["largeurs_cm"].append(round(longueur * 100))
             ligne["lineaire_m"] += longueur
             fiche["facade_m"] += longueur

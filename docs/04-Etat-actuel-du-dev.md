@@ -29,6 +29,12 @@ do_not_auto_read:
 **229 côtés** (et non plus 222 : les côtés contre les 2 terrasses sont distingués depuis F), **170,12 m
 déperditifs**, 289 formes, 77 liaisons. Tout lot qui ne touche pas au calcul doit les laisser intacts.
 
+**2026-10-01 (fin) — modèles de menuiserie ✅ EN PROD** (D218–D222, `docs/thermique/modeles-menuiseries-decisions.md`).
+Mesure en coupe/élévation → modèle nommé + capture PNG → posé en cliquant les menuiseries du plan (ou « même
+largeur ± 2 cm ») ; la baie hérite largeur, hauteur et surface du modèle ; cote affichée sur le plan à l'étape 4 ;
+bibliothèque des modèles du projet. Hauteur : « Appliquer à tous les locaux du niveau ». Reporté : couper une baie
+réunie à tort ; relevé cadre/vitrage par un agent sur les captures.
+
 **2026-10-01 (suite) — parcours à 5 étapes et fenêtre « Coupes et élévations » ✅ EN PROD** (D213–D217,
 `docs/thermique/coupes-elevations-fenetre-decisions.md`). Étape 3 « Locaux et hauteur » (hauteur obligatoire
 pour valider) ; plus de traits de coupe sur le plan ; la fenêtre choisit la vue et mesure hauteur ou

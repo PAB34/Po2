@@ -3321,3 +3321,66 @@ circle.th-seg--measure {
   gap: 0.5rem;
   margin-top: 0.3rem;
 }
+/* Cotes des menuiseries sur le plan (D221). Le plan est toujours blanc : couleurs fixes. */
+.th-cotes-menuiseries text {
+  fill: #1d4ed8;
+  font-size: 10px;
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 3px;
+  pointer-events: none;
+}
+
+.th-cotes-menuiseries text.is-posee {
+  fill: #047857;
+}
+
+.th-poser-hauteur__message {
+  display: block;
+  color: var(--po2-color-muted);
+}
+
+/* Bibliothèque des modèles de menuiserie (D222). */
+.th-modeles-section {
+  margin-top: 1rem;
+}
+
+.th-modeles {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.th-modeles li {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.th-modeles li > span:nth-child(2) {
+  display: grid;
+}
+
+.th-modeles__vignette {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  border: 1px solid var(--po2-color-line);
+  border-radius: var(--po2-radius-sm);
+  background: #fff;
+}
+
+.th-modeles__vignette.is-vide {
+  display: block;
+  background: var(--po2-color-blue-soft);
+}
+
+.th-modeles__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}

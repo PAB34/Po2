@@ -380,6 +380,13 @@ class MenuiserieConfirmee(BaseModel):
     largeur_cm: float | None = None
 
 
+class ModeleMesure(BaseModel):
+    """Un modèle de menuiserie : deux coins opposés sur une coupe ou une élévation, et son nom (D219)."""
+
+    coins: list[list[float]] = Field(min_length=2, max_length=2)
+    nom: str = Field(min_length=1, max_length=60)
+
+
 class HauteursDuPlan(BaseModel):
     sheet_id: int
     locaux: dict[str, dict[str, Any]]

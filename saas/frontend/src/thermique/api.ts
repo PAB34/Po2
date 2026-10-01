@@ -154,6 +154,8 @@ export type StudyReleveElement = {
   angle_deg?: number;
   /** Autres pièces qui partagent cette menuiserie, à parts égales (D217). */
   pieces_en_plus?: string[];
+  /** Modèle de menuiserie posé par le thermicien (D220). */
+  modele?: string | null;
 };
 /** Un pont type du tableau C.2 de la NF EN ISO 14683 (D158). */
 export type PontType = {
@@ -235,11 +237,33 @@ export type HauteursDuPlan = {
 };
 
 /** D'où vient la hauteur d'une baie (S5e, D196, D200). */
-export type BaieSource = "baie" | "composant" | "hauteur_du_local" | "a_lire";
+export type BaieSource = "modele" | "baie" | "composant" | "hauteur_du_local" | "a_lire";
+
+/** Un modèle de menuiserie mesuré en coupe ou en élévation, posé sur les menuiseries du plan (D219 à D222). */
+export type ModeleMenuiserie = {
+  nom: string;
+  largeur_cm: number;
+  hauteur_m: number;
+  vue_id: number;
+  vue: string;
+  capture: boolean;
+  horodatage: string | null;
+  /** Nombre de baies du projet posées sur ce modèle. */
+  poses: number;
+};
 
 export type Baie = {
   composant: string;
+  /** Modèle posé par le thermicien (D220) : il fait foi pour la largeur et la hauteur (D221). */
+  modele?: string | null;
+  /** Largeur relevée sur le plan. */
   largeur_cm: number;
+  /** Largeur retenue : celle du modèle s'il y en a un, sinon celle du plan (D221). */
+  largeur_retenue_cm?: number;
+  largeur_modele_cm?: number;
+  /** Plan moins modèle, en cm : un grand écart trahit une baie double ou un morceau. */
+  ecart_modele_cm?: number | null;
+  surface_m2?: number | null;
   mur_rideau: boolean;
   morceau_a_verifier: boolean;
   morceaux: { troncon: string; debut_m: number; fin_m: number }[];
@@ -260,6 +284,7 @@ export type MenuiseriesDuProjet = {
     a_lire: number;
     confirmation: { vue_id: number; vue: string; largeur_mesuree_cm: number | null } | null;
   }[];
+  modeles?: ModeleMenuiserie[];
   morceaux_a_verifier: { composant: string; largeur_cm: number; niveau: string }[];
 };
 
@@ -368,6 +393,8 @@ export type StudyElementChanges = Partial<{
   nu_interieur_fin_cm: number;
   /** Menuiserie partagée avec d'autres pièces (D217). */
   pieces_en_plus: string[];
+  /** Modèle de menuiserie posé (D220) ; une chaîne vide le retire. */
+  modele: string;
 }>;
 export type StudyElementScope = "cet_element" | "partout";
 export type StudyOperation =
@@ -536,6 +563,22 @@ export const thermiqueApi = {
     request<VueCoupe>(token, `/thermique/vues/${vueId}/hauteur`, { method: "POST", body: JSON.stringify({ sol, plafond }) }),
   getMenuiseries: (token: string, projectId: number) =>
     request<MenuiseriesDuProjet>(token, `/thermique/projects/${projectId}/menuiseries`),
+  // Modèle de menuiserie mesuré, nommé et capturé (D219, D222).
+  enregistrerModele: (token: string, vueId: number, coins: PdfPoint[], nom: string) =>
+    request<{ modele: string; largeur_mesuree_cm: number; hauteur_m: number; capture: string | null }>(
+      token,
+      `/thermique/vues/${vueId}/modeles`,
+      { method: "POST", body: JSON.stringify({ coins, nom }) },
+    ),
+  retirerModele: (token: string, projectId: number, nom: string) =>
+    request<unknown>(token, `/thermique/projects/${projectId}/modeles?nom=${encodeURIComponent(nom)}`, { method: "DELETE" }),
+  captureDuModele: async (token: string, projectId: number, nom: string): Promise<Blob> => {
+    const reponse = await fetch(`${apiBaseUrl}/thermique/projects/${projectId}/modeles/capture?nom=${encodeURIComponent(nom)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!reponse.ok) throw new Error("Capture introuvable.");
+    return reponse.blob();
+  },
   confirmerMenuiserie: (token: string, vueId: number, coins: PdfPoint[], composant: string, largeurCm: number | null) =>
     request<{ hauteur_m: number; largeur_mesuree_cm: number }>(token, `/thermique/vues/${vueId}/menuiseries`, {
       method: "POST",

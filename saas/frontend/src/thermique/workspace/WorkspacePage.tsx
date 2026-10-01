@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../../providers/AuthProvider";
-import { thermiqueApi, type CorrectionDeVue, type PdfPoint, type ProjectDetail, type Sheet, type Study, type VueCoupe } from "../api";
+import { thermiqueApi, type CorrectionDeVue, type PdfPoint, type StudyElementRef, type ProjectDetail, type Sheet, type Study, type VueCoupe } from "../api";
 import { TileSheetViewer, type ViewerTool, type ViewerView } from "../components/TileSheetViewer";
 import { STATUS_LABELS } from "../natures";
 import { allSheets, projectQueryKey, projectsQueryKey } from "../projectCache";
@@ -21,7 +21,9 @@ import { FenetreCoupe, type OutilDeMesure } from "./FenetreCoupe";
 import { menuiseriesQueryKey } from "./baies";
 import { PontsPanel } from "./PontsPanel";
 import { coteAt, empreinteCote, milieuCote, rangVise, type CoteVisee } from "./cotes";
-import { elementDuPont, paroisATrancher, pontAt, pontDeElement, trouverElement, viserSurLePlan } from "./elements";
+import { elementDuPont, paroisATrancher, pontAt, pontDeElement, refDeElement, trouverElement, viserSurLePlan } from "./elements";
+import { cleDeRef, cotesDesMenuiseries, menuiseriesDeMemeLargeur } from "./modeles";
+import { BibliothequeModeles, CotesMenuiseries } from "./ModelesMenuiseries";
 import { demandeUneHauteur, etapeCourante, hauteurConnue, locauxSansHauteur, parcours, vueDeLEtape, type EtapeId } from "./parcours";
 import { TYPES_PONT_REATTRIBUABLES } from "./pontsTypes";
 import {
@@ -249,6 +251,7 @@ export function WorkspacePage() {
         setCalage(null);
         setCadreVue(null);
         setHauteurAPoser(null);
+        setModeleAPoser(null);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -564,6 +567,43 @@ export function WorkspacePage() {
     if (premier) enfiler(premier, valeur);
     setHauteurAPoser({ valeur, poses: premier ? [premier] : [] });
   };
+  // D220 : un modèle de menuiserie se pose sur la menuiserie désignée, puis sur chaque menuiserie cliquée.
+  const [modeleAPoser, setModeleAPoser] = useState<{ nom: string; largeur_cm: number; hauteur_m: number; poses: string[] } | null>(null);
+  const [modeleMessage, setModeleMessage] = useState<string | null>(null);
+  const fileModeles = useRef<Promise<void>>(Promise.resolve());
+  const affecterModele = (refs: StudyElementRef[], nom: string) => {
+    if (!token || !sheetId || refs.length === 0) return;
+    if (elementsState.pending > 0 || editionState.pending > 0 || editionState.draft) {
+      setModeleMessage("Enregistrez ou abandonnez d'abord les corrections en attente : le modèle n'a pas été posé.");
+      return;
+    }
+    const planche = sheetId;
+    fileModeles.current = fileModeles.current.then(async () => {
+      try {
+        const enregistre = await thermiqueApi.saveStudy(token, planche, {
+          operations: refs.map((ref) => ({ type: "element_corriger", element: ref, changes: { modele: nom } })),
+          motif: "modele_menuiserie",
+          valider: false,
+        });
+        queryClient.setQueryData<Study>(studyQueryKey(planche), enregistre);
+        void queryClient.invalidateQueries({ queryKey: menuiseriesQueryKey(projectId) });
+        setModeleMessage(`« ${nom} » posé sur ${refs.length} menuiserie${refs.length > 1 ? "s" : ""}.`);
+      } catch (echec) {
+        setModeleMessage(echec instanceof Error ? echec.message : "Le modèle n'a pas été posé.");
+      }
+    });
+  };
+  const poserModele = (modele: { nom: string; largeur_cm: number; hauteur_m: number }) => {
+    const designe = shownStudy ? trouverElement(shownStudy.content, elementsState.selected) : null;
+    const premier = designe && designe.type === "menuiserie" ? refDeElement(designe) : null;
+    if (premier) affecterModele([premier], modele.nom);
+    setModeleMessage(null);
+    setModeleAPoser({ ...modele, poses: premier ? [cleDeRef(premier)] : [] });
+  };
+  const memeLargeurRestantes =
+    modeleAPoser && shownStudy
+      ? menuiseriesDeMemeLargeur(shownStudy.content, modeleAPoser).filter((ref) => !modeleAPoser.poses.includes(cleDeRef(ref)))
+      : [];
   const sansHauteurRestants =
     hauteurAPoser && shownStudy
       ? locauxSansHauteur(shownStudy.content, hauteurs.data).filter((local) => !hauteurAPoser.poses.includes(local.id))
@@ -841,7 +881,48 @@ export function WorkspacePage() {
                   Appliquer aux {sansHauteurRestants.length} locaux sans hauteur
                 </button>
               )}
+              {shownStudy && (
+                <button
+                  type="button"
+                  className="po2-button po2-button--ghost"
+                  onClick={() => {
+                    const tous = shownStudy.content.locaux.filter(demandeUneHauteur).map((local) => local.id);
+                    const valeur = hauteurAPoser.valeur.toLocaleString("fr-FR");
+                    if (!window.confirm(`Donner ${valeur} m aux ${tous.length} locaux du niveau, y compris ceux qui ont déjà une hauteur ?`)) return;
+                    enfiler(tous, hauteurAPoser.valeur);
+                    setHauteurAPoser({ ...hauteurAPoser, poses: tous });
+                  }}
+                >
+                  Appliquer à tous les locaux du niveau
+                </button>
+              )}
               <button type="button" className="po2-button po2-button--primary" onClick={() => setHauteurAPoser(null)}>
+                Terminé
+              </button>
+            </div>
+          )}
+          {modeleAPoser && (
+            <div className="th-poser-hauteur" role="status">
+              <span>
+                Modèle <strong>{modeleAPoser.nom}</strong> ({Math.round(modeleAPoser.largeur_cm)} × {Math.round(modeleAPoser.hauteur_m * 100)} cm) :
+                cliquez sur le plan les menuiseries de ce modèle
+                {modeleAPoser.poses.length > 0 && ` (${modeleAPoser.poses.length} posée${modeleAPoser.poses.length > 1 ? "s" : ""})`}.
+                {modeleMessage && <small className="th-poser-hauteur__message"> {modeleMessage}</small>}
+              </span>
+              {memeLargeurRestantes.length > 0 && (
+                <button
+                  type="button"
+                  className="po2-button po2-button--ghost"
+                  title="Les menuiseries du niveau dont la largeur relevée est à ± 2 cm de celle du modèle"
+                  onClick={() => {
+                    affecterModele(memeLargeurRestantes, modeleAPoser.nom);
+                    setModeleAPoser({ ...modeleAPoser, poses: [...modeleAPoser.poses, ...memeLargeurRestantes.map(cleDeRef)] });
+                  }}
+                >
+                  Appliquer aux {memeLargeurRestantes.length} menuiseries de même largeur (± 2 cm)
+                </button>
+              )}
+              <button type="button" className="po2-button po2-button--primary" onClick={() => setModeleAPoser(null)}>
                 Terminé
               </button>
             </div>
@@ -855,7 +936,7 @@ export function WorkspacePage() {
               key={viewKey}
               manifest={raster.data}
               tileTemplate={thermiqueApi.apiUrl(raster.data.tile_url)}
-              tool={editionState.draft ? "edition" : calage || cadreVue ? "calage" : hauteurAPoser ? "pan" : tool}
+              tool={editionState.draft ? "edition" : calage || cadreVue ? "calage" : hauteurAPoser || modeleAPoser ? "pan" : tool}
               points={cadreVue?.premier ? [cadreVue.premier] : points}
               segments={editionState.draft ? [] : sheetSegments(sheet, tool, points)}
               onAddPoint={(point, event) => {
@@ -878,6 +959,26 @@ export function WorkspacePage() {
                     // Les enregistrements se suivent : deux clics rapides ne se marchent pas dessus.
                     enfiler(local.id, hauteurAPoser.valeur);
                     setHauteurAPoser({ ...hauteurAPoser, poses: [...hauteurAPoser.poses, local.id] });
+                  }
+                  return;
+                }
+                // Modèle de menuiserie : chaque menuiserie cliquée le reçoit (D220).
+                if (modeleAPoser && shownStudy) {
+                  const vise = viserSurLePlan(
+                    { ...shownStudy.content, enveloppe: { ...shownStudy.content.enveloppe, liaisons: [] } },
+                    shownStudy.content.locaux,
+                    point,
+                    { element: PRISE_ELEMENT_PAROIS_PX / pixelsPerPt, pont: 0 },
+                  );
+                  const element = vise ? trouverElement(shownStudy.content, vise.ref) : null;
+                  if (!element || element.type !== "menuiserie") {
+                    setModeleMessage("Cliquez sur le trait d'une menuiserie.");
+                    return;
+                  }
+                  const ref = refDeElement(element);
+                  if (!modeleAPoser.poses.includes(cleDeRef(ref))) {
+                    affecterModele([ref], modeleAPoser.nom);
+                    setModeleAPoser({ ...modeleAPoser, poses: [...modeleAPoser.poses, cleDeRef(ref)] });
                   }
                   return;
                 }
@@ -1153,6 +1254,10 @@ export function WorkspacePage() {
                             accentMenuiseries={etape === "enveloppe"}
                           />
                       )}
+                      {/* D221 : à l'étape des menuiseries, chacune porte sa cote, héritée du modèle posé. */}
+                      {!editionState.draft && (etape === "enveloppe" || modeleAPoser) && (
+                        <CotesMenuiseries cotes={cotesDesMenuiseries(shownStudy.content, menuiseries.data?.modeles)} toScreen={toScreen} />
+                      )}
                     </>
                   )}
                 </>
@@ -1318,6 +1423,24 @@ export function WorkspacePage() {
                       onMesurerBaie={vuesDuProjet.length ? () => ouvrirLaFenetre("menuiserie") : undefined}
                     />
                   )}
+                  {/* D222 : la bibliothèque des modèles du projet, à l'étape des menuiseries. */}
+                  {etape === "enveloppe" && token && !elementsState.selected && !editionState.draft && (
+                    <section className="th-modeles-section">
+                      <h2>Modèles de menuiserie du projet</h2>
+                      <BibliothequeModeles
+                        token={token}
+                        projectId={projectId}
+                        modeles={menuiseries.data?.modeles ?? []}
+                        onPoser={(modele) => poserModele({ nom: modele.nom, largeur_cm: modele.largeur_cm, hauteur_m: modele.hauteur_m })}
+                        onRetirer={(modele) => {
+                          if (!window.confirm(`Retirer le modèle « ${modele.nom} » ? Ses ${modele.poses} menuiserie(s) perdront sa hauteur.`)) return;
+                          void thermiqueApi
+                            .retirerModele(token, projectId, modele.nom)
+                            .then(() => queryClient.invalidateQueries({ queryKey: menuiseriesQueryKey(projectId) }));
+                        }}
+                      />
+                    </section>
+                  )}
                 </>
               )}
               {(elementsState.pending > 0 || elementsState.canRedo) && (
@@ -1391,6 +1514,7 @@ export function WorkspacePage() {
           outilPrefere={etape === "enveloppe" ? "menuiserie" : etape === "locaux" ? "hauteur" : undefined}
           outilArme={outilArme}
           onPoserHauteur={sheet?.nature === "plan" && study ? poserHauteur : undefined}
+          onPoserModele={sheet?.nature === "plan" && study ? poserModele : undefined}
           onClose={() => setCoupeOuverte(null)}
         />
       )}

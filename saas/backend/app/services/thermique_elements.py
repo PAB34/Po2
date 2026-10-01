@@ -52,6 +52,8 @@ CHAMPS_CORRIGEABLES = (
     "nu_interieur_fin_cm",
     # Menuiserie partagée avec d'autres pièces, désignées par leur nom (D217).
     "pieces_en_plus",
+    # Modèle de menuiserie mesuré en coupe ou en élévation et posé par le thermicien (D220).
+    "modele",
 )
 
 NUS = ("nu_exterieur_cm", "nu_interieur_cm", "nu_exterieur_fin_cm", "nu_interieur_fin_cm")
@@ -140,6 +142,11 @@ def _controler(element: dict[str, Any], changes: dict[str, Any]) -> dict[str, An
             if isinstance(valeur, bool) or not isinstance(valeur, (int, float)) or not 0 < valeur <= 180:
                 raise ThermiqueError("L'angle se donne en degrés, entre 0 et 180 (90 pour un angle droit).")
             propres[champ] = float(valeur)
+        elif champ == "modele":
+            texte = str(valeur or "").strip()
+            if len(texte) > 60:
+                raise ThermiqueError("Le nom d'un modèle de menuiserie tient en 60 caractères.")
+            propres[champ] = texte or None
         elif champ == "pieces_en_plus":
             if not isinstance(valeur, list) or not all(isinstance(nom, str) for nom in valeur):
                 raise ThermiqueError("Les pièces à affecter se donnent par leur nom.")
@@ -160,6 +167,8 @@ def _controler(element: dict[str, Any], changes: dict[str, Any]) -> dict[str, An
         raise ThermiqueError("Seul un pont thermique (angle ou about de refend) porte un pont type du catalogue.")
     if propres.get("pieces_en_plus") and futur.get("type") != "menuiserie":
         raise ThermiqueError("Seule une menuiserie s'affecte en plus à d'autres pièces.")
+    if propres.get("modele") and futur.get("type") != "menuiserie":
+        raise ThermiqueError("Seule une menuiserie reçoit un modèle de menuiserie.")
     if "angle_deg" in propres and futur.get("type") not in ("angle_sortant", "angle_rentrant"):
         raise ThermiqueError("Seul un angle sortant ou rentrant porte un angle.")
     # Le nu intérieur est toujours en deçà du nu extérieur : sur les 227 éléments du R+1, pas une

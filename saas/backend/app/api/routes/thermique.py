@@ -46,6 +46,7 @@ from app.schemas.thermique import (
     VueCorrigee,
     TraitTrace,
     MenuiserieConfirmee,
+    ModeleMesure,
     MiseEnFileResult,
     CalageRequest,
     NordRequest,
@@ -1172,6 +1173,54 @@ def confirmer_une_menuiserie(
         )
     except ThermiqueError as exc:
         raise _bad_request(exc) from exc
+
+
+@router.post("/vues/{vue_id}/modeles")
+def enregistrer_un_modele_de_menuiserie(
+    vue_id: int,
+    payload: ModeleMesure,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Modèle de menuiserie mesuré par deux coins, nommé, et capturé (D219, D222)."""
+    from datetime import datetime, timezone
+
+    vue = _vue_or_404(db, user, vue_id)
+    planche = db.get(ThermiqueSheet, vue.sheet_id)
+    try:
+        pdf = document_path(planche.document) if planche is not None else None
+        return menuiseries_service.enregistrer_modele(
+            db, vue, payload.coins, payload.nom, datetime.now(timezone.utc).isoformat(), pdf
+        )
+    except ThermiqueError as exc:
+        raise _bad_request(exc) from exc
+
+
+@router.get("/projects/{project_id}/modeles/capture")
+def lire_la_capture_d_un_modele(
+    project_id: int,
+    nom: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> Response:
+    """La capture d'un modèle de menuiserie (D222)."""
+    project = _project_or_404(db, user, project_id)
+    chemin = menuiseries_service.capture_du_modele(db, project.id, nom)
+    if chemin is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pas de capture pour ce modèle.")
+    return Response(content=chemin.read_bytes(), media_type="image/png")
+
+
+@router.delete("/projects/{project_id}/modeles")
+def retirer_un_modele(
+    project_id: int,
+    nom: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    project = _project_or_404(db, user, project_id)
+    menuiseries_service.retirer_modele(db, project.id, nom)
+    return {"ok": True}
 
 
 @router.delete("/vues/{vue_id}/menuiseries/{composant}")

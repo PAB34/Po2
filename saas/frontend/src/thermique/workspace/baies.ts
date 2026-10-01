@@ -29,6 +29,8 @@ export function baieDeElement(
 /** D'où vient la hauteur d'une baie, en clair. */
 export function provenanceBaie(baie: Baie): string {
   switch (baie.source) {
+    case "modele":
+      return `modèle « ${baie.modele} » mesuré sur ${baie.vue}`;
     case "baie":
       return `mesurée pour cette baie sur ${baie.vue}`;
     case "composant":

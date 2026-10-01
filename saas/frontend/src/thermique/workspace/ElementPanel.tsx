@@ -368,11 +368,19 @@ export function BaieDeLaMenuiserie({
   return (
     <div className="th-baie">
       <p>
-        Baie {baie.composant} · <strong>{baie.largeur_cm.toLocaleString("fr-FR")} cm</strong>
+        Baie {baie.modele ? <strong>{baie.modele}</strong> : baie.composant} ·{" "}
+        <strong>{(baie.largeur_retenue_cm ?? baie.largeur_cm).toLocaleString("fr-FR")} cm</strong>
         {baie.morceaux.length > 1 ? ` (${baie.morceaux.length} morceaux réunis)` : ""} — hauteur{" "}
         <strong>{baie.hauteur_m === null ? "inconnue" : `${baie.hauteur_m.toLocaleString("fr-FR")} m`}</strong>,{" "}
         {provenanceBaie(baie)}
+        {baie.surface_m2 != null ? ` · ${baie.surface_m2.toLocaleString("fr-FR")} m²` : ""}
       </p>
+      {baie.ecart_modele_cm != null && Math.abs(baie.ecart_modele_cm) > 5 && (
+        <p className="th-alert th-alert--warn">
+          Le plan relève {baie.largeur_cm.toLocaleString("fr-FR")} cm, le modèle mesure{" "}
+          {(baie.largeur_modele_cm ?? 0).toLocaleString("fr-FR")} cm : baie double, morceau mal relevé, ou mauvais modèle ?
+        </p>
+      )}
       {baie.morceau_a_verifier && (
         <p className="th-alert th-alert--warn">
           Morceau de {baie.largeur_cm.toLocaleString("fr-FR")} cm seul : sans doute la tranche d'une menuiserie mal

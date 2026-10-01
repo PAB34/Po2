@@ -6,6 +6,7 @@ import { thermiqueApi, type HautDeVue, type MenuiseriesDuProjet, type PdfPoint, 
 import { TileSheetViewer } from "../components/TileSheetViewer";
 import { mesureDeDeuxCoins, proposerComposants } from "./baies";
 import { avisSurLaHauteur, avisSurLaMenuiserie, rectangleDeMenuiserie, segmentDeHauteur } from "./mesuresVue";
+import { ModeleDeMenuiserie } from "./ModelesMenuiseries";
 import { pageDuCoteEcran, rotationALEndroit } from "./orientation";
 import { hauteursQueryKey } from "./study";
 
@@ -142,6 +143,7 @@ export function FenetreCoupe({
   outilPrefere,
   outilArme = null,
   onPoserHauteur,
+  onPoserModele,
   onClose,
 }: {
   token: string;
@@ -159,6 +161,8 @@ export function FenetreCoupe({
   outilArme?: { outil: OutilDeMesure; fois: number } | null;
   /** Pose la hauteur mesurée sur les locaux que le thermicien cliquera sur le plan (D211). */
   onPoserHauteur?: (hauteur: number) => void;
+  /** Pose le modèle mesuré sur les menuiseries que le thermicien cliquera sur le plan (D220). */
+  onPoserModele?: (modele: { nom: string; largeur_cm: number; hauteur_m: number }) => void;
   onClose: () => void;
 }) {
   const [survol, setSurvol] = useState<PdfPoint | null>(null);
@@ -220,18 +224,20 @@ export function FenetreCoupe({
     }
   };
 
-  const confirmerMenuiserie = async (coins: [PdfPoint, PdfPoint], composant: string, largeurCm: number | null) => {
+  // D219 : la mesure devient un modèle nommé, capturé, puis posé sur les menuiseries du plan (D220).
+  const enregistrerModele = async (coins: [PdfPoint, PdfPoint], nom: string) => {
     setBusy(true);
     try {
-      const resultat = await thermiqueApi.confirmerMenuiserie(token, vue.id, coins, composant, largeurCm);
-      setMessage(
-        `${composant}${largeurCm === null ? " (toutes les baies)" : ` · ${largeurCm.toLocaleString("fr-FR")} cm`} : ` +
-          `${resultat.hauteur_m.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} m de haut.`,
-      );
-      void queryClient.invalidateQueries({ queryKey: ["thermique", "menuiseries"] });
+      const modele = await thermiqueApi.enregistrerModele(token, vue.id, coins, nom);
+      await queryClient.invalidateQueries({ queryKey: ["thermique", "menuiseries"] });
       void queryClient.invalidateQueries({ queryKey: ["thermique", "vues"] });
+      onPoserModele?.({ nom: modele.modele, largeur_cm: modele.largeur_mesuree_cm, hauteur_m: modele.hauteur_m });
+      setMessage(
+        `Modèle « ${modele.modele} » enregistré (${Math.round(modele.largeur_mesuree_cm)} × ${Math.round(modele.hauteur_m * 100)} cm)` +
+          (onPoserModele ? " : cliquez sur le plan les menuiseries de ce modèle." : "."),
+      );
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "La confirmation a échoué.");
+      setMessage(error instanceof Error ? error.message : "L'enregistrement du modèle a échoué.");
     } finally {
       setBusy(false);
       setEtat({ etape: "aucune" });
@@ -405,12 +411,13 @@ export function FenetreCoupe({
         </div>
       )}
       {etat.etape === "choix" && (
-        <ChoixMenuiserie
+        <ModeleDeMenuiserie
+          key={`${etat.coins[0].join()}-${etat.coins[1].join()}`}
           largeurM={etat.largeur_m}
           hauteurM={etat.hauteur_m}
           menuiseries={menuiseries}
           busy={busy}
-          onChoisir={(composant, largeurCm) => void confirmerMenuiserie(etat.coins, composant, largeurCm)}
+          onEnregistrer={(nom) => void enregistrerModele(etat.coins, nom)}
           onAnnuler={() => {
             setEtat({ etape: "aucune" });
             setMessage(null);

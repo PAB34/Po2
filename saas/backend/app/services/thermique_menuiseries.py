@@ -13,6 +13,10 @@ Les confirmations sont gardées avec la vue d'élévation (`lecture_json["menuis
 from __future__ import annotations
 
 import json
+import logging
+import re
+import unicodedata
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy import select
@@ -52,9 +56,12 @@ def baies_du_releve(elements: list[dict[str, Any]]) -> list[dict[str, Any]]:
             courante = None
             continue
         composant = str(element.get("composant") or "?")
+        modele = element.get("modele") or None
         if (
             courante is not None
             and courante["composant"] == composant
+            # D220 : deux menuiseries de modèles différents ne forment plus une seule baie.
+            and courante["modele"] == modele
             and abs(courante["fin_m"] - float(element["debut_m"])) <= CONTIGU_M
         ):
             courante["fin_m"] = float(element["fin_m"])
@@ -63,6 +70,7 @@ def baies_du_releve(elements: list[dict[str, Any]]) -> list[dict[str, Any]]:
             continue
         courante = {
             "composant": composant,
+            "modele": modele,
             "debut_m": float(element["debut_m"]),
             "fin_m": float(element["fin_m"]),
             "mur_rideau": _mur_rideau(element),
@@ -84,9 +92,29 @@ def _confirmations(db: Session, project_id: int) -> list[dict[str, Any]]:
     return sorted(resultat, key=lambda c: (c.get("horodatage") or "", c["vue_id"], c["rang"]))
 
 
-def _hauteur_de_la_baie(baie: dict[str, Any], confirmations: list[dict[str, Any]]) -> dict[str, Any]:
-    """Hauteur propre à la baie si elle en a une, sinon celle du composant, sinon mur-rideau ou à lire."""
-    du_composant = [c for c in confirmations if c.get("composant") == baie["composant"]]
+def modeles(confirmations: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Les modèles de menuiserie mesurés (D219) : la dernière mesure de chaque nom fait foi."""
+    resultat: dict[str, dict[str, Any]] = {}
+    for confirmation in confirmations:
+        if confirmation.get("modele"):
+            resultat[confirmation["modele"]] = confirmation
+    return resultat
+
+
+def _hauteur_de_la_baie(
+    baie: dict[str, Any], confirmations: list[dict[str, Any]], par_modele: dict[str, dict[str, Any]] | None = None
+) -> dict[str, Any]:
+    """Modèle posé (D220, D221) ; sinon hauteur propre à la baie, puis celle du composant, puis mur-rideau ou à lire."""
+    modele = (par_modele or {}).get(baie.get("modele") or "")
+    if modele is not None:
+        return {
+            "hauteur_m": modele["hauteur_m"],
+            "source": "modele",
+            "vue_id": modele["vue_id"],
+            "vue": modele["vue"],
+            "largeur_modele_cm": modele["largeur_mesuree_cm"],
+        }
+    du_composant = [c for c in confirmations if not c.get("modele") and c.get("composant") == baie["composant"]]
     propres = [
         c for c in du_composant
         if c.get("largeur_cm") is not None and abs(float(c["largeur_cm"]) - baie["largeur_cm"]) <= IDENTIQUES_CM
@@ -108,6 +136,8 @@ def _hauteur_de_la_baie(baie: dict[str, Any], confirmations: list[dict[str, Any]
 def menuiseries_du_projet(db: Session, project_id: int) -> dict[str, Any]:
     """Les composants de menuiserie du projet, leurs baies sur tous les niveaux étudiés, et leur hauteur."""
     confirmations = _confirmations(db, project_id)
+    par_modele = modeles(confirmations)
+    poses: dict[str, int] = {}
     planches = db.scalars(
         select(ThermiqueSheet)
         .join(ThermiqueEtude, ThermiqueEtude.sheet_id == ThermiqueSheet.id)
@@ -125,12 +155,23 @@ def menuiseries_du_projet(db: Session, project_id: int) -> dict[str, Any]:
                 {"composant": baie["composant"], "mur_rideau": False, "baies": []},
             )
             fiche["mur_rideau"] = fiche["mur_rideau"] or baie["mur_rideau"]
+            hauteur = _hauteur_de_la_baie(baie, confirmations, par_modele)
+            # D221 : une baie posée hérite de la largeur du modèle mesuré ; l'écart avec le plan est signalé.
+            largeur = hauteur.get("largeur_modele_cm") or baie["largeur_cm"]
+            if baie.get("modele") in par_modele:
+                poses[baie["modele"]] = poses.get(baie["modele"], 0) + 1
             fiche["baies"].append(
-                {**baie, "sheet_id": planche.id, "niveau": planche.level_label or planche.label,
-                 **_hauteur_de_la_baie(baie, confirmations)}
+                {**baie, "sheet_id": planche.id, "niveau": planche.level_label or planche.label, **hauteur,
+                 "largeur_retenue_cm": largeur,
+                 "surface_m2": None if hauteur["hauteur_m"] is None else round(largeur / 100 * hauteur["hauteur_m"], 2),
+                 "ecart_modele_cm": None if "largeur_modele_cm" not in hauteur
+                 else round(baie["largeur_cm"] - hauteur["largeur_modele_cm"], 1)}
             )
     for fiche in composants.values():
-        generales = [c for c in confirmations if c.get("composant") == fiche["composant"] and c.get("largeur_cm") is None]
+        generales = [
+            c for c in confirmations
+            if not c.get("modele") and c.get("composant") == fiche["composant"] and c.get("largeur_cm") is None
+        ]
         fiche["hauteur_m"] = generales[-1]["hauteur_m"] if generales else None
         fiche["confirmation"] = (
             {"vue_id": generales[-1]["vue_id"], "vue": generales[-1]["vue"],
@@ -141,6 +182,13 @@ def menuiseries_du_projet(db: Session, project_id: int) -> dict[str, Any]:
     liste = sorted(composants.values(), key=lambda f: f["composant"])
     return {
         "composants": liste,
+        # D222 : la bibliothèque des modèles du projet.
+        "modeles": [
+            {"nom": nom, "largeur_cm": m["largeur_mesuree_cm"], "hauteur_m": m["hauteur_m"], "vue_id": m["vue_id"],
+             "vue": m["vue"], "capture": bool(m.get("capture")), "horodatage": m.get("horodatage"),
+             "poses": poses.get(nom, 0)}
+            for nom, m in sorted(par_modele.items())
+        ],
         "morceaux_a_verifier": [
             {"composant": b["composant"], "largeur_cm": b["largeur_cm"], "niveau": b["niveau"], "morceaux": b["morceaux"]}
             for f in liste for b in f["baies"] if b["morceau_a_verifier"]
@@ -209,6 +257,127 @@ def confirmer(
     vue.lecture_json = json.dumps(lecture, ensure_ascii=False, separators=(",", ":"))
     db.commit()
     return {k: v for k, v in confirmation.items() if k != "coins"}
+
+
+LARGEUR_MIN_M = 0.2
+MARGE_CAPTURE = 0.3  # D222 : la capture déborde de 30 % autour de la menuiserie
+MARGE_CAPTURE_MIN_PT = 12.0
+COTE_CAPTURE_PX = 900
+
+
+def dossier_des_captures(project_id: int) -> Path:
+    from app.core.config import settings
+
+    return Path(settings.thermique_storage_dir) / f"projet_{project_id}" / "modeles"
+
+
+def nom_de_capture(nom: str, horodatage: str) -> str:
+    """Nom de fichier sûr : le nom du modèle en clair, puis l'horodatage de la mesure."""
+    propre = re.sub(r"[^A-Za-z0-9_-]+", "-", unicodedata.normalize("NFKD", nom).encode("ascii", "ignore").decode()).strip("-")
+    instant = re.sub(r"[^0-9]", "", horodatage)[:14]
+    return f"{propre or 'modele'}-{instant}.png"
+
+
+def cadre_de_capture(coins: list[list[float]]) -> list[float]:
+    """Le cadre (points PDF) de la capture : la menuiserie et une marge autour."""
+    (ax, ay), (bx, by) = coins
+    x0, x1, y0, y1 = min(ax, bx), max(ax, bx), min(ay, by), max(ay, by)
+    mx = max((x1 - x0) * MARGE_CAPTURE, MARGE_CAPTURE_MIN_PT)
+    my = max((y1 - y0) * MARGE_CAPTURE, MARGE_CAPTURE_MIN_PT)
+    return [x0 - mx, y0 - my, x1 + mx, y1 + my]
+
+
+def capturer(pdf: Path, page_index: int, cadre: list[float], destination: Path) -> Path:
+    """Découpe la planche autour de la menuiserie, en PNG (D222)."""
+    import pypdfium2 as pdfium
+
+    from app.services.thermique_raster import VERROU_PDFIUM
+
+    x0, y0, x1, y1 = cadre
+    echelle = COTE_CAPTURE_PX / max(x1 - x0, y1 - y0, 1.0)
+    with VERROU_PDFIUM:
+        document = pdfium.PdfDocument(str(pdf))
+        try:
+            page = document[page_index]
+            gauche, bas, droite, haut = page.get_mediabox()
+            image = page.render(
+                scale=echelle,
+                crop=(max(0.0, x0 - gauche), max(0.0, y0 - bas), max(0.0, droite - x1), max(0.0, haut - y1)),
+            ).to_pil()
+        finally:
+            document.close()
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    image.save(destination, "PNG")
+    return destination
+
+
+def enregistrer_modele(
+    db: Session,
+    vue: ThermiqueVue,
+    coins: Any,
+    nom: str,
+    horodatage: str,
+    pdf: Path | None = None,
+) -> dict[str, Any]:
+    """Mesure un modèle de menuiserie par deux coins opposés et le garde avec sa capture (D219, D222).
+
+    Une nouvelle mesure du même nom remplace l'ancienne pour toutes les menuiseries posées.
+    """
+    planche = db.get(ThermiqueSheet, vue.sheet_id)
+    if planche is None or not planche.scale_denominator:
+        raise ThermiqueError("L'échelle de la planche n'est pas définie : la menuiserie ne se mesure pas.")
+    if not isinstance(coins, list) or len(coins) != 2:
+        raise ThermiqueError("Cliquez deux coins opposés de la menuiserie.")
+    propre = str(nom or "").strip()
+    if not propre or len(propre) > 60:
+        raise ThermiqueError("Donnez au modèle un nom de 1 à 60 caractères.")
+    largeur_m, hauteur_m = mesurer(vue, planche.scale_denominator, coins[0], coins[1])
+    if not HAUTEUR_MIN_M <= hauteur_m <= HAUTEUR_MAX_M or largeur_m < LARGEUR_MIN_M:
+        raise ThermiqueError(
+            f"Les deux coins donnent {largeur_m * 100:.0f} × {hauteur_m * 100:.0f} cm : cliquez deux coins opposés "
+            "de la baie (en diagonale), cadre compris."
+        )
+    points = [[float(v) for v in p] for p in coins]
+    capture = None
+    if pdf is not None:
+        try:
+            fichier = nom_de_capture(propre, horodatage)
+            capturer(pdf, planche.page_index, cadre_de_capture(points), dossier_des_captures(vue.project_id) / fichier)
+            capture = fichier
+        except Exception:  # Une capture ratée ne doit pas faire perdre la mesure.
+            logging.getLogger(__name__).exception("Capture du modèle « %s » impossible", propre)
+    confirmation = {
+        "modele": propre,
+        "largeur_mesuree_cm": round(largeur_m * 100, 1),
+        "hauteur_m": round(hauteur_m, 3),
+        "coins": points,
+        "capture": capture,
+        "horodatage": horodatage,
+    }
+    lecture = json.loads(vue.lecture_json)
+    lecture.setdefault("menuiseries", []).append(confirmation)
+    vue.lecture_json = json.dumps(lecture, ensure_ascii=False, separators=(",", ":"))
+    db.commit()
+    return {k: v for k, v in confirmation.items() if k != "coins"} | {"vue_id": vue.id, "vue": vue.nom}
+
+
+def capture_du_modele(db: Session, project_id: int, nom: str) -> Path | None:
+    modele = modeles(_confirmations(db, project_id)).get(nom)
+    if modele is None or not modele.get("capture"):
+        return None
+    chemin = dossier_des_captures(project_id) / modele["capture"]
+    return chemin if chemin.is_file() else None
+
+
+def retirer_modele(db: Session, project_id: int, nom: str) -> None:
+    """Retire un modèle de la bibliothèque (toutes ses mesures). Les menuiseries posées perdent sa hauteur."""
+    for vue in db.scalars(select(ThermiqueVue).where(ThermiqueVue.project_id == project_id)).all():
+        lecture = json.loads(vue.lecture_json)
+        gardees = [c for c in lecture.get("menuiseries", []) if c.get("modele") != nom]
+        if len(gardees) != len(lecture.get("menuiseries", [])):
+            lecture["menuiseries"] = gardees
+            vue.lecture_json = json.dumps(lecture, ensure_ascii=False, separators=(",", ":"))
+    db.commit()
 
 
 def retirer(db: Session, vue: ThermiqueVue, composant: str) -> None:
