@@ -166,6 +166,30 @@ def test_catalogue_fusionne_et_couches_reprises_de_la_fiche():
     assert synthese[0]["lineaire_m"] == 2 and synthese[0]["composition_retenue"] == "mur 12 + isolant 12"
 
 
+def test_un_catalogue_repris_d_un_autre_niveau_ne_fait_pas_tomber_la_planche(tmp_path):
+    """2026-10-01, R+2 avec le catalogue du R+1 : la « première vue » désignait un tronçon d'un autre niveau."""
+    import json
+
+    from PIL import Image
+
+    fiche = {"id": "P1", "nom": "double mur", "genre": "paroi", "decision": "integre", "regle": "alvéoles",
+             "couches": [{"nature": "mur", "epaisseur_cm": 12, "indice": ""}],
+             "premiere_vue": {"troncon": "T01", "debut_m": 40.0, "fin_m": 44.0}}
+    chemin = tmp_path / "catalogue.json"
+    chemin.write_text(json.dumps([fiche]), encoding="utf-8")
+    enveloppe.marquer_catalogue_repris(chemin)
+    repris = json.loads(chemin.read_text(encoding="utf-8"))
+    assert repris[0]["premiere_vue"]["autre_niveau"] is True
+
+    analyse = _analyse()
+    guide = enveloppe.contour_guide(analyse, 2000, 1000, PX_PAR_M)
+    manifeste = {"px_par_m": PX_PAR_M, "troncons": enveloppe.troncons(guide, analyse, 2000, 1000, PX_PAR_M)}
+    page = Image.new("RGB", (2000, 1000), "white")
+    # Repris : pas de vignette. Non marqué mais hors de la bande : la planche se dessine quand même.
+    assert enveloppe.planche_catalogue(page, manifeste, repris, tmp_path / "a.png").is_file()
+    assert enveloppe.planche_catalogue(page, manifeste, [fiche], tmp_path / "b.png").is_file()
+
+
 def test_massif_d_epaisseur_variable_cale_ses_couches_sur_le_nu_interieur():
     element = {"nu_exterieur_cm": 0, "nu_interieur_cm": -10, "nu_exterieur_fin_cm": 0, "nu_interieur_fin_cm": -70,
                "couches": [{"nature": "mur", "epaisseur_cm": 30}, {"nature": "isolant", "epaisseur_cm": 12},

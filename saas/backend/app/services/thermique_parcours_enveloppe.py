@@ -1113,10 +1113,10 @@ def planche_catalogue(page_image: Image.Image, manifeste: dict[str, Any], catalo
         vue = fiche.get("premiere_vue") or {}
         # Vu sur un autre niveau : pas de vignette, elle montrerait un autre mur (2026-10-01).
         troncon = None if vue.get("autre_niveau") else par_id.get(vue.get("troncon"))
-        if troncon is None and vue.get("autre_niveau"):
-            dessin.text((12, 80), "Appris sur un autre niveau : pas d'image de ce niveau.", fill="#495057", font=petite)
         carte = Image.new("RGB", (760, 420), "white")
         dessin = ImageDraw.Draw(carte)
+        if vue.get("autre_niveau"):
+            dessin.text((12, 80), "Appris sur un autre niveau : pas d'image de ce niveau.", fill="#495057", font=petite)
         couleur = {"integre": "#2b8a3e", "exclu": "#868e96", "a_confirmer": "#e8590c"}.get(fiche["decision"], "#172033")
         dessin.rectangle((0, 0, 759, 419), outline=couleur, width=4)
         dessin.text((12, 8), f"{fiche['id']} · {fiche['nom']}"[:60], fill="#0b3d91", font=police)
