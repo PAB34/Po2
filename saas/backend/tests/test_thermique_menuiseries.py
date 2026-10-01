@@ -207,6 +207,49 @@ def test_un_modele_mesure_et_pose_donne_sa_largeur_et_sa_hauteur_a_la_baie(db_se
         elements.corriger(contenu, elements.reference(RELEVE[1]), {"modele": "X"})
 
 
+def test_les_morceaux_d_une_menuiserie_sont_reunis_dans_le_releve():
+    """D223 (2026-10-01) : réunion physique à 6 cm, même composant et même modèle, indéterminé absorbé."""
+    from app.services import thermique_elements as elements
+
+    releve = {"elements": [
+        _m("T01", 1.00, 1.60, "M1", confirme=True, a_verifier=False),
+        _e("T01", 1.61, 1.64, "indetermine"),
+        _m("T01", 1.65, 2.20, "M1", confirme=True, a_verifier=False, modele=None),
+        _m("T01", 2.24, 2.80, "M1", a_verifier=True),           # 4 cm : réunie aussi
+        _m("T01", 2.90, 3.40, "M1"),                            # 10 cm : un trumeau, reste à part
+        _m("T01", 3.42, 3.90, "M2"),                            # autre composant : jamais d'office
+        _m("T02", 0.00, 0.50, "M1", modele="A"),
+        _m("T02", 0.52, 1.00, "M1", modele="B"),                # autre modèle : reste à part
+        _m("T03", 0.00, 0.50, "M1"),
+        _e("T03", 0.50, 0.55, "about_refend"),                  # un pont sépare
+        _m("T03", 0.55, 1.00, "M1"),
+    ]}
+    assert elements.reunir_menuiseries(releve) == 2
+    t01 = [e for e in releve["elements"] if e["troncon"] == "T01"]
+    reunie = t01[0]
+    assert (reunie["debut_m"], reunie["fin_m"]) == (1.00, 2.80)
+    assert [m["debut_m"] for m in reunie["morceaux_reunis"]] == [1.00, 1.65, 2.24]
+    assert reunie["confirme"] is False and reunie["a_verifier"] is True
+    assert t01[1]["exclu"] and "D223" in t01[1]["motif_exclusion"]
+    assert [(e["debut_m"], e["composant"]) for e in t01[2:]] == [(2.90, "M1"), (3.42, "M2")]
+    assert len([e for e in releve["elements"] if e["troncon"] in ("T02", "T03") and e["type"] == "menuiserie"]) == 4
+    assert elements.reunir_menuiseries(releve) == 0
+
+
+def test_l_exposition_d_une_menuiserie_suit_le_nord():
+    """D225 : normale sortante du tronçon (repère image) par rapport au nord ; sans nord, « à caler »."""
+    from app.services.thermique_etude_edition import exposer_menuiseries
+
+    manifeste = {"troncons": [{"id": "T01", "normale_ext": [0.0, 1.0]}, {"id": "T02", "normale_ext": [1.0, 0.0]}]}
+    releve = {"elements": [_m("T01", 0, 1, "M1"), _m("T02", 0, 1, "M1"), _e("T01", 1, 2, "paroi")]}
+    exposer_menuiseries(releve, manifeste, 0.0)
+    assert [(e.get("exposition"), e.get("azimut_deg")) for e in releve["elements"]] == [("S", 180), ("E", 90), (None, None)]
+    exposer_menuiseries(releve, manifeste, 90.0)  # le nord pointe à droite de la feuille : l'est est en bas
+    assert [e["exposition"] for e in releve["elements"][:2]] == ["E", "N"]
+    exposer_menuiseries(releve, manifeste, None)
+    assert releve["elements"][0]["exposition"] == "nord à caler" and releve["elements"][0]["azimut_deg"] is None
+
+
 def test_une_menuiserie_de_mauvaise_largeur_est_refusee(db_session):
     projet, vue = _projet(db_session)
     with pytest.raises(ThermiqueError, match="pas la même menuiserie"):

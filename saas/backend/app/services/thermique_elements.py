@@ -245,6 +245,77 @@ def reactiver(contenu: dict[str, Any], ref: dict[str, Any]) -> dict[str, Any]:
     return element
 
 
+REUNION_ECART_M = 0.06  # D223 : deux morceaux à 6 cm au plus forment une seule menuiserie
+NUS_FIN = ("nu_exterieur_fin_cm", "nu_interieur_fin_cm")
+
+
+def _reunir(a: dict[str, Any], b: dict[str, Any]) -> None:
+    """`b` rejoint `a` : bornes, nus de fin, corrections ; les morceaux d'origine restent notés (D223)."""
+    morceaux = a.get("morceaux_reunis") or [reference(a)]
+    a["morceaux_reunis"] = morceaux + (b.get("morceaux_reunis") or [reference(b)])
+    a["fin_m"] = max(float(a["fin_m"]), float(b["fin_m"]))
+    for champ in NUS_FIN:
+        if b.get(champ) is not None:
+            a[champ] = b[champ]
+    a["confirme"] = bool(a.get("confirme")) and bool(b.get("confirme"))
+    a["corrige"] = bool(a.get("corrige")) or bool(b.get("corrige"))
+    a["a_verifier"] = bool(a.get("a_verifier")) or bool(b.get("a_verifier"))
+    if b.get("modele") and not a.get("modele"):
+        a["modele"] = b["modele"]
+    partagees = sorted(set(a.get("pieces_en_plus") or []) | set(b.get("pieces_en_plus") or []))
+    if partagees:
+        a["pieces_en_plus"] = partagees
+    if b.get("releve_origine"):
+        a.setdefault("releve_origine_reunis", []).append(b["releve_origine"])
+
+
+def reunir_menuiseries(releve_brut: dict[str, Any]) -> int:
+    """Réunit dans le relevé les morceaux d'une même menuiserie (D223) ; renvoie le nombre de réunions.
+
+    Sur un même tronçon : même composant, même modèle, écart de 6 cm au plus, rien entre eux qu'un élément
+    « indéterminé » (absorbé, écarté avec un motif). Des composants différents ne se réunissent jamais d'office.
+    """
+    elements = releve_brut.get("elements")
+    if not isinstance(elements, list):
+        return 0
+    reunions = 0
+    change = True
+    while change:
+        change = False
+        actifs = sorted(
+            # Un pont (about de refend, angle) entre deux morceaux les sépare : il n'est pas ignoré.
+            (e for e in elements if est_actif(e)),
+            key=lambda e: (str(e.get("troncon")), float(e["debut_m"]), float(e["fin_m"])),
+        )
+        for rang, a in enumerate(actifs):
+            if a.get("type") != "menuiserie":
+                continue
+            entre = []
+            for b in actifs[rang + 1:]:
+                if b.get("troncon") != a.get("troncon") or float(b["debut_m"]) - float(a["fin_m"]) > REUNION_ECART_M:
+                    break
+                if b.get("type") == "indetermine":
+                    entre.append(b)
+                    continue
+                if (
+                    b.get("type") == "menuiserie"
+                    and (b.get("composant") or "") == (a.get("composant") or "")
+                    and (b.get("modele") or None) == (a.get("modele") or None)
+                ):
+                    _reunir(a, b)
+                    elements.remove(b)
+                    for parasite in entre:
+                        parasite["exclu"] = True
+                        parasite["motif_exclusion"] = "absorbé par la réunion de deux morceaux d'une menuiserie (D223)"
+                        parasite["a_verifier"] = False
+                    reunions += 1
+                    change = True
+                break
+            if change:
+                break
+    return reunions
+
+
 def compter(contenu: dict[str, Any]) -> dict[str, int]:
     """Compteurs du niveau : ce qui reste à regarder, et ce qui a été traité."""
     elements = _elements(contenu)

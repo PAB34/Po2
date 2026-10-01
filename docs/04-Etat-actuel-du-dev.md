@@ -29,6 +29,12 @@ do_not_auto_read:
 **229 côtés** (et non plus 222 : les côtés contre les 2 terrasses sont distingués depuis F), **170,12 m
 déperditifs**, 289 formes, 77 liaisons. Tout lot qui ne touche pas au calcul doit les laisser intacts.
 
+**2026-10-01 (soir) — menuiseries réunies et exposition ✅ EN PROD** (D223–D225,
+`docs/thermique/menuiseries-reunies-exposition-decisions.md`). Morceaux d'une menuiserie réunis **dans le
+relevé** à chaque recalcul (même tronçon, même composant et modèle, ≤ 6 cm, indéterminé absorbé) ; une étude
+plus ancienne est recalculée une fois à sa lecture (`menuiseries_reunies`). Jonction de tronçons : une baie à
+l'écran (une cote, un clic). Exposition (8 secteurs + azimut) écrite à chaque recalcul, donc à chaque pose du nord.
+
 **2026-10-01 (fin) — modèles de menuiserie ✅ EN PROD** (D218–D222, `docs/thermique/modeles-menuiseries-decisions.md`).
 Mesure en coupe/élévation → modèle nommé + capture PNG → posé en cliquant les menuiseries du plan (ou « même
 largeur ± 2 cm ») ; la baie hérite largeur, hauteur et surface du modèle ; cote affichée sur le plan à l'étape 4 ;

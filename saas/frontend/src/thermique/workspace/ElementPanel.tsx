@@ -26,6 +26,7 @@ import {
   trouverElement,
 } from "./elements";
 import { baieDeElement, provenanceBaie } from "./baies";
+import { expositionLisible } from "./modeles";
 
 const LIBELLES_CHAMP: Record<string, string> = {
   type: "type",
@@ -215,6 +216,20 @@ function Detail({
           </ul>
         )}
 
+        {element.type === "menuiserie" && (
+          <p className="th-muted">
+            Exposition :{" "}
+            {expositionLisible(element) ? (
+              <strong>
+                {expositionLisible(element)}
+                {element.azimut_deg != null ? ` (${element.azimut_deg}° depuis le nord)` : ""}
+              </strong>
+            ) : (
+              "nord à caler (onglet Planche)"
+            )}
+            {(element.morceaux_reunis?.length ?? 0) > 1 && ` · ${element.morceaux_reunis!.length} morceaux relevés réunis`}
+          </p>
+        )}
         {element.type === "menuiserie" && baie && <BaieDeLaMenuiserie baie={baie} onMesurer={onMesurerBaie} />}
         {element.type === "menuiserie" && !element.exclu && (
           <AffecterAussiA

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import type { MenuiseriesDuProjet, ModeleMenuiserie, StudyContent, StudyReleveElement } from "../api";
 import { BaieDeLaMenuiserie } from "./ElementPanel";
-import { menuiseriesDeMemeLargeur, nomPropose, texteDeLaCote } from "./modeles";
+import { baieDeLElement, baiesDuNiveau, cotesDesMenuiseries, menuiseriesDeMemeLargeur, nomPropose, texteDeLaCote } from "./modeles";
 import { BibliothequeModeles, ModeleDeMenuiserie } from "./ModelesMenuiseries";
 
 const menuiserie = (debut: number, fin: number, reste: Partial<StudyReleveElement> = {}): StudyReleveElement =>
@@ -27,9 +27,36 @@ describe("modèles de menuiserie (D219 à D222)", () => {
     expect(nomPropose(0.8, 2.15)).toBe("M 80×215");
   });
 
-  it("le trait du plan hérite de la cote du modèle posé", () => {
-    expect(texteDeLaCote(menuiserie(0, 2.4, { modele: "M1 120×215" }), [modele])).toEqual({ texte: "M1 120×215 · 120×215", posee: true });
-    expect(texteDeLaCote(menuiserie(0, 1.21), [modele])).toEqual({ texte: "121 cm", posee: false });
+  it("le trait du plan hérite de la cote du modèle posé, et porte son exposition (D221, D225)", () => {
+    expect(texteDeLaCote(menuiserie(0, 2.4, { modele: "M1 120×215", exposition: "SO" }), [modele])).toEqual({
+      texte: "M1 120×215 · 120×215 · SO",
+      posee: true,
+    });
+    expect(texteDeLaCote(menuiserie(0, 1.21, { exposition: "nord à caler" }), [modele])).toEqual({ texte: "121 cm", posee: false });
+  });
+
+  it("une baie coupée à la jonction de deux tronçons ne fait qu'une cote et qu'un clic (D224)", () => {
+    const content = {
+      enveloppe: {
+        objets: [
+          { id: "a", category: "menuiserie_exterieure", points_pdf: [[0, 0], [60, 0]], source_parcours: { troncon: "T1", debut_m: 0, fin_m: 0.6 } },
+          { id: "b", category: "menuiserie_exterieure", points_pdf: [[60, 0], [60, 40]], source_parcours: { troncon: "T2", debut_m: 0.6, fin_m: 1.2 } },
+        ],
+        releve_brut: {
+          elements: [
+            menuiserie(0, 0.6, { troncon: "T1" }),
+            menuiserie(0.6, 1.2, { troncon: "T2" }),
+            { ...menuiserie(1.2, 1.5, { troncon: "T2" }), type: "paroi" },
+            menuiserie(1.5, 2.0, { troncon: "T2" }),
+          ],
+        },
+      },
+    } as unknown as StudyContent;
+    expect(baiesDuNiveau(content).map((baie) => baie.length)).toEqual([2, 1]);
+    expect(baieDeLElement(content, content.enveloppe.releve_brut.elements[1]).map((ref) => ref.troncon)).toEqual(["T1", "T2"]);
+    const cotes = cotesDesMenuiseries(content, []);
+    expect(cotes.map((cote) => cote.texte)).toEqual(["120 cm"]);
+    expect(menuiseriesDeMemeLargeur(content, modele).map((ref) => ref.troncon)).toEqual(["T1", "T2"]);
   });
 
   it("retrouve les menuiseries de même largeur à ± 2 cm qui ne portent pas déjà le modèle", () => {

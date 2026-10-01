@@ -214,8 +214,9 @@ export function SheetPanel({
       queryClient.setQueryData<ProjectDetail>(projectQueryKey(projectId), (current) =>
         planches.reduce((projet, planche) => (projet ? replaceSheet(projet, planche) : projet), current),
       );
-      // Les orientations de l'étude ont été recalculées côté serveur : on la redemande.
-      void queryClient.invalidateQueries({ queryKey: studyQueryKey(sheet.id) });
+      // Les orientations des études (côtés, exposition des menuiseries, D225) ont été recalculées côté
+      // serveur, sur toutes les planches touchées : on les redemande.
+      void queryClient.invalidateQueries({ queryKey: nordPartout ? ["thermique", "etude"] : studyQueryKey(sheet.id) });
       onTool("pan");
     } catch (actionFailure) {
       setActionError(actionFailure instanceof Error ? actionFailure.message : "Impossible de poser le nord.");

@@ -22,7 +22,7 @@ import { menuiseriesQueryKey } from "./baies";
 import { PontsPanel } from "./PontsPanel";
 import { coteAt, empreinteCote, milieuCote, rangVise, type CoteVisee } from "./cotes";
 import { elementDuPont, paroisATrancher, pontAt, pontDeElement, refDeElement, trouverElement, viserSurLePlan } from "./elements";
-import { cleDeRef, cotesDesMenuiseries, menuiseriesDeMemeLargeur } from "./modeles";
+import { baieDeLElement, cleDeRef, cotesDesMenuiseries, menuiseriesDeMemeLargeur } from "./modeles";
 import { BibliothequeModeles, CotesMenuiseries } from "./ModelesMenuiseries";
 import { demandeUneHauteur, etapeCourante, hauteurConnue, locauxSansHauteur, parcours, vueDeLEtape, type EtapeId } from "./parcours";
 import { TYPES_PONT_REATTRIBUABLES } from "./pontsTypes";
@@ -595,10 +595,11 @@ export function WorkspacePage() {
   };
   const poserModele = (modele: { nom: string; largeur_cm: number; hauteur_m: number }) => {
     const designe = shownStudy ? trouverElement(shownStudy.content, elementsState.selected) : null;
-    const premier = designe && designe.type === "menuiserie" ? refDeElement(designe) : null;
-    if (premier) affecterModele([premier], modele.nom);
+    // D224 : la menuiserie désignée reçoit le modèle sur tous ses morceaux.
+    const premiers = shownStudy && designe && designe.type === "menuiserie" ? baieDeLElement(shownStudy.content, designe) : [];
+    if (premiers.length) affecterModele(premiers, modele.nom);
     setModeleMessage(null);
-    setModeleAPoser({ ...modele, poses: premier ? [cleDeRef(premier)] : [] });
+    setModeleAPoser({ ...modele, poses: premiers.map(cleDeRef) });
   };
   const memeLargeurRestantes =
     modeleAPoser && shownStudy
@@ -975,10 +976,11 @@ export function WorkspacePage() {
                     setModeleMessage("Cliquez sur le trait d'une menuiserie.");
                     return;
                   }
-                  const ref = refDeElement(element);
-                  if (!modeleAPoser.poses.includes(cleDeRef(ref))) {
-                    affecterModele([ref], modeleAPoser.nom);
-                    setModeleAPoser({ ...modeleAPoser, poses: [...modeleAPoser.poses, cleDeRef(ref)] });
+                  // D224 : un clic sur un morceau pose le modèle sur toute la baie.
+                  const refs = baieDeLElement(shownStudy.content, element).filter((ref) => !modeleAPoser.poses.includes(cleDeRef(ref)));
+                  if (refs.length) {
+                    affecterModele(refs, modeleAPoser.nom);
+                    setModeleAPoser({ ...modeleAPoser, poses: [...modeleAPoser.poses, ...refs.map(cleDeRef)] });
                   }
                   return;
                 }
@@ -1252,6 +1254,9 @@ export function WorkspacePage() {
                             coteVisee={rangCote}
                             familles={vue}
                             accentMenuiseries={etape === "enveloppe"}
+                            memeBaie={
+                              elementCourant?.type === "menuiserie" ? baieDeLElement(shownStudy.content, elementCourant) : undefined
+                            }
                           />
                       )}
                       {/* D221 : à l'étape des menuiseries, chacune porte sa cote, héritée du modèle posé. */}

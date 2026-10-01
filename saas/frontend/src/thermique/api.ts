@@ -156,6 +156,11 @@ export type StudyReleveElement = {
   pieces_en_plus?: string[];
   /** Modèle de menuiserie posé par le thermicien (D220). */
   modele?: string | null;
+  /** Exposition de la menuiserie selon le nord posé (D225) : secteur et azimut en degrés. */
+  exposition?: string;
+  azimut_deg?: number | null;
+  /** Morceaux relevés par l'IA, réunis en cette menuiserie (D223). */
+  morceaux_reunis?: StudyElementRef[];
 };
 /** Un pont type du tableau C.2 de la NF EN ISO 14683 (D158). */
 export type PontType = {

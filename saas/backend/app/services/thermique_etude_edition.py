@@ -376,6 +376,25 @@ def _inserer_pont(
     return element
 
 
+def exposer_menuiseries(releve_brut: dict[str, Any], manifeste: dict[str, Any], nord_deg: float | None) -> None:
+    """Exposition de chaque menuiserie : normale sortante de son tronçon par rapport au nord (D225)."""
+    import math
+
+    par_id = {t["id"]: t for t in manifeste.get("troncons", [])}
+    for element in releve_brut.get("elements", []):
+        if element.get("type") != "menuiserie":
+            continue
+        troncon = par_id.get(element.get("troncon"))
+        normale = (troncon or {}).get("normale_ext")
+        if not normale:
+            continue
+        element["exposition"] = fiches_locaux.orientation(tuple(normale), nord_deg)
+        element["azimut_deg"] = (
+            None if nord_deg is None
+            else round((math.degrees(math.atan2(normale[0], -normale[1])) - nord_deg) % 360)
+        )
+
+
 def reconstruire(contenu: dict[str, Any]) -> dict[str, Any]:
     """Recalcule le rattachement, les raccords, la synthèse, les fiches et la couverture (D62).
 
@@ -384,6 +403,10 @@ def reconstruire(contenu: dict[str, Any]) -> dict[str, Any]:
     resultat = copy.deepcopy(contenu)
     analyse = resultat["analyse"]
     manifeste = resultat["enveloppe"]["manifeste"]
+    # D223 : les morceaux d'une même menuiserie deviennent une seule menuiserie, dans le relevé lui-même.
+    elements_releve.reunir_menuiseries(resultat["enveloppe"]["releve_brut"])
+    # D225 : l'exposition de chaque menuiserie suit le nord posé (recalculée quand il change).
+    exposer_menuiseries(resultat["enveloppe"]["releve_brut"], manifeste, resultat.get("nord_deg"))
     # Les éléments écartés par le thermicien restent dans l'étude, avec leur motif, mais sortent de tout
     # ce qui se mesure (D100). Une seule copie filtrée sert à toute la chaîne, pour que le dessin, les
     # fiches, les liaisons et la couverture racontent la même chose.

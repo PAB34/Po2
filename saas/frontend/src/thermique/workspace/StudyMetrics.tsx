@@ -214,7 +214,10 @@ export function StudyMetrics({
   coteVisee = null,
   familles = { cotes: true, elements: true, ponts: true },
   accentMenuiseries = false,
+  memeBaie = [],
 }: {
+  /** Les autres morceaux de la menuiserie désignée, d'un tronçon à l'autre (D224). */
+  memeBaie?: StudyElementRef[];
   rooms: StudyRoom[];
   selected: StudyRoom | null;
   shapes: StudyEnvelopeShape[];
@@ -284,8 +287,11 @@ export function StudyMetrics({
   });
 
   // Un élément qui longe deux locaux est dessiné en morceaux : tous s'allument quand il est désigné (M2).
+  // Une menuiserie coupée à la jonction de deux tronçons s'allume en entier (D224).
   const designe = (shape: StudyEnvelopeShape) =>
-    memeElement(refDeForme(shape), selectedElement) || faitPartieDe(selectedElement, refDeForme(shape));
+    memeElement(refDeForme(shape), selectedElement) ||
+    faitPartieDe(selectedElement, refDeForme(shape)) ||
+    memeBaie.some((ref) => faitPartieDe(ref, refDeForme(shape)));
 
   return (
     <g className={`th-metrics${accentMenuiseries ? " th-metrics--parois" : ""}`}>

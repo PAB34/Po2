@@ -490,7 +490,31 @@ def read_sheet_etude(
 ) -> dict | None:
     sheet = _sheet_or_404(db, user, sheet_id)
     etude = get_etude_for_sheet(db, sheet.id)
+    if etude is not None:
+        _reunir_les_menuiseries_une_fois(db, sheet, etude)
     return serialize_etude(db, etude) if etude is not None else None
+
+
+MENUISERIES_REUNIES = "menuiseries_reunies"
+
+
+def _reunir_les_menuiseries_une_fois(db: Session, sheet: ThermiqueSheet, etude: ThermiqueEtude) -> None:
+    """Une étude d'avant D223 est recalculée une fois à sa lecture : morceaux de menuiserie réunis et
+    exposition posée, sans créer de version (comme une pose du nord). Un échec laisse l'étude telle quelle."""
+    try:
+        contenu = json.loads(etude.content_json)
+        if contenu.get(MENUISERIES_REUNIES) or "enveloppe" not in contenu:
+            return
+        transform, largeur, hauteur = _repere_de_la_planche(sheet, contenu)
+        recalcule = edition.reconstruire(contenu)
+        convertir_contours(recalcule, transform, largeur, hauteur)
+        recalcule[MENUISERIES_REUNIES] = True
+        etude.content_json = json.dumps(recalcule, ensure_ascii=False, separators=(",", ":"))
+        db.commit()
+        db.refresh(etude)
+    except Exception:
+        db.rollback()
+        LOG.exception("Réunion des menuiseries impossible pour la planche %s", sheet.id)
 
 
 @router.post("/sheets/{sheet_id}/etude/importer", response_model=EtudeRead)
