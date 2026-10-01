@@ -306,6 +306,13 @@ _CATEGORIES_SYNONYMES = {"mur_refend": "refend"}
 def _objet_normalise(objet: dict[str, Any]) -> dict[str, Any]:
     """Un objet de l'agent dans le vocabulaire du schéma : `points`, `evidence`, `geometry_type`."""
     resultat = dict(objet)
+    if "category" not in resultat and "categorie" in resultat:
+        resultat["category"] = resultat.pop("categorie")
+    geometrie = resultat.get("geometry")
+    if isinstance(geometrie, dict):
+        # {"type": "polyline", "points": [...]} : forme rendue le 2026-09-30 sans sortie structurée.
+        resultat.setdefault("geometry_type", geometrie.get("type"))
+        resultat["geometry"] = geometrie.get("points") or geometrie.get("coordinates") or []
     if "points" not in resultat:
         resultat["points"] = resultat.pop("geometry", None) or resultat.pop("coordinates", None) or []
     resultat.pop("geometry", None)

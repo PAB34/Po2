@@ -130,6 +130,9 @@ def test_parse_cli_output_tolere_une_phrase_ou_un_bloc_autour_du_json():
     assert objet["evidence"] == "trait épais"
     assert objet["geometry_type"] == "polyline"
     assert "geometry" not in objet and "id" not in objet
+    imbrique = {"composants": [{"categorie": "mur_refend", "geometry": {"type": "polygon", "points": [[1, 2], [3, 4], [5, 6]]}}]}
+    [objet] = thermique_claude_agent.parse_cli_output(json.dumps({"result": json.dumps(imbrique)}))["objects"]
+    assert (objet["category"], objet["geometry_type"], objet["points"]) == ("refend", "polygon", [[1, 2], [3, 4], [5, 6]])
     with pytest.raises(thermique_claude_agent.ThermiqueError, match="JSON valide"):
         thermique_claude_agent.parse_cli_output(json.dumps({"result": "Je n'ai pas pu lire le plan."}))
 
