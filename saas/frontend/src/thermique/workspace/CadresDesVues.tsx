@@ -22,7 +22,8 @@ export function hautDeLaVue(haut: [number, number]): HautDeVue {
 /** Ce qu'on sait de la vue, en clair. */
 export function etatDeLaVue(vue: VueCoupe): string {
   if (vue.nature !== "coupe") return vue.nature === "facade" ? "façade" : "détail";
-  if (vue.a_relire) return "à relire : cadre corrigé";
+  if (vue.lecture_demandee) return "lecture par l'IA demandée";
+  if (vue.a_relire) return "cadre corrigé : à faire lire";
   const n = vue.pieces?.length ?? 0;
   return n ? `${n} pièce${n > 1 ? "s" : ""} lue${n > 1 ? "s" : ""}` : "aucune pièce lue : cadre à vérifier";
 }
@@ -125,6 +126,7 @@ export function ListeDesVues({
   onChoisir,
   onRedessiner,
   onCorriger,
+  onFaireLire,
   onSupprimer,
 }: {
   vues: VueCoupe[];
@@ -136,6 +138,8 @@ export function ListeDesVues({
   onChoisir: (vueId: number) => void;
   onRedessiner: (vueId: number) => void;
   onCorriger: (vueId: number, correction: CorrectionDeVue) => void;
+  /** « Faire lire par l'IA » une coupe cadrée et orientée (D212) ; absent, le bouton ne s'affiche pas. */
+  onFaireLire?: (vueId: number) => void;
   onSupprimer: (vue: VueCoupe) => void;
 }) {
   if (!vues.length) return <p className="th-muted">Aucune vue lue sur cette planche.</p>;
@@ -188,6 +192,17 @@ export function ListeDesVues({
                   ))}
                 </select>
               </label>
+              {onFaireLire && vue.nature === "coupe" && (
+                <button
+                  type="button"
+                  className="po2-button po2-button--ghost"
+                  disabled={busy || vue.lecture_demandee}
+                  title="Une fois le cadre et le haut vérifiés : l'IA lira les pièces de cette coupe (consomme l'abonnement Claude)."
+                  onClick={() => onFaireLire(vue.id)}
+                >
+                  {vue.lecture_demandee ? "Lecture demandée" : "Faire lire par l'IA"}
+                </button>
+              )}
               <button type="button" className="th-link" disabled={busy} onClick={() => onSupprimer(vue)}>
                 Supprimer
               </button>

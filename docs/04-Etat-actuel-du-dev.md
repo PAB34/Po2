@@ -29,6 +29,13 @@ do_not_auto_read:
 **229 côtés** (et non plus 222 : les côtés contre les 2 terrasses sont distingués depuis F), **170,12 m
 déperditifs**, 289 formes, 77 liaisons. Tout lot qui ne touche pas au calcul doit les laisser intacts.
 
+**2026-10-01 — coupes et façades : le thermicien d'abord, l'IA ensuite ✅ EN PROD** (D206–D212,
+`docs/thermique/vues-manuelles-decisions.md`). Vue renommable et reclassable ; haut choisi tel que vu à
+l'écran ; fenêtre de vue ouverte à l'endroit ; « Placer les coupes » trace un trait à la main sur le plan ;
+mesures dessinées en direct, hauteur vérifiée puis posée sur les locaux cliqués ; mode sombre lisible ;
+« Faire lire par l'IA » vue par vue (plus de relecture automatique). **À éprouver par le thermicien sur
+PC10/PC11 et le R+1.** Niveaux SS1, RDC, R2, R3, toiture du projet 1 : analyse toujours à relancer (sur accord).
+
 **2026-09-30 — calage des niveaux refait « comme Aligner d'AutoCAD » ✅ EN PROD (`a601cfe0`), validé par
 l'utilisateur** (`thermique/calage-autocad-decisions.md`, D201–D202) : point de base → rotation (aimant 1°,
 « La rotation est déjà bonne ») → longueur avec ses propres points ; écart à l'échelle déclarée affiché. Les

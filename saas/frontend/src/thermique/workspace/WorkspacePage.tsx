@@ -383,11 +383,27 @@ export function WorkspacePage() {
       setVuesEtat({
         busy: false,
         message: vue.a_relire
-          ? `« ${vue.nom} » corrigée : ses pièces seront relues. Placez-la sur le plan du niveau (« Placer les coupes ») si elle n'y apparaît plus.`
+          ? `« ${vue.nom} » corrigée. Placez-la sur le plan du niveau (« Placer les coupes ») si elle n'y apparaît plus ; ` +
+            "quand son cadre et son haut sont bons, « Faire lire par l'IA » relira ses pièces."
           : `« ${vue.nom} » corrigée.`,
       });
     } catch (echec) {
       setVuesEtat({ busy: false, message: echec instanceof Error ? echec.message : "La correction a échoué." });
+    }
+  };
+  const faireLireUneVue = async (vueId: number) => {
+    if (!token) return;
+    setVuesEtat({ busy: true, message: null });
+    try {
+      const vue = await thermiqueApi.faireLireVue(token, vueId);
+      await queryClient.invalidateQueries({ queryKey: ["thermique", "vues"] });
+      void queryClient.invalidateQueries({ queryKey: ["thermique", "travaux"] });
+      setVuesEtat({
+        busy: false,
+        message: `« ${vue.nom} » est dans la file d'analyse : elle sera lue au prochain passage du relais (ou depuis une session Claude).`,
+      });
+    } catch (echec) {
+      setVuesEtat({ busy: false, message: echec instanceof Error ? echec.message : "La demande a échoué." });
     }
   };
   const cliquerCadreVue = (point: PdfPoint) => {
@@ -1237,6 +1253,7 @@ export function WorkspacePage() {
                         setCadreVue({ vueId, premier: null });
                       }}
                       onCorriger={(vueId, correction) => void corrigerUneVue(vueId, correction)}
+                      onFaireLire={(vueId) => void faireLireUneVue(vueId)}
                       onSupprimer={(vue) => void supprimerUneVue(vue)}
                     />
                     {vuesEtat.message && <p className="th-alert th-alert--ok">{vuesEtat.message}</p>}

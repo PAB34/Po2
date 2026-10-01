@@ -276,6 +276,8 @@ export type VueCoupe = {
   pieces?: unknown[];
   /** Cadre ou haut corrigé par le thermicien : la vue attend sa relecture (D205). */
   a_relire?: boolean;
+  /** Le thermicien a demandé la lecture de cette vue par l'IA (D212). */
+  lecture_demandee?: boolean;
   haut_impose?: boolean;
 };
 
@@ -542,6 +544,8 @@ export const thermiqueApi = {
     request<VueCoupe>(token, `/thermique/vues/${vueId}`, { method: "PATCH", body: JSON.stringify(correction) }),
   supprimerVue: (token: string, vueId: number) =>
     request<void>(token, `/thermique/vues/${vueId}`, { method: "DELETE" }),
+  // « Faire lire par l'IA » une coupe cadrée et orientée (D212).
+  faireLireVue: (token: string, vueId: number) => request<VueCoupe>(token, `/thermique/vues/${vueId}/lire`, { method: "POST" }),
   // Trait d'une coupe tracé à la main sur le plan (D209).
   tracerTraitDeCoupe: (token: string, planId: number, trait: { vue_id: number; points: PdfPoint[]; sens: [number, number] }) =>
     request<unknown>(token, `/thermique/sheets/${planId}/traits-coupe`, { method: "POST", body: JSON.stringify(trait) }),

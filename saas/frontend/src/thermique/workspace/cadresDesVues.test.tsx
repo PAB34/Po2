@@ -20,7 +20,8 @@ describe("les cadres des vues (D205)", () => {
 
   it("une coupe sans pièce signale un cadre à vérifier, une coupe corrigée attend sa relecture", () => {
     expect(etatDeLaVue(vue())).toContain("cadre à vérifier");
-    expect(etatDeLaVue(vue({ a_relire: true }))).toContain("à relire");
+    expect(etatDeLaVue(vue({ a_relire: true }))).toContain("à faire lire");
+    expect(etatDeLaVue(vue({ a_relire: true, lecture_demandee: true }))).toContain("demandée");
     expect(etatDeLaVue(vue({ pieces: [{}, {}] }))).toBe("2 pièces lues");
     expect(etatDeLaVue(vue({ nature: "facade" }))).toBe("façade");
   });

@@ -219,6 +219,22 @@ def corriger_vue(
     return vue
 
 
+def demander_la_lecture(db: Session, vue: ThermiqueVue) -> ThermiqueVue:
+    """Le thermicien demande à l'IA de lire cette coupe, une fois cadrée et orientée (D212).
+
+    Rien ne part sans cette demande : une lecture consomme l'abonnement Claude. Les pièces déjà lues restent
+    jusqu'à l'arrivée de la nouvelle lecture.
+    """
+    if vue.nature != "coupe":
+        raise ThermiqueError("Seule une coupe se fait lire pièce par pièce.")
+    lecture = json.loads(vue.lecture_json)
+    lecture.update({"a_relire": True, "lecture_demandee": True})
+    vue.lecture_json = json.dumps(lecture, ensure_ascii=False, separators=(",", ":"))
+    db.commit()
+    db.refresh(vue)
+    return vue
+
+
 def tracer_trait(db: Session, plan: ThermiqueSheet, vue: ThermiqueVue, points: Any, sens: Any) -> dict[str, Any]:
     """Le trait d'une coupe tracé à la main sur le plan (D209) : il fait foi pour cette vue.
 
@@ -259,7 +275,8 @@ def vues_a_relire(db: Session, sheet_id: int) -> list[ThermiqueVue]:
     return [
         vue
         for vue in db.scalars(select(ThermiqueVue).where(ThermiqueVue.sheet_id == sheet_id).order_by(ThermiqueVue.id)).all()
-        if json.loads(vue.lecture_json).get("a_relire")
+        # Seules les vues dont la lecture est demandée partent (D212) : corriger un cadre ne dépense rien.
+        if json.loads(vue.lecture_json).get("lecture_demandee")
     ]
 
 

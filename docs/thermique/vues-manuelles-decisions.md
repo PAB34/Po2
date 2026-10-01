@@ -43,9 +43,17 @@ Date : 2026-10-01. Suite de `cadres-des-vues-decisions.md` (D205), après le tes
   ou corrige les pièces lues de la coupe (D191), si la coupe en a. Une menuiserie de moins de 20 cm dans un
   sens est signalée comme suspecte.
 
-## À venir (lots suivants)
+- **D212 — L'IA lit une coupe quand le thermicien le demande** (lot 4). Corriger un cadre, un haut ou une
+  nature ne met plus rien en file. Le bouton « Faire lire par l'IA » d'une coupe la marque
+  `lecture_demandee` et met en file la relecture de la planche (`POST /vues/{id}/lire`) ; seules les vues
+  demandées sont relues. Les pièces déjà lues restent jusqu'à la nouvelle lecture.
 
-- Lot 4 : « Faire lire par l'IA » par vue, à l'initiative du thermicien.
+## Méthode de travail retenue (2026-10-01)
+
+1. Importer la lecture d'une planche de coupes ou de façades : les cadres de l'IA sont des propositions.
+2. Pour chaque vue : vérifier le nom (celui du trait du plan), la nature, le cadre, le haut (vu à l'écran).
+3. Sur le plan du niveau, « Placer les coupes » : tracer à la main celles qui ne sont pas situées.
+4. Mesurer à la main dans la vue ouverte (hauteurs, menuiseries) ; ou « Faire lire par l'IA » une coupe.
 
 ## Questions
 

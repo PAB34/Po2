@@ -184,7 +184,7 @@ def mettre_en_file(db: Session, project: ThermiqueProject, user: User) -> dict[s
                 elif _travail_vivant(db, sheet.id, COUPES) or _travail_vivant(db, sheet.id, VUES):
                     motif = "déjà dans la file"
                 else:
-                    motif = "déjà lue : corrigez le cadre d'une vue pour la faire relire"
+                    motif = "déjà lue : vérifiez ses vues, puis « Faire lire par l'IA » vue par vue"
                 ecartes.append({"sheet_id": sheet.id, "label": sheet.label, "motif": motif})
             continue
         motif = motif_d_exclusion(db, sheet)

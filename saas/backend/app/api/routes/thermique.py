@@ -1050,8 +1050,8 @@ def corriger_une_vue(
     db: Session = Depends(get_db),
     user: User = Depends(get_authenticated_user),
 ) -> dict:
-    """Cadre, haut, nom ou nature corrigés par le thermicien (D205, D206) ; une coupe dont le cadre ou le
-    haut change est mise en file de relecture."""
+    """Cadre, haut, nom ou nature corrigés par le thermicien (D205, D206). La relecture ne part plus
+    d'elle-même : le thermicien la demande vue par vue (D212)."""
     vue = _vue_or_404(db, user, vue_id)
     try:
         vue = lecture_coupes.corriger_vue(
@@ -1059,8 +1059,23 @@ def corriger_une_vue(
         )
     except ThermiqueError as exc:
         raise _bad_request(exc) from exc
+    return lecture_coupes.serialize_vue(vue)
+
+
+@router.post("/vues/{vue_id}/lire")
+def faire_lire_une_vue(
+    vue_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """« Faire lire par l'IA » (D212) : la coupe, cadrée et orientée, part dans la file du relais."""
+    vue = _vue_or_404(db, user, vue_id)
+    try:
+        vue = lecture_coupes.demander_la_lecture(db, vue)
+    except ThermiqueError as exc:
+        raise _bad_request(exc) from exc
     sheet = db.get(ThermiqueSheet, vue.sheet_id)
-    if sheet is not None and vue.nature == "coupe" and json.loads(vue.lecture_json).get("a_relire"):
+    if sheet is not None:
         travaux.mettre_en_file_la_relecture(db, sheet, user)
     return lecture_coupes.serialize_vue(vue)
 

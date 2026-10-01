@@ -300,6 +300,11 @@ def test_un_cadre_corrige_fait_relire_la_seule_vue_et_garde_le_haut_donne(db_ses
     assert lue["pieces"] == [] and lue["a_relire"] and lue["haut"] == [1.0, 0.0]
     assert not any(t.get("vue_id") == a.id for t in lecture.traits_du_plan(plan))
 
+    # D212 : rien ne part tant que le thermicien ne demande pas la lecture.
+    assert travaux.mettre_en_file_la_relecture(db_session, coupe, user) is None
+    with pytest.raises(ThermiqueError, match="Seule une coupe"):
+        lecture.demander_la_lecture(db_session, facade)
+    lecture.demander_la_lecture(db_session, a)
     travail = travaux.mettre_en_file_la_relecture(db_session, coupe, user)
     assert travail.type == "vues"
     consignes = travaux.consignes_du_travail(db_session, travail)
