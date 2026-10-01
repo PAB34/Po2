@@ -121,7 +121,8 @@ def test_un_nu_interieur_au_dela_de_l_exterieur_est_refuse():
         ({"type": "fenetre_ronde"}, "Type d'élément inconnu"),
         ({"composant": "  "}, "ne peut pas être vide"),
         ({"nu_interieur_cm": "vingt"}, "nombre de centimètres"),
-        ({"couches": []}, "ne se corrige pas dans ce lot"),
+        # D239 : les couches se copient désormais d'une paroi de référence ; vides, elles restent refusées.
+        ({"couches": []}, "au moins une couche"),
         ({"debut_m": 1}, "ne se corrige pas dans ce lot"),
     ],
 )

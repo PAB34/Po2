@@ -236,6 +236,60 @@ def test_les_morceaux_d_une_menuiserie_sont_reunis_dans_le_releve():
     assert elements.reunir_menuiseries(releve) == 0
 
 
+def test_les_parois_se_reunissent_aussi_et_la_composition_se_copie():
+    """D238 : réunion des parois à 6 cm ; D239 : les couches d'une paroi de référence se copient."""
+    import pytest
+
+    from app.services import thermique_elements as elements
+
+    couches = [{"nature": "mur", "epaisseur_cm": 20, "indice": ""}, {"nature": "isolant", "epaisseur_cm": 12, "indice": ""}]
+    releve = {"elements": [
+        {**_e("T01", 0.0, 2.0, "paroi"), "composant": "P1"},
+        {**_e("T01", 2.04, 4.0, "paroi"), "composant": "P1"},
+        {**_e("T01", 4.0, 5.0, "paroi"), "composant": "P2"},
+    ]}
+    assert elements.reunir_menuiseries(releve) == 1
+    assert [(e["debut_m"], e["fin_m"], e["composant"]) for e in releve["elements"]] == [(0.0, 4.0, "P1"), (4.0, 5.0, "P2")]
+
+    contenu = {"enveloppe": {"releve_brut": releve}}
+    cible = releve["elements"][1]
+    elements.corriger(contenu, elements.reference(cible), {"composant": "P1", "couches": couches, "nu_exterieur_cm": 44})
+    assert cible["couches"][1]["epaisseur_cm"] == 12.0 and cible["composant"] == "P1"
+    with pytest.raises(ThermiqueError, match="épaisseur"):
+        elements.corriger(contenu, elements.reference(cible), {"couches": [{"nature": "mur", "epaisseur_cm": 0}]})
+
+
+def test_un_mur_retrace_remplace_les_morceaux_et_garde_menuiseries_et_angles():
+    """D240, D241 : sur T01 puis T02, les morceaux bizarres sont écartés, une paroi propre par tronçon,
+    la menuiserie et l'angle restent, un morceau qui dépasse est rogné."""
+    import pytest
+
+    from app.services.thermique_etude_edition import MOTIF_RETRACE, retracer_paroi
+
+    manifeste = {"troncons": [{"id": "T01", "debut_m": 0.0, "fin_m": 5.0}, {"id": "T02", "debut_m": 5.0, "fin_m": 9.0}]}
+    releve = {"elements": [
+        {**_e("T01", 0.0, 1.5, "paroi"), "composant": "P9"},            # dépasse le début : rogné
+        _e("T01", 1.8, 2.2, "indetermine"),                              # morceau bizarre : écarté
+        {**_e("T01", 2.2, 3.0, "paroi"), "composant": "P9"},            # écarté
+        _m("T01", 3.0, 4.2, "M1"),                                       # gardée
+        _e("T01", 5.0, 5.0, "angle_sortant"),                            # pont : gardé
+        {**_e("T02", 5.0, 9.0, "paroi"), "composant": "P9"},            # dépasse la fin : rogné
+    ]}
+    modele = {"composant": "P1", "couches": [{"nature": "mur", "epaisseur_cm": 20}], "nu_exterieur_cm": 44, "nu_interieur_cm": 0}
+    with pytest.raises(ThermiqueError, match="Copiez"):
+        retracer_paroi(releve, manifeste, {"debut_m": 1, "fin_m": 7})
+    nouveaux = retracer_paroi(releve, manifeste, {"debut_m": 7.0, "fin_m": 1.0, "modele": modele})
+
+    assert [(n["troncon"], n["debut_m"], n["fin_m"]) for n in nouveaux] == [("T01", 1.0, 3.0), ("T01", 4.2, 5.0), ("T02", 5.0, 7.0)]
+    assert all(n["composant"] == "P1" and n["retrace"] and n["confirme"] for n in nouveaux)
+    par_bornes = {(e["troncon"], e["debut_m"]): e for e in releve["elements"] if not e.get("retrace")}
+    assert par_bornes[("T01", 0.0)]["fin_m"] == 1.0 and not par_bornes[("T01", 0.0)].get("exclu")
+    assert par_bornes[("T01", 1.8)]["motif_exclusion"] == MOTIF_RETRACE
+    assert par_bornes[("T01", 2.2)]["exclu"]
+    assert not par_bornes[("T01", 3.0)].get("exclu") and not par_bornes[("T01", 5.0)].get("exclu")
+    assert par_bornes[("T02", 7.0)]["fin_m"] == 9.0  # rogné : il commence où finit le mur retracé
+
+
 def test_l_exposition_d_une_menuiserie_suit_le_nord():
     """D225 : normale sortante du tronçon (repère image) par rapport au nord ; sans nord, « à caler »."""
     from app.services.thermique_etude_edition import exposer_menuiseries

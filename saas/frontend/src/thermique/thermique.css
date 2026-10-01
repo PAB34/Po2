@@ -3452,3 +3452,9 @@ circle.th-seg--measure {
   border-radius: var(--po2-radius-sm);
   background: var(--po2-color-blue-soft);
 }
+/* D239 : composition d'une paroi et pinceau. */
+.th-composition {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.4rem 0;
+}

@@ -41,6 +41,8 @@ OPERATIONS = (
     "element_reactiver",
     # Un pont que l'agent n'a pas vu, posé par le thermicien là où il le dit (remarque C, D157).
     "pont_ajouter",
+    # Un pan de mur retracé d'un bout à l'autre avec une composition copiée (D240).
+    "paroi_retracer",
 )
 OPERATIONS_ELEMENT = tuple(nom for nom in OPERATIONS if nom.startswith("element_"))
 # Un contour édité est simplifié sous cette tolérance, en unités du repère 0..1000 (~5 cm).
@@ -248,6 +250,8 @@ def appliquer(contenu: dict[str, Any], operations: list[dict[str, Any]]) -> dict
             _element(resultat, operation)
         elif operation["type"] == "pont_ajouter":
             _ajouter_pont(resultat, operation)
+        elif operation["type"] == "paroi_retracer":
+            retracer_paroi(resultat["enveloppe"]["releve_brut"], resultat["enveloppe"]["manifeste"], operation)
         elif operation["type"] == "modifier":
             _modifier(resultat["analyse"], operation)
         elif operation["type"] == "couper":
@@ -374,6 +378,82 @@ def _inserer_pont(
         element["reference_pont"] = str(reference)
     elements.append(element)
     return element
+
+
+# D240 : ce qu'un mur retracé remplace, et ce qu'il garde.
+REMPLACES_PAR_LE_MUR = ("paroi", "indetermine")
+MOTIF_RETRACE = "remplacé par le mur retracé (D240)"
+
+
+def retracer_paroi(releve_brut: dict[str, Any], manifeste: dict[str, Any], operation: dict[str, Any]) -> list[dict[str, Any]]:
+    """Retrace un pan de mur d'un bout à l'autre avec la composition copiée (D240, D241).
+
+    Entre les deux abscisses (globales au parcours, sur un ou plusieurs tronçons) : les parois et indéterminés
+    sont écartés avec un motif (visibles, réactivables) ou rognés s'ils dépassent ; les trous laissés entre les
+    éléments gardés (menuiseries, poteaux, garde-corps) reçoivent une paroi propre de la composition, une par
+    tronçon. Les angles et abouts — les ponts thermiques — restent : la discontinuité à chaque angle est gardée.
+    """
+    try:
+        debut, fin = sorted((float(operation["debut_m"]), float(operation["fin_m"])))
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ThermiqueError("Le mur à retracer se donne par son début et sa fin le long de la façade.") from exc
+    if fin - debut < 0.05:
+        raise ThermiqueError("Le mur à retracer est trop court : cliquez son début puis sa fin.")
+    modele = operation.get("modele")
+    if not isinstance(modele, dict) or not modele.get("couches"):
+        raise ThermiqueError("Copiez d'abord la composition d'une paroi de référence.")
+    couches = elements_releve._couches(modele["couches"])
+    nus = {cle: float(modele.get(cle) or 0.0) for cle in ("nu_exterieur_cm", "nu_interieur_cm")}
+    elements = releve_brut["elements"]
+    nouveaux: list[dict[str, Any]] = []
+    for troncon in manifeste.get("troncons", []):
+        a, b = max(debut, float(troncon["debut_m"])), min(fin, float(troncon["fin_m"]))
+        if b - a < 0.01:
+            continue
+        gardes: list[tuple[float, float]] = []
+        for element in list(elements):
+            if element.get("troncon") != troncon["id"] or element.get("exclu"):
+                continue
+            e0, e1 = float(element["debut_m"]), float(element["fin_m"])
+            if e1 <= a or e0 >= b:
+                continue
+            if element.get("type") not in REMPLACES_PAR_LE_MUR:
+                if e1 > e0:
+                    gardes.append((max(e0, a), min(e1, b)))
+                continue
+            if e0 >= a - 0.005 and e1 <= b + 0.005:
+                element["exclu"] = True
+                element["motif_exclusion"] = MOTIF_RETRACE
+                element["a_verifier"] = False
+            else:
+                # Il dépasse : il garde sa part hors du pan retracé.
+                element.setdefault("releve_origine", {}).setdefault("bornes", [e0, e1])
+                if e0 < a:
+                    element["fin_m"] = round(a, 3)
+                else:
+                    element["debut_m"] = round(b, 3)
+        position = a
+        for g0, g1 in sorted(gardes) + [(b, b)]:
+            if g0 - position >= 0.01:
+                nouveaux.append({
+                    "troncon": troncon["id"], "debut_m": round(position, 3), "fin_m": round(g0, 3), "type": "paroi",
+                    "composant": modele.get("composant"), "couches": copy.deepcopy(couches),
+                    **nus, "nu_exterieur_fin_cm": nus["nu_exterieur_cm"], "nu_interieur_fin_cm": nus["nu_interieur_cm"],
+                    "menuiserie_type": "", "cadre_cm": 0, "confiance": 1.0, "indice": "mur retracé par le thermicien",
+                    "a_verifier": False, "confirme": True, "ajoute": True, "retrace": True,
+                })
+            position = max(position, g1)
+    if not nouveaux and not any(e.get("motif_exclusion") == MOTIF_RETRACE for e in elements):
+        raise ThermiqueError("Aucun pan de façade entre ces deux points : cliquez le long du mur.")
+    # Un élément se désigne par (tronçon, début, fin) : le mur neuf ne doit jamais prendre l'identité d'un
+    # morceau écarté aux mêmes bornes, sinon les gestes suivants viseraient le mauvais.
+    prises = {(e.get("troncon"), e.get("debut_m"), e.get("fin_m")) for e in elements}
+    for nouveau in nouveaux:
+        while (nouveau["troncon"], nouveau["debut_m"], nouveau["fin_m"]) in prises:
+            nouveau["debut_m"] = round(nouveau["debut_m"] + 0.001, 3)
+        prises.add((nouveau["troncon"], nouveau["debut_m"], nouveau["fin_m"]))
+    elements.extend(nouveaux)
+    return nouveaux
 
 
 def exposer_menuiseries(releve_brut: dict[str, Any], manifeste: dict[str, Any], nord_deg: float | None) -> None:

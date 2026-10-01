@@ -163,6 +163,10 @@ export type StudyReleveElement = {
   azimut_deg?: number | null;
   /** Morceaux relevés par l'IA, réunis en cette menuiserie (D223). */
   morceaux_reunis?: StudyElementRef[];
+  /** Composition de la paroi (couches, du nu extérieur vers l'intérieur). */
+  couches?: StudyCouche[];
+  /** Paroi retracée par le thermicien (D240). */
+  retrace?: boolean;
 };
 /** Un pont type du tableau C.2 de la NF EN ISO 14683 (D158). */
 export type PontType = {
@@ -409,6 +413,8 @@ export type StudyElementChanges = Partial<{
   pieces_en_plus: string[];
   /** Modèle de menuiserie posé (D220) ; une chaîne vide le retire. */
   modele: string;
+  /** Composition copiée d'une paroi de référence (D239). */
+  couches: StudyCouche[];
 }>;
 export type StudyElementScope = "cet_element" | "partout";
 export type StudyOperation =
@@ -438,7 +444,20 @@ export type StudyOperation =
       /** Position calculée par l'écran, que le serveur vérifie au lieu de la recalculer (P5, D164). */
       troncon?: string;
       abscisse_m?: number;
-    };
+    }
+  /** Un pan de mur retracé d'un bout à l'autre (abscisses globales au parcours) avec une composition copiée (D240). */
+  | { type: "paroi_retracer"; debut_m: number; fin_m: number; modele: CompositionCopiee };
+
+/** La composition d'une paroi de référence, copiée au pinceau (D239). */
+export type CompositionCopiee = {
+  composant: string | null;
+  couches: StudyCouche[];
+  nu_exterieur_cm: number;
+  nu_interieur_cm: number;
+  /** Repère lisible : composant et épaisseur totale. */
+  libelle: string;
+};
+export type StudyCouche = { nature: string; epaisseur_cm: number; indice?: string; presume?: boolean };
 export type StudyPreview = {
   content: StudyContent;
   couverture: StudyCoverage;

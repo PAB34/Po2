@@ -54,6 +54,8 @@ CHAMPS_CORRIGEABLES = (
     "pieces_en_plus",
     # Modèle de menuiserie mesuré en coupe ou en élévation et posé par le thermicien (D220).
     "modele",
+    # Composition copiée d'une paroi de référence (pinceau, D239).
+    "couches",
 )
 
 NUS = ("nu_exterieur_cm", "nu_interieur_cm", "nu_exterieur_fin_cm", "nu_interieur_fin_cm")
@@ -124,6 +126,24 @@ def confirmer(contenu: dict[str, Any], ref: dict[str, Any]) -> dict[str, Any]:
     return element
 
 
+def _couches(valeur: Any) -> list[dict[str, Any]]:
+    """Une composition copiée (D239) : des couches de nature et d'épaisseur lisibles, gardées telles quelles."""
+    if not isinstance(valeur, list) or not valeur:
+        raise ThermiqueError("Une composition se donne par au moins une couche.")
+    couches = []
+    for couche in valeur:
+        if not isinstance(couche, dict):
+            raise ThermiqueError("Une couche de la composition est illisible.")
+        epaisseur = couche.get("epaisseur_cm")
+        if isinstance(epaisseur, bool) or not isinstance(epaisseur, (int, float)) or not 0 < epaisseur <= 200:
+            raise ThermiqueError("L'épaisseur d'une couche se donne en centimètres, entre 0 et 200.")
+        nature = str(couche.get("nature") or "").strip()
+        if not nature:
+            raise ThermiqueError("Chaque couche de la composition doit avoir une nature.")
+        couches.append({**couche, "nature": nature, "epaisseur_cm": float(epaisseur)})
+    return couches
+
+
 def _controler(element: dict[str, Any], changes: dict[str, Any]) -> dict[str, Any]:
     propres: dict[str, Any] = {}
     for champ, valeur in changes.items():
@@ -142,6 +162,8 @@ def _controler(element: dict[str, Any], changes: dict[str, Any]) -> dict[str, An
             if isinstance(valeur, bool) or not isinstance(valeur, (int, float)) or not 0 < valeur <= 180:
                 raise ThermiqueError("L'angle se donne en degrés, entre 0 et 180 (90 pour un angle droit).")
             propres[champ] = float(valeur)
+        elif champ == "couches":
+            propres[champ] = _couches(valeur)
         elif champ == "modele":
             texte = str(valeur or "").strip()
             if len(texte) > 60:
@@ -246,6 +268,7 @@ def reactiver(contenu: dict[str, Any], ref: dict[str, Any]) -> dict[str, Any]:
 
 
 REUNION_ECART_M = 0.06  # D223 : deux morceaux à 6 cm au plus forment une seule menuiserie
+TYPES_REUNIS = ("menuiserie", "paroi")  # D238 : et une seule paroi
 NUS_FIN = ("nu_exterieur_fin_cm", "nu_interieur_fin_cm")
 
 
@@ -288,7 +311,8 @@ def reunir_menuiseries(releve_brut: dict[str, Any]) -> int:
             key=lambda e: (str(e.get("troncon")), float(e["debut_m"]), float(e["fin_m"])),
         )
         for rang, a in enumerate(actifs):
-            if a.get("type") != "menuiserie":
+            # D238 : les parois se réunissent comme les menuiseries.
+            if a.get("type") not in TYPES_REUNIS:
                 continue
             entre = []
             for b in actifs[rang + 1:]:
@@ -298,7 +322,7 @@ def reunir_menuiseries(releve_brut: dict[str, Any]) -> int:
                     entre.append(b)
                     continue
                 if (
-                    b.get("type") == "menuiserie"
+                    b.get("type") == a.get("type")
                     and (b.get("composant") or "") == (a.get("composant") or "")
                     and (b.get("modele") or None) == (a.get("modele") or None)
                 ):

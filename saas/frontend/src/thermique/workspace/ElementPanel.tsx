@@ -28,6 +28,7 @@ import {
 } from "./elements";
 import { baieDeElement, provenanceBaie } from "./baies";
 import { expositionLisible } from "./modeles";
+import { epaisseurTotaleCm } from "./parois";
 
 const LIBELLES_CHAMP: Record<string, string> = {
   type: "type",
@@ -180,6 +181,7 @@ function Detail({
   onMesurerBaie,
   modeles = [],
   onChoisirModele,
+  onCopierComposition,
 }: {
   element: StudyReleveElement;
   content: StudyContent;
@@ -192,8 +194,27 @@ function Detail({
   onMesurerBaie?: () => void;
   modeles?: ModeleMenuiserie[];
   onChoisirModele?: (element: StudyReleveElement, nom: string) => void;
+  /** D239 : prendre cette paroi comme référence pour le pinceau de composition. */
+  onCopierComposition?: (element: StudyReleveElement) => void;
 }) {
   const menuiserie = element.type === "menuiserie";
+  // D239 : la composition d'une paroi, et le pinceau qui la copie sur d'autres.
+  const composition =
+    element.type === "paroi" && !element.exclu ? (
+      <div className="th-composition">
+        <p className="th-muted">
+          Composition : <strong>{element.composant ?? "—"}</strong> · {epaisseurTotaleCm(element)} cm
+          {(element.couches ?? []).length > 0 &&
+            ` (${(element.couches ?? []).map((couche) => `${couche.nature} ${couche.epaisseur_cm}`).join(" + ")})`}
+          {element.retrace ? " · mur retracé" : ""}
+        </p>
+        {onCopierComposition && (
+          <button type="button" className="po2-button po2-button--secondary" disabled={busy} onClick={() => onCopierComposition(element)}>
+            Copier sa composition (pinceau)
+          </button>
+        )}
+      </div>
+    ) : null;
   const lecture = (
     <>
       {element.indice && (
@@ -319,6 +340,7 @@ function Detail({
           </strong>
           <Etat element={element} />
         </header>
+        {composition}
         {lecture}
         {gestes}
       </article>
@@ -484,10 +506,13 @@ export function ElementPanel({
   sheetId = null,
   onMesurerBaie,
   onChoisirModele,
+  onCopierComposition,
   famille,
 }: {
   /** D227 : l'étape ne liste que les parois, ou que les menuiseries. */
   famille?: "parois" | "menuiseries";
+  /** D239 : prendre une paroi comme référence pour le pinceau de composition. */
+  onCopierComposition?: (element: StudyReleveElement) => void;
   content: StudyContent;
   room: StudyRoom | null;
   selected: StudyElementRef | null;
@@ -542,6 +567,7 @@ export function ElementPanel({
           onMesurerBaie={onMesurerBaie}
           modeles={menuiseries?.modeles ?? []}
           onChoisirModele={onChoisirModele}
+          onCopierComposition={onCopierComposition}
         />
         {message && <p className="th-alert">{message}</p>}
       </section>
