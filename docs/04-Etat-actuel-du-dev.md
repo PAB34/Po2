@@ -29,6 +29,12 @@ do_not_auto_read:
 **229 côtés** (et non plus 222 : les côtés contre les 2 terrasses sont distingués depuis F), **170,12 m
 déperditifs**, 289 formes, 77 liaisons. Tout lot qui ne touche pas au calcul doit les laisser intacts.
 
+**2026-10-01 (nuit, suite) — coupes et élévations sans IA ✅ EN PROD** (D230–D232,
+`docs/thermique/vues-sans-ia-decisions.md`). « Analyser » ne met plus en file que les niveaux ; les vues se
+créent à la main (« Ajouter une vue ») ; les menuiseries mesurées sont dessinées sur leur vue. Catalogue repris
+d'un autre niveau : vignettes non dessinées (arrêt du R+2 corrigé). **R+2 du projet 1 en cours d'analyse sur le
+poste** (`Etudes-thermique/projet1/R2`), à importer par l'utilisateur.
+
 **2026-10-01 (nuit) — étapes Parois et Menuiseries séparées ✅ EN PROD** (D227–D229,
 `docs/thermique/etapes-parois-menuiseries-decisions.md`). Six étapes ; chaque étape n'épaissit et ne laisse
 attraper que sa famille ; étape Menuiseries : compteur « sans modèle », cotes, bibliothèque, fenêtre prête à

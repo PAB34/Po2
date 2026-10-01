@@ -219,6 +219,38 @@ def corriger_vue(
     return vue
 
 
+def creer_vue(db: Session, sheet: ThermiqueSheet, nom: Any, nature: Any, cadre: Any, haut: Any) -> ThermiqueVue:
+    """Une vue tracée à la main sur une planche de coupes ou d'élévations (D231) : sans lecture IA."""
+    if sheet.nature not in ("coupe", "facade"):
+        raise ThermiqueError("Une vue se trace sur une planche de coupes ou d'élévations.")
+    propre = _nom(nom, "La vue")
+    if propre in db.scalars(select(ThermiqueVue.nom).where(ThermiqueVue.sheet_id == sheet.id)).all():
+        raise ThermiqueError(f"Une vue de cette planche s'appelle déjà « {propre} ».")
+    if nature not in ("coupe", "facade"):
+        raise ThermiqueError("Une vue est une coupe ou une élévation.")
+    if haut not in SENS_DU_HAUT:
+        raise ThermiqueError("Le haut d'une vue est en haut, en bas, à gauche ou à droite de la page.")
+    if not isinstance(cadre, list) or len(cadre) != 4:
+        raise ThermiqueError("Le cadre d'une vue se donne par deux coins opposés.")
+    x0, y0, x1, y1 = (_nombre(v, "Le cadre") for v in cadre)
+    boite = [min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)]
+    if boite[2] - boite[0] < 20 or boite[3] - boite[1] < 20:
+        raise ThermiqueError("Ce cadre est trop petit : cliquez deux coins opposés de la vue entière.")
+    lecture = {"haut": SENS_DU_HAUT[haut], "haut_impose": True, "niveaux": [], "pieces": [], "manuelle": True}
+    vue = ThermiqueVue(
+        project_id=sheet.project_id,
+        sheet_id=sheet.id,
+        nom=propre,
+        nature=nature,
+        cadre_json=json.dumps(boite),
+        lecture_json=json.dumps(lecture, ensure_ascii=False, separators=(",", ":")),
+    )
+    db.add(vue)
+    db.commit()
+    db.refresh(vue)
+    return vue
+
+
 def demander_la_lecture(db: Session, vue: ThermiqueVue) -> ThermiqueVue:
     """Le thermicien demande à l'IA de lire cette coupe, une fois cadrée et orientée (D212).
 

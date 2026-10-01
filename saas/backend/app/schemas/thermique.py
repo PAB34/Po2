@@ -356,6 +356,15 @@ class VueCorrigee(BaseModel):
     nature: str | None = None
 
 
+class VueTracee(BaseModel):
+    """Une vue tracée à la main (D231) : nom, nature, cadre (deux coins, points PDF), haut dans la page."""
+
+    nom: str = Field(min_length=1, max_length=80)
+    nature: str
+    cadre: list[float] = Field(min_length=4, max_length=4)
+    haut: str
+
+
 class TraitTrace(BaseModel):
     """Le trait d'une coupe tracé à la main sur le plan : deux points et le côté regardé (D209)."""
 

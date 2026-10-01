@@ -368,6 +368,28 @@ def test_une_vue_corrigee_se_renomme_et_reste_sur_le_plan_par_son_trait_trace(db
     assert not any(t.get("vue_id") == a.id for t in lecture.traits_du_plan(plan))
 
 
+def test_une_vue_se_trace_a_la_main(db_session):
+    """D231 : sans lecture IA, le thermicien crée la vue (cadre en deux coins, nom, nature, haut)."""
+    import json
+
+    import pytest
+
+    from app.services import thermique_lecture_coupes as lecture
+    from app.services.thermique import ThermiqueError
+
+    plan, coupe = _projet_avec_coupe(db_session)
+    vue = lecture.creer_vue(db_session, coupe, " Façade Nord ", "facade", [900, 300, 100, 700], "droite")
+    assert (vue.nom, vue.nature, json.loads(vue.cadre_json)) == ("Façade Nord", "facade", [100, 300, 900, 700])
+    lue = lecture.serialize_vue(vue)
+    assert lue["haut"] == [1.0, 0.0] and lue["haut_impose"] and lue["pieces"] == []
+    with pytest.raises(ThermiqueError, match="déjà"):
+        lecture.creer_vue(db_session, coupe, "Façade Nord", "coupe", [0, 0, 100, 100], "haut")
+    with pytest.raises(ThermiqueError, match="trop petit"):
+        lecture.creer_vue(db_session, coupe, "B", "coupe", [0, 0, 5, 5], "haut")
+    with pytest.raises(ThermiqueError, match="planche de coupes"):
+        lecture.creer_vue(db_session, plan, "C", "coupe", [0, 0, 100, 100], "haut")
+
+
 def test_sans_trait_sur_le_plan_il_se_deduit_de_la_coupe(db_session):
     """D190 : le plan ne porte pas le trait ; la coupe A le situe par ses numéros de pièces, une seule fois."""
     import json

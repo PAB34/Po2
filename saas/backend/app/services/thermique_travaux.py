@@ -134,18 +134,8 @@ def _lectures_de_coupes(db: Session, sheet: ThermiqueSheet, avec_coupes: bool) -
     Une planche de coupes ou de façades est lue en entier ; un plan voit ses traits de coupe relevés dès
     que le projet a des coupes. Une lecture n'écrase que des données d'agent : pas de garde-fou D94.
     """
-    if sheet.scale_denominator is None:
-        return []
-    if sheet.nature in ("coupe", "facade"):
-        # Une planche déjà lue n'est pas relue en entier : ce serait effacer les cadres corrigés à la main
-        # (D205). Seules ses vues marquées « à relire » repartent.
-        if db.scalar(select(func.count()).select_from(ThermiqueVue).where(ThermiqueVue.sheet_id == sheet.id)):
-            if vues_a_relire(db, sheet.id) and not _travail_vivant(db, sheet.id, VUES):
-                return [(VUES, RANG_VUES)]
-            return []
-        return [] if _travail_vivant(db, sheet.id, COUPES) else [(COUPES, RANG_COUPES)]
-    if sheet.nature == "plan" and avec_coupes and not sheet.traits_coupe_json:
-        return [] if _travail_vivant(db, sheet.id, TRAITS) else [(TRAITS, RANG_TRAITS)]
+    # D230 (2026-10-01) : les coupes, les élévations et les traits de coupe ne sont plus lus par l'IA ; les vues
+    # se créent à la main (D231) et les hauteurs et menuiseries s'y mesurent. Rien ne part plus en file d'ici.
     return []
 
 
@@ -178,14 +168,7 @@ def mettre_en_file(db: Session, project: ThermiqueProject, user: User) -> dict[s
         for type_travail, rang in lectures:
             ajouter(sheet, type_travail, rang)
         if sheet.nature in ("coupe", "facade"):
-            if not lectures:
-                if sheet.scale_denominator is None:
-                    motif = "l'échelle n'est pas définie"
-                elif _travail_vivant(db, sheet.id, COUPES) or _travail_vivant(db, sheet.id, VUES):
-                    motif = "déjà dans la file"
-                else:
-                    motif = "déjà lue : vérifiez ses vues, puis « Faire lire par l'IA » vue par vue"
-                ecartes.append({"sheet_id": sheet.id, "label": sheet.label, "motif": motif})
+            # D230 : ses vues se créent à la main ; elle n'est ni analysée, ni signalée comme écartée.
             continue
         motif = motif_d_exclusion(db, sheet)
         if motif:

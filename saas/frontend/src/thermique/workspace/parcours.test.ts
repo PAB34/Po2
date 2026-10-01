@@ -181,13 +181,13 @@ describe("le parcours d'une planche de coupes ou de façades (S5)", () => {
     expect(etapes.map((item) => item.id)).toEqual(["planche", "lecture", "hauteurs"]);
     expect(etapes[0].etat).toBe("fait");
     expect(etapes[0].reste).not.toContain("nord");
-    expect(etapes[1].reste).toContain("Analyser avec Claude Code");
+    expect(etapes[1]).toMatchObject({ titre: "Vues", reste: "« Ajouter une vue » : deux clics sur la planche" });
     expect(etapeCourante(etapes)).toBe("lecture");
   });
 
   it("façades lues puis menuiseries mesurées", () => {
     const lue = parcours(planche({ nature: "facade" }), undefined, [vue(), vue({ id: 8, nom: "Détail", nature: "detail" })]);
-    expect(lue[1]).toMatchObject({ etat: "fait", reste: "1 façade lue" });
+    expect(lue[1]).toMatchObject({ etat: "fait", reste: "1 vue cadrée" });
     expect(lue[2].reste).toContain("Coupes et élévations");
     const mesuree = parcours(planche({ nature: "facade" }), undefined, [
       vue({ menuiseries: [{ composant: "M4", largeur_cm: null, hauteur_m: 2.15 }] }),
@@ -198,7 +198,7 @@ describe("le parcours d'une planche de coupes ou de façades (S5)", () => {
   it("une planche de coupes compte ses étages confirmés, et ignore les vues d'autres planches", () => {
     const coupe = vue({ nom: "COUPE A", nature: "coupe", corrections: [{ sol: 1, plafond: 2, hauteur_m: 2.88 }] });
     const etapes = parcours(planche({ nature: "coupe" }), undefined, [coupe, vue({ id: 9, sheet_id: 2, nature: "coupe" })]);
-    expect(etapes[1].reste).toBe("1 coupe lue");
+    expect(etapes[1].reste).toBe("1 vue cadrée");
     expect(etapes[2]).toMatchObject({ titre: "Hauteurs des locaux", etat: "fait", reste: "1 étage confirmé" });
   });
 });

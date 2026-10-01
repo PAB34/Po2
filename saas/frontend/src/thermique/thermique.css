@@ -3426,3 +3426,29 @@ circle.th-seg--measure {
   color: var(--po2-color-muted);
   font-weight: 700;
 }
+/* D232 : menuiseries mesurées sur une planche de coupes ou d'élévations. Plan toujours blanc : couleurs fixes. */
+.th-menuiserie-mesuree rect {
+  fill: rgb(4 120 87 / 12%);
+  stroke: #047857;
+  stroke-width: 2;
+}
+
+.th-menuiserie-mesuree text {
+  fill: #047857;
+  font-size: 11px;
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 3px;
+}
+
+/* D231 : vue créée à la main. */
+.th-nouvelle-vue {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0.5rem 0;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--po2-color-line);
+  border-radius: var(--po2-radius-sm);
+  background: var(--po2-color-blue-soft);
+}

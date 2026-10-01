@@ -19,13 +19,20 @@ export function hautDeLaVue(haut: [number, number]): HautDeVue {
   return cotePage(haut);
 }
 
-/** Ce qu'on sait de la vue, en clair. */
+/** Les modèles de menuiserie mesurés sur cette vue, avec leurs deux coins (D232) ; le dernier d'un nom fait foi. */
+export function modelesDeLaVue(vue: VueCoupe): { nom: string; coins: [PdfPoint, PdfPoint] }[] {
+  const parNom = new Map<string, [PdfPoint, PdfPoint]>();
+  for (const mesure of vue.menuiseries ?? []) {
+    if (mesure.modele && mesure.coins?.length === 2) parNom.set(mesure.modele, [mesure.coins[0], mesure.coins[1]]);
+  }
+  return [...parNom].map(([nom, coins]) => ({ nom, coins }));
+}
+
+/** Ce qu'on sait de la vue, en clair (D230 : plus de lecture IA ; D232 : menuiseries mesurées). */
 export function etatDeLaVue(vue: VueCoupe): string {
-  if (vue.nature !== "coupe") return vue.nature === "facade" ? "façade" : "détail";
-  if (vue.lecture_demandee) return "lecture par l'IA demandée";
-  if (vue.a_relire) return "cadre corrigé : à faire lire";
-  const n = vue.pieces?.length ?? 0;
-  return n ? `${n} pièce${n > 1 ? "s" : ""} lue${n > 1 ? "s" : ""}` : "aucune pièce lue : cadre à vérifier";
+  const nature = vue.nature === "facade" ? "élévation" : vue.nature === "detail" ? "détail" : "coupe";
+  const n = modelesDeLaVue(vue).length;
+  return n ? `${nature} · ${n} menuiserie${n > 1 ? "s" : ""} mesurée${n > 1 ? "s" : ""}` : nature;
 }
 
 function rectangle(cadre: number[], toScreen: ToScreen) {
@@ -52,13 +59,25 @@ export function CadresDesVues({
     <g className="th-cadres-vues">
       {vues.map((vue) => {
         const r = rectangle(vue.cadre, toScreen);
-        const classes = ["th-cadre-vue", vue.id === choisie ? "is-choisie" : "", vue.a_relire ? "is-a-relire" : ""].join(" ");
+        const classes = ["th-cadre-vue", vue.id === choisie ? "is-choisie" : ""].join(" ");
         return (
           <g key={vue.id} className={classes}>
             <rect {...r} />
             <text x={r.x + 6} y={r.y + 16}>
               {vue.nom} · {etatDeLaVue(vue)}
             </text>
+            {/* D232 : chaque menuiserie mesurée se voit à sa place, avec son modèle. */}
+            {modelesDeLaVue(vue).map((modele) => {
+              const m = rectangle([...modele.coins[0], ...modele.coins[1]], toScreen);
+              return (
+                <g key={modele.nom} className="th-menuiserie-mesuree">
+                  <rect {...m} />
+                  <text x={m.x + 3} y={m.y - 4}>
+                    {modele.nom}
+                  </text>
+                </g>
+              );
+            })}
           </g>
         );
       })}
@@ -117,6 +136,68 @@ function NomDeLaVue({ vue, busy, onChoisir, onRenommer }: {
   );
 }
 
+/** Le cadre en cours de tracé désigne une vue qui n'existe pas encore (D231). */
+export const NOUVELLE_VUE = -1;
+
+/** Après les deux coins : nom, nature et haut de la nouvelle vue (D231). */
+function NouvelleVue({
+  cadre,
+  transform,
+  rang,
+  busy,
+  onCreer,
+  onAbandonner,
+}: {
+  cadre: number[];
+  transform?: number[];
+  rang: number;
+  busy: boolean;
+  onCreer: (vue: { nom: string; nature: "coupe" | "facade"; cadre: number[]; haut: HautDeVue }) => void;
+  onAbandonner?: () => void;
+}) {
+  const [nom, setNom] = useState(`Vue ${rang}`);
+  const [nature, setNature] = useState<"coupe" | "facade">("facade");
+  const [haut, setHaut] = useState<HautDeVue>("haut");
+  return (
+    <div className="th-nouvelle-vue">
+      <label>
+        Nom
+        <input value={nom} maxLength={80} autoFocus onChange={(event) => setNom(event.target.value)} />
+      </label>
+      <label>
+        Nature
+        <select value={nature} onChange={(event) => setNature(event.target.value as "coupe" | "facade")}>
+          <option value="facade">élévation</option>
+          <option value="coupe">coupe</option>
+        </select>
+      </label>
+      <label>
+        Haut du dessin
+        <select value={haut} onChange={(event) => setHaut(event.target.value as HautDeVue)}>
+          {HAUTS.map((h) => (
+            <option key={h.id} value={h.id}>
+              {h.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <span className="th-vues__actions">
+        <button
+          type="button"
+          className="po2-button po2-button--primary"
+          disabled={busy || !nom.trim()}
+          onClick={() => onCreer({ nom: nom.trim(), nature, cadre, haut: transform ? pageDuCoteEcran(haut, transform) : haut })}
+        >
+          Créer la vue
+        </button>
+        <button type="button" className="th-link" onClick={onAbandonner}>
+          Abandonner
+        </button>
+      </span>
+    </div>
+  );
+}
+
 export function ListeDesVues({
   vues,
   choisie,
@@ -126,8 +207,11 @@ export function ListeDesVues({
   onChoisir,
   onRedessiner,
   onCorriger,
-  onFaireLire,
   onSupprimer,
+  nouvelle = null,
+  onAjouter,
+  onCreer,
+  onAbandonner,
 }: {
   vues: VueCoupe[];
   choisie: number | null;
@@ -138,17 +222,48 @@ export function ListeDesVues({
   onChoisir: (vueId: number) => void;
   onRedessiner: (vueId: number) => void;
   onCorriger: (vueId: number, correction: CorrectionDeVue) => void;
-  /** « Faire lire par l'IA » une coupe cadrée et orientée (D212) ; absent, le bouton ne s'affiche pas. */
-  onFaireLire?: (vueId: number) => void;
   onSupprimer: (vue: VueCoupe) => void;
+  /** D231 : cadre de la vue en cours de création, une fois ses deux coins cliqués. */
+  nouvelle?: number[] | null;
+  onAjouter?: () => void;
+  onCreer?: (vue: { nom: string; nature: "coupe" | "facade"; cadre: number[]; haut: HautDeVue }) => void;
+  onAbandonner?: () => void;
 }) {
-  if (!vues.length) return <p className="th-muted">Aucune vue lue sur cette planche.</p>;
-  return (
+  const ajout = enCours?.vueId === NOUVELLE_VUE;
+  const entete = (
     <>
       <p className="th-muted">
-        Vérifiez chaque vue sur la planche : son nom (celui du trait sur le plan), sa nature, son cadre (tout le
-        bâtiment et les cotes de niveau) et le côté où se trouve le haut du dessin, tel que vous le voyez.
+        Une vue par coupe ou élévation : cadrez-la (tout le dessin et ses cotes de niveau), nommez-la comme sur le plan
+        (« Coupe A », « Façade Nord »), et dites où se trouve le haut du dessin tel que vous le voyez.
       </p>
+      {onAjouter && !nouvelle && (
+        <button type="button" className="po2-button po2-button--primary" disabled={busy || ajout} onClick={onAjouter}>
+          {ajout ? (enCours?.premier ? "Cliquez le coin opposé…" : "Cliquez un coin de la vue…") : "Ajouter une vue"}
+        </button>
+      )}
+      {nouvelle && onCreer && (
+        <NouvelleVue
+          cadre={nouvelle}
+          transform={transform}
+          rang={vues.length + 1}
+          busy={busy}
+          onCreer={onCreer}
+          onAbandonner={onAbandonner}
+        />
+      )}
+    </>
+  );
+  if (!vues.length) {
+    return (
+      <>
+        {entete}
+        <p className="th-muted">Aucune vue sur cette planche.</p>
+      </>
+    );
+  }
+  return (
+    <>
+      {entete}
       <ul className="th-vues">
         {vues.map((vue) => (
           <li key={vue.id} className={vue.id === choisie ? "is-choisie" : undefined}>
@@ -192,17 +307,6 @@ export function ListeDesVues({
                   ))}
                 </select>
               </label>
-              {onFaireLire && vue.nature === "coupe" && (
-                <button
-                  type="button"
-                  className="po2-button po2-button--ghost"
-                  disabled={busy || vue.lecture_demandee}
-                  title="Une fois le cadre et le haut vérifiés : l'IA lira les pièces de cette coupe (consomme l'abonnement Claude)."
-                  onClick={() => onFaireLire(vue.id)}
-                >
-                  {vue.lecture_demandee ? "Lecture demandée" : "Faire lire par l'IA"}
-                </button>
-              )}
               <button type="button" className="th-link" disabled={busy} onClick={() => onSupprimer(vue)}>
                 Supprimer
               </button>

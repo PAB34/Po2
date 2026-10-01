@@ -45,6 +45,7 @@ from app.schemas.thermique import (
     LectureCoupes,
     VueCorrigee,
     TraitTrace,
+    VueTracee,
     MenuiserieConfirmee,
     ModeleMesure,
     MiseEnFileResult,
@@ -1103,6 +1104,21 @@ def faire_lire_une_vue(
     if sheet is not None:
         travaux.mettre_en_file_la_relecture(db, sheet, user)
     return lecture_coupes.serialize_vue(vue)
+
+
+@router.post("/sheets/{sheet_id}/vues")
+def tracer_une_vue(
+    sheet_id: int,
+    vue: VueTracee,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_authenticated_user),
+) -> dict:
+    """Une vue créée à la main sur une planche de coupes ou d'élévations (D231)."""
+    sheet = _sheet_or_404(db, user, sheet_id)
+    try:
+        return lecture_coupes.serialize_vue(lecture_coupes.creer_vue(db, sheet, vue.nom, vue.nature, vue.cadre, vue.haut))
+    except ThermiqueError as exc:
+        raise _bad_request(exc) from exc
 
 
 @router.post("/sheets/{sheet_id}/traits-coupe")

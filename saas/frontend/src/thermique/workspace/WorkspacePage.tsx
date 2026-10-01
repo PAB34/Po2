@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../../providers/AuthProvider";
-import { thermiqueApi, type CorrectionDeVue, type PdfPoint, type StudyElementRef, type ProjectDetail, type Sheet, type Study, type VueCoupe } from "../api";
+import { thermiqueApi, type CorrectionDeVue, type HautDeVue, type PdfPoint, type StudyElementRef, type ProjectDetail, type Sheet, type Study, type VueCoupe } from "../api";
 import { TileSheetViewer, type ViewerTool, type ViewerView } from "../components/TileSheetViewer";
 import { STATUS_LABELS } from "../natures";
 import { allSheets, projectQueryKey, projectsQueryKey } from "../projectCache";
@@ -35,7 +35,7 @@ import {
   type Alignement,
 } from "./alignement";
 import { GuideCalage } from "./GuideCalage";
-import { CadresDesVues, ListeDesVues, cadreDeDeuxCoins, type CadreEnCours } from "./CadresDesVues";
+import { CadresDesVues, ListeDesVues, NOUVELLE_VUE, cadreDeDeuxCoins, type CadreEnCours } from "./CadresDesVues";
 import { NiveauFantome, PointsDeCalage } from "./NiveauFantome";
 import { appliquer, calageAEnregistrer, correspondance, inverser, niveauxVoisins } from "./superposition";
 import { useStudyEdition } from "./useStudyEdition";
@@ -378,28 +378,10 @@ export function WorkspacePage() {
       await queryClient.invalidateQueries({ queryKey: ["thermique", "hauteurs"] });
       setVuesEtat({
         busy: false,
-        message: vue.a_relire
-          ? `« ${vue.nom} » corrigée. Placez-la sur le plan du niveau (« Placer les coupes ») si elle n'y apparaît plus ; ` +
-            "quand son cadre et son haut sont bons, « Faire lire par l'IA » relira ses pièces."
-          : `« ${vue.nom} » corrigée.`,
+        message: `« ${vue.nom} » corrigée.`,
       });
     } catch (echec) {
       setVuesEtat({ busy: false, message: echec instanceof Error ? echec.message : "La correction a échoué." });
-    }
-  };
-  const faireLireUneVue = async (vueId: number) => {
-    if (!token) return;
-    setVuesEtat({ busy: true, message: null });
-    try {
-      const vue = await thermiqueApi.faireLireVue(token, vueId);
-      await queryClient.invalidateQueries({ queryKey: ["thermique", "vues"] });
-      void queryClient.invalidateQueries({ queryKey: ["thermique", "travaux"] });
-      setVuesEtat({
-        busy: false,
-        message: `« ${vue.nom} » est dans la file d'analyse : elle sera lue au prochain passage du relais (ou depuis une session Claude).`,
-      });
-    } catch (echec) {
-      setVuesEtat({ busy: false, message: echec instanceof Error ? echec.message : "La demande a échoué." });
     }
   };
   const cliquerCadreVue = (point: PdfPoint) => {
@@ -410,7 +392,27 @@ export function WorkspacePage() {
     }
     const cadre = cadreDeDeuxCoins(cadreVue.premier, point);
     setCadreVue(null);
+    // D231 : le cadre d'une vue à créer attend son nom, sa nature et son haut dans la fiche.
+    if (cadreVue.vueId === NOUVELLE_VUE) {
+      setNouvelleVue(cadre);
+      return;
+    }
     void corrigerUneVue(cadreVue.vueId, { cadre });
+  };
+  const [nouvelleVue, setNouvelleVue] = useState<number[] | null>(null);
+  useEffect(() => setNouvelleVue(null), [sheetId]);
+  const creerUneVue = async (vue: { nom: string; nature: "coupe" | "facade"; cadre: number[]; haut: HautDeVue }) => {
+    if (!token || !sheet) return;
+    setVuesEtat({ busy: true, message: null });
+    try {
+      const creee = await thermiqueApi.creerVue(token, sheet.id, vue);
+      await queryClient.invalidateQueries({ queryKey: ["thermique", "vues"] });
+      setNouvelleVue(null);
+      setVueChoisie(creee.id);
+      setVuesEtat({ busy: false, message: `« ${creee.nom} » créée : elle s'ouvre depuis le plan d'un niveau, « Coupes et élévations ».` });
+    } catch (echec) {
+      setVuesEtat({ busy: false, message: echec instanceof Error ? echec.message : "La vue n'a pas été créée." });
+    }
   };
   // Hauteur mesurée dans une coupe, posée local par local d'un clic sur le plan (D211).
   const [hauteurAPoser, setHauteurAPoser] = useState<{ valeur: number; poses: string[] } | null>(null);
@@ -1368,7 +1370,14 @@ export function WorkspacePage() {
                         setCadreVue({ vueId, premier: null });
                       }}
                       onCorriger={(vueId, correction) => void corrigerUneVue(vueId, correction)}
-                      onFaireLire={(vueId) => void faireLireUneVue(vueId)}
+                      nouvelle={nouvelleVue}
+                      onAjouter={() => {
+                        setCalage(null);
+                        setNouvelleVue(null);
+                        setCadreVue({ vueId: NOUVELLE_VUE, premier: null });
+                      }}
+                      onCreer={(vue) => void creerUneVue(vue)}
+                      onAbandonner={() => setNouvelleVue(null)}
                       onSupprimer={(vue) => void supprimerUneVue(vue)}
                     />
                     {vuesEtat.message && <p className="th-alert th-alert--ok">{vuesEtat.message}</p>}

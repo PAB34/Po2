@@ -6,6 +6,7 @@ import { thermiqueApi, type HautDeVue, type MenuiseriesDuProjet, type PdfPoint, 
 import { TileSheetViewer } from "../components/TileSheetViewer";
 import { mesureDeDeuxCoins, proposerComposants } from "./baies";
 import { avisSurLaHauteur, avisSurLaMenuiserie, rectangleDeMenuiserie, segmentDeHauteur } from "./mesuresVue";
+import { modelesDeLaVue } from "./CadresDesVues";
 import { ModeleDeMenuiserie } from "./ModelesMenuiseries";
 import { pageDuCoteEcran, rotationALEndroit } from "./orientation";
 import { hauteursQueryKey } from "./study";
@@ -296,6 +297,16 @@ export function FenetreCoupe({
             : etat.etape === "hauteur"
               ? [segmentDeHauteur(etat.sol, etat.plafond, vue.haut, echelle)]
               : [];
+  // D232 : les menuiseries déjà mesurées sur cette vue restent dessinées, avec le nom de leur modèle.
+  const mesurees = echelle
+    ? modelesDeLaVue(vue).flatMap((modele) =>
+        rectangleDeMenuiserie(modele.coins[0], modele.coins[1], vue.haut, echelle).map((segment, rang) => ({
+          ...segment,
+          tone: "reference" as const,
+          label: rang === 0 ? modele.nom : undefined,
+        })),
+      )
+    : [];
   const avis = etat.etape === "hauteur" ? avisSurLaHauteur(etat.hauteur_m) : null;
   const piecesLues = (vue.pieces ?? []).length > 0;
 
@@ -441,7 +452,7 @@ export function FenetreCoupe({
                       ? [etat.sol, etat.plafond]
                       : []
             }
-            segments={apercu}
+            segments={[...mesurees, ...apercu]}
             onHover={(point) => setSurvol(point)}
             onAddPoint={(point) => void cliquer(point)}
             focus={{ point: cadrage.point, cle: `vue-${vue.id}-${rotation}`, zoom: cadrage.zoom }}

@@ -96,7 +96,7 @@ function parcoursDesVues(sheet: Sheet, vues: VueCoupe[]): Etape[] {
   const facade = sheet.nature === "facade";
   const lues = vues.filter((vue) => vue.nature !== "detail");
   const confirmees = facade
-    ? lues.reduce((total, vue) => total + (vue.menuiseries?.length ?? 0), 0)
+    ? lues.reduce((total, vue) => total + new Set((vue.menuiseries ?? []).map((m) => m.modele ?? m.composant)).size, 0)
     : lues.reduce((total, vue) => total + (vue.corrections?.length ?? 0), 0);
   return [
     {
@@ -109,15 +109,16 @@ function parcoursDesVues(sheet: Sheet, vues: VueCoupe[]): Etape[] {
       calques: null,
     },
     {
+      // D230, D231 : plus de lecture IA ; les vues se tracent à la main sur la planche.
       id: "lecture",
-      titre: facade ? "Lecture des façades" : "Lecture des coupes",
+      titre: "Vues",
       reste: lues.length
-        ? `${pluriel(lues.length, facade ? "façade lue" : "coupe lue")}`
+        ? `${pluriel(lues.length, "vue cadrée")}`
         : prete
-          ? "Documents → « Analyser avec Claude Code »"
+          ? "« Ajouter une vue » : deux clics sur la planche"
           : "après la planche",
       etat: lues.length ? "fait" : prete ? "en_cours" : "attente",
-      panneau: "documents",
+      panneau: "planche",
       calques: null,
     },
     {

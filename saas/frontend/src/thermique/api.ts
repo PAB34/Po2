@@ -304,8 +304,15 @@ export type VueCoupe = {
   cadre: [number, number, number, number];
   haut: [number, number];
   corrections?: { sol: number; plafond: number; hauteur_m: number }[];
-  /** Hauteurs de menuiserie mesurées sur cette façade (S5e, D193). */
-  menuiseries?: { composant: string; largeur_cm: number | null; hauteur_m: number }[];
+  /** Menuiseries mesurées sur cette vue : hauteurs par composant (D193) ou modèles avec leurs coins (D219, D232). */
+  menuiseries?: {
+    composant?: string;
+    largeur_cm?: number | null;
+    hauteur_m: number;
+    modele?: string;
+    largeur_mesuree_cm?: number;
+    coins?: PdfPoint[];
+  }[];
   /** Pièces lues dans la vue (vide tant qu'une vue au cadre corrigé n'est pas relue, D205). */
   pieces?: unknown[];
   /** Cadre ou haut corrigé par le thermicien : la vue attend sa relecture (D205). */
@@ -598,6 +605,9 @@ export const thermiqueApi = {
     request<VueCoupe>(token, `/thermique/vues/${vueId}`, { method: "PATCH", body: JSON.stringify(correction) }),
   supprimerVue: (token: string, vueId: number) =>
     request<void>(token, `/thermique/vues/${vueId}`, { method: "DELETE" }),
+  // Vue tracée à la main sur une planche de coupes ou d'élévations (D231) ; le haut est un côté de la page.
+  creerVue: (token: string, sheetId: number, vue: { nom: string; nature: "coupe" | "facade"; cadre: number[]; haut: HautDeVue }) =>
+    request<VueCoupe>(token, `/thermique/sheets/${sheetId}/vues`, { method: "POST", body: JSON.stringify(vue) }),
   // « Faire lire par l'IA » une coupe cadrée et orientée (D212).
   faireLireVue: (token: string, vueId: number) => request<VueCoupe>(token, `/thermique/vues/${vueId}/lire`, { method: "POST" }),
   // Trait d'une coupe tracé à la main sur le plan (D209).
