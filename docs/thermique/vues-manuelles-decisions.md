@@ -36,10 +36,15 @@ Date : 2026-10-01. Suite de `cadres-des-vues-decisions.md` (D205), après le tes
 - **D210 — Mode sombre.** Les couleurs de texte secondaire et des boutons fantômes de l'outil passent par
   des jetons redéfinis en sombre.
 
+- **D211 — Mesures visibles et posées à la main** (lot 2). Pendant la mesure, le rectangle de la menuiserie
+  et la hauteur se dessinent avec leurs cotes, le long des axes de la vue. Une hauteur n'est plus envoyée au
+  second clic : elle s'affiche d'abord. Hors de 1,50–15 m elle est refusée (« Refaire la mesure ») ; hors de
+  2–6 m elle est signalée. Elle se pose ensuite **sur les locaux cliqués du plan** (hauteur saisie, sans IA)
+  ou corrige les pièces lues de la coupe (D191), si la coupe en a. Une menuiserie de moins de 20 cm dans un
+  sens est signalée comme suspecte.
+
 ## À venir (lots suivants)
 
-- Lot 2 : rectangle et cotes en direct pendant la mesure ; hauteur cliquée attribuée aux locaux choisis du
-  plan sans lecture IA ; alerte bloquante hors plage avec « Refaire ».
 - Lot 4 : « Faire lire par l'IA » par vue, à l'initiative du thermicien.
 
 ## Questions

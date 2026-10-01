@@ -3258,3 +3258,29 @@ circle.th-seg--measure {
 .th-vues__saisie {
   max-width: 12rem;
 }
+/* Hauteur mesurée dans une coupe, puis posée sur des locaux du plan (D211). */
+.th-fenetre-coupe__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.th-poser-hauteur {
+  position: absolute;
+  z-index: 30;
+  top: 0.6rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  max-width: calc(100% - 32px);
+  padding: 0.5rem 0.8rem;
+  border: 1px solid var(--po2-color-line);
+  border-radius: var(--po2-radius-sm);
+  background: var(--po2-color-paper);
+  color: var(--po2-color-ink);
+  box-shadow: var(--po2-shadow-card);
+  font-size: 0.88rem;
+}

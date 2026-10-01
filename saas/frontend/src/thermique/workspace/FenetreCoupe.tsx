@@ -5,6 +5,7 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 import { thermiqueApi, type HautDeVue, type MenuiseriesDuProjet, type PdfPoint, type Sheet, type VueCoupe } from "../api";
 import { TileSheetViewer } from "../components/TileSheetViewer";
 import { mesureDeDeuxCoins, proposerComposants } from "./baies";
+import { avisSurLaHauteur, avisSurLaMenuiserie, rectangleDeMenuiserie, segmentDeHauteur } from "./mesuresVue";
 import { pageDuCoteEcran, rotationALEndroit } from "./orientation";
 import { hauteursQueryKey } from "./study";
 
@@ -53,6 +54,7 @@ export function ChoixMenuiserie({
       <p>
         Menuiserie mesurée : <strong>{format(largeurM)} m</strong> de large, <strong>{format(hauteurM)} m</strong> de haut.
       </p>
+      {avisSurLaMenuiserie(largeurM, hauteurM) && <p className="th-alert th-alert--warn">{avisSurLaMenuiserie(largeurM, hauteurM)}</p>}
       {propositions.length === 0 ? (
         <p className="th-alert th-alert--warn">
           Aucune baie du projet n'a cette largeur à ± 5 cm : vérifiez les deux coins, ou la baie dans le relevé.
@@ -88,15 +90,18 @@ type Etat =
   // Façade (S5e, D193) : deux coins opposés d'une menuiserie, puis le choix de ce à quoi la hauteur s'applique.
   | { etape: "coin1" }
   | { etape: "coin2"; a: PdfPoint }
-  | { etape: "choix"; coins: [PdfPoint, PdfPoint]; largeur_m: number; hauteur_m: number };
+  | { etape: "choix"; coins: [PdfPoint, PdfPoint]; largeur_m: number; hauteur_m: number }
+  // Hauteur mesurée, montrée avant d'être appliquée (D211) : on la vérifie, puis on choisit où la poser.
+  | { etape: "hauteur"; sol: PdfPoint; plafond: PdfPoint; hauteur_m: number };
 
-/** La coupe dans une fenêtre flottante au-dessus du plan (D183) ; deux clics y confirment la hauteur (D191). */
+/** La coupe dans une fenêtre flottante au-dessus du plan (D183) ; deux clics y mesurent la hauteur (D191, D211). */
 export function FenetreCoupe({
   token,
   vue,
   planche,
   planSheetId,
   menuiseries,
+  onPoserHauteur,
   onClose,
 }: {
   token: string;
@@ -105,8 +110,11 @@ export function FenetreCoupe({
   planSheetId: number | null;
   /** Baies du projet, pour proposer le composant de la menuiserie mesurée sur une façade (S5e). */
   menuiseries?: MenuiseriesDuProjet;
+  /** Pose la hauteur mesurée sur les locaux que le thermicien cliquera sur le plan (D211). */
+  onPoserHauteur?: (hauteur: number) => void;
   onClose: () => void;
 }) {
+  const [survol, setSurvol] = useState<PdfPoint | null>(null);
   const facade = vue.nature === "facade";
   const queryClient = useQueryClient();
   const base = useQuery({
@@ -183,11 +191,16 @@ export function FenetreCoupe({
       return;
     }
     if (etat.etape !== "plafond" || !echelle) return;
-    const hauteur = hauteurEntreClics(etat.sol, point, vue.haut, echelle);
+    setEtat({ etape: "hauteur", sol: etat.sol, plafond: point, hauteur_m: hauteurEntreClics(etat.sol, point, vue.haut, echelle) });
+    setMessage(null);
+  };
+
+  // La hauteur corrige la lecture de la coupe : les pièces lues posées sur ce sol (D191).
+  const corrigerLaCoupe = async (sol: PdfPoint, plafond: PdfPoint, hauteur: number) => {
     setBusy(true);
     try {
-      await thermiqueApi.confirmerHauteur(token, vue.id, etat.sol, point);
-      setMessage(`Hauteur de l'étage confirmée : ${hauteur.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} m.`);
+      await thermiqueApi.confirmerHauteur(token, vue.id, sol, plafond);
+      setMessage(`Hauteur de l'étage confirmée dans la coupe : ${hauteur.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} m.`);
       void queryClient.invalidateQueries({ queryKey: hauteursQueryKey(planSheetId) });
       void queryClient.invalidateQueries({ queryKey: ["thermique", "vues"] });
     } catch (error) {
@@ -197,6 +210,22 @@ export function FenetreCoupe({
       setEtat({ etape: "aucune" });
     }
   };
+
+  // Ce qui se dessine pendant la mesure (D211).
+  const apercu =
+    !echelle
+      ? []
+      : etat.etape === "coin2" && survol
+        ? rectangleDeMenuiserie(etat.a, survol, vue.haut, echelle)
+        : etat.etape === "choix"
+          ? rectangleDeMenuiserie(etat.coins[0], etat.coins[1], vue.haut, echelle)
+          : etat.etape === "plafond" && survol
+            ? [segmentDeHauteur(etat.sol, survol, vue.haut, echelle)]
+            : etat.etape === "hauteur"
+              ? [segmentDeHauteur(etat.sol, etat.plafond, vue.haut, echelle)]
+              : [];
+  const avis = etat.etape === "hauteur" ? avisSurLaHauteur(etat.hauteur_m) : null;
+  const piecesLues = (vue.pieces ?? []).length > 0;
 
   const deplacer = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!glisse.current) return;
@@ -240,7 +269,7 @@ export function FenetreCoupe({
             }
           }}
         >
-          {facade ? "Mesurer une menuiserie" : "Confirmer la hauteur"}
+          {facade ? "Mesurer une menuiserie" : "Mesurer une hauteur"}
         </button>
         <label className="th-inline" title="Si le dessin s'affiche couché ou à l'envers, dites où se trouve son haut : la vue se redresse.">
           Dessin de travers ? Son haut est
@@ -258,6 +287,55 @@ export function FenetreCoupe({
         )}
       </div>
       {message && <p className="th-fenetre-coupe__message">{message}</p>}
+      {etat.etape === "hauteur" && (
+        <div className="th-fenetre-coupe__choix">
+          {avis?.bloquant ? (
+            <p className="th-alert th-alert--error">{avis.texte}</p>
+          ) : (
+            <>
+              <p>
+                Hauteur mesurée : <strong>{etat.hauteur_m.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} m</strong>.
+              </p>
+              {avis && <p className="th-alert th-alert--warn">{avis.texte}</p>}
+              <div className="th-fenetre-coupe__actions">
+                {onPoserHauteur && (
+                  <button
+                    type="button"
+                    className="po2-button po2-button--primary"
+                    disabled={busy}
+                    onClick={() => {
+                      onPoserHauteur(Math.round(etat.hauteur_m * 1000) / 1000);
+                      setEtat({ etape: "aucune" });
+                      setMessage("Cliquez maintenant, sur le plan, les locaux qui ont cette hauteur.");
+                    }}
+                  >
+                    Poser sur des locaux du plan
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="po2-button po2-button--ghost"
+                  disabled={busy || !piecesLues}
+                  title={piecesLues ? "Corrige les pièces lues de la coupe posées sur ce sol." : "La coupe n'a pas de pièces lues : posez la hauteur sur les locaux du plan."}
+                  onClick={() => void corrigerLaCoupe(etat.sol, etat.plafond, etat.hauteur_m)}
+                >
+                  Corriger les pièces lues de la coupe
+                </button>
+              </div>
+            </>
+          )}
+          <button
+            type="button"
+            className="th-link"
+            onClick={() => {
+              setEtat({ etape: "sol" });
+              setMessage("Cliquez le sol fini d'une pièce coupée, puis son plafond fini.");
+            }}
+          >
+            Refaire la mesure
+          </button>
+        </div>
+      )}
       {etat.etape === "choix" && (
         <ChoixMenuiserie
           largeurM={etat.largeur_m}
@@ -276,8 +354,20 @@ export function FenetreCoupe({
           <TileSheetViewer
             manifest={raster.data}
             tileTemplate={thermiqueApi.apiUrl(raster.data.tile_url)}
-            tool={etat.etape === "aucune" || etat.etape === "choix" ? "pan" : "measure"}
-            points={etat.etape === "plafond" ? [etat.sol] : etat.etape === "coin2" ? [etat.a] : etat.etape === "choix" ? etat.coins : []}
+            tool={etat.etape === "aucune" || etat.etape === "choix" || etat.etape === "hauteur" ? "pan" : "measure"}
+            points={
+              etat.etape === "plafond"
+                ? [etat.sol]
+                : etat.etape === "coin2"
+                  ? [etat.a]
+                  : etat.etape === "choix"
+                    ? etat.coins
+                    : etat.etape === "hauteur"
+                      ? [etat.sol, etat.plafond]
+                      : []
+            }
+            segments={apercu}
+            onHover={(point) => setSurvol(point)}
             onAddPoint={(point) => void cliquer(point)}
             focus={{ point: cadrage.point, cle: `vue-${vue.id}-${rotation}`, zoom: cadrage.zoom }}
           />

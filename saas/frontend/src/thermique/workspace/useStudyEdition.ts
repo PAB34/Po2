@@ -559,6 +559,8 @@ export function useStudyEdition({
     startNew,
     deleteRoom,
     changeNature,
+    /** Hauteur mesurée dans une coupe, posée sur un local cliqué du plan (D211). */
+    changeHauteur,
     pending: pendingOperations.length,
     keepDraft,
     savePending: () => void savePending(),

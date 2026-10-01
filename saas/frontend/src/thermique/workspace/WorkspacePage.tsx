@@ -254,6 +254,7 @@ export function WorkspacePage() {
         setCalage(null);
         setCadreVue(null);
         setTraitCoupe(null);
+        setHauteurAPoser(null);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -399,6 +400,10 @@ export function WorkspacePage() {
     setCadreVue(null);
     void corrigerUneVue(cadreVue.vueId, { cadre });
   };
+  // Hauteur mesurée dans une coupe, posée local par local d'un clic sur le plan (D211).
+  const [hauteurAPoser, setHauteurAPoser] = useState<{ valeur: number; poses: string[] } | null>(null);
+  useEffect(() => setHauteurAPoser(null), [sheetId]);
+  const fileHauteurs = useRef<Promise<void>>(Promise.resolve());
   // Trait d'une coupe tracé à la main sur ce plan (D209).
   const [traitCoupe, setTraitCoupe] = useState<TraitEnCours | null>(null);
   const [traitMessage, setTraitMessage] = useState<string | null>(null);
@@ -796,6 +801,22 @@ export function WorkspacePage() {
         </aside>
 
         <div className="th-ws__plan">
+          {hauteurAPoser && (
+            <div className="th-poser-hauteur" role="status">
+              <span>
+                Hauteur <strong>{hauteurAPoser.valeur.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} m</strong> : cliquez
+                les locaux concernés sur le plan
+                {hauteurAPoser.poses.length > 0 &&
+                  ` (${hauteurAPoser.poses
+                    .map((id) => shownStudy?.content.locaux.find((local) => local.id === id)?.nom ?? id)
+                    .join(", ")})`}
+                .
+              </span>
+              <button type="button" className="po2-button po2-button--primary" onClick={() => setHauteurAPoser(null)}>
+                Terminé
+              </button>
+            </div>
+          )}
           {!sheet ? (
             <div className="th-viewer th-viewer--empty">
               <p className="th-viewer__status">Déposez les plans du projet dans le panneau « Documents » pour commencer.</p>
@@ -805,7 +826,7 @@ export function WorkspacePage() {
               key={viewKey}
               manifest={raster.data}
               tileTemplate={thermiqueApi.apiUrl(raster.data.tile_url)}
-              tool={editionState.draft ? "edition" : calage || cadreVue || traitCoupe ? "calage" : tool}
+              tool={editionState.draft ? "edition" : calage || cadreVue || traitCoupe ? "calage" : hauteurAPoser ? "pan" : tool}
               points={cadreVue?.premier ? [cadreVue.premier] : traitCoupe ? traitCoupe.points : points}
               segments={editionState.draft ? [] : sheetSegments(sheet, tool, points)}
               onAddPoint={(point, event) => {
@@ -825,6 +846,18 @@ export function WorkspacePage() {
                 setPoints((current) => (current.length >= 2 ? [point] : [...current, point]));
               }}
               onPick={(point, pixelsPerPt) => {
+                // Hauteur mesurée dans une coupe : chaque local cliqué la reçoit (D211).
+                if (hauteurAPoser) {
+                  const local = shownStudy ? roomAt(shownStudy.content.locaux, point) : null;
+                  if (local && !hauteurAPoser.poses.includes(local.id)) {
+                    // Les enregistrements se suivent : deux clics rapides ne se marchent pas dessus.
+                    const changer = editionState.changeHauteur;
+                    const valeur = hauteurAPoser.valeur;
+                    fileHauteurs.current = fileHauteurs.current.then(() => changer(local.id, valeur));
+                    setHauteurAPoser({ ...hauteurAPoser, poses: [...hauteurAPoser.poses, local.id] });
+                  }
+                  return;
+                }
                 // Traits de coupe montrés : un clic dessus ouvre la coupe, avant tout autre objet (D171).
                 const trait = traitAt(traitsAffiches, point, PRISE_TRAIT_COUPE_PX / pixelsPerPt);
                 if (trait) {
@@ -1353,6 +1386,9 @@ export function WorkspacePage() {
           planche={plancheOuverte}
           planSheetId={sheetId}
           menuiseries={menuiseries.data}
+          onPoserHauteur={
+            sheet?.nature === "plan" && study ? (valeur) => setHauteurAPoser({ valeur, poses: [] }) : undefined
+          }
           onClose={() => setCoupeOuverte(null)}
         />
       )}
