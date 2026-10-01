@@ -189,6 +189,7 @@ def preparer_enveloppe(etude: Etude) -> dict:
                                    complement=lecture_locaux.complement)
     if etude.args.catalogue and not (etude.env_dir / "catalogue.json").is_file():
         shutil.copyfile(etude.args.catalogue, etude.env_dir / "catalogue.json")
+        enveloppe.marquer_catalogue_repris(etude.env_dir / "catalogue.json")
         etude.noter("catalogue", "repris", str(etude.args.catalogue))
     etude.noter("guide", "fait", f"{len(manifeste['troncons'])} tronçons, {manifeste['perimetre_m']} m")
     return manifeste

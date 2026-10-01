@@ -1087,6 +1087,21 @@ def bandes_annotees(page_image: Image.Image, manifeste: dict[str, Any], brut: di
     return images
 
 
+def marquer_catalogue_repris(chemin: Path) -> None:
+    """Un catalogue repris d'un autre niveau : ses « premières vues » désignent des tronçons de ce niveau-là.
+
+    Constaté le 2026-10-01 sur le R+2 (catalogue du R+1) : le même identifiant « T05 » désigne un autre endroit,
+    et la vignette tombait hors de la bande, ou pire, sur un autre mur. Elles sont marquées pour ne plus être
+    dessinées ; un composant revu sur ce niveau reçoit sa propre première vue.
+    """
+    contenu = json.loads(chemin.read_text(encoding="utf-8"))
+    fiches = contenu if isinstance(contenu, list) else contenu.get("catalogue", [])
+    for fiche in fiches:
+        if isinstance(fiche.get("premiere_vue"), dict):
+            fiche["premiere_vue"]["autre_niveau"] = True
+    chemin.write_text(json.dumps(contenu, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
 def planche_catalogue(page_image: Image.Image, manifeste: dict[str, Any], catalogue: list[dict[str, Any]], chemin: Path) -> Path:
     """Vignettes des composants appris : l'image où chacun a été vu, son identifiant, sa décision, sa règle."""
     px_par_m = manifeste["px_par_m"]
@@ -1096,7 +1111,10 @@ def planche_catalogue(page_image: Image.Image, manifeste: dict[str, Any], catalo
     cartes: list[Image.Image] = []
     for fiche in catalogue:
         vue = fiche.get("premiere_vue") or {}
-        troncon = par_id.get(vue.get("troncon"))
+        # Vu sur un autre niveau : pas de vignette, elle montrerait un autre mur (2026-10-01).
+        troncon = None if vue.get("autre_niveau") else par_id.get(vue.get("troncon"))
+        if troncon is None and vue.get("autre_niveau"):
+            dessin.text((12, 80), "Appris sur un autre niveau : pas d'image de ce niveau.", fill="#495057", font=petite)
         carte = Image.new("RGB", (760, 420), "white")
         dessin = ImageDraw.Draw(carte)
         couleur = {"integre": "#2b8a3e", "exclu": "#868e96", "a_confirmer": "#e8590c"}.get(fiche["decision"], "#172033")
@@ -1110,9 +1128,12 @@ def planche_catalogue(page_image: Image.Image, manifeste: dict[str, Any], catalo
             milieu = (vue["debut_m"] + vue["fin_m"]) / 2
             x_milieu = (milieu - s0) * echelle
             demi = min(max((vue["fin_m"] - vue["debut_m"]) / 2 + 0.3, 0.6), 1.2) * echelle
-            extrait = bande.crop((max(0, round(x_milieu - demi)), 0, min(bande.width, round(x_milieu + demi)), bande.height))
-            extrait.thumbnail((736, 300))
-            carte.paste(extrait, (12, 66))
+            gauche, droite = max(0, round(x_milieu - demi)), min(bande.width, round(x_milieu + demi))
+            # Une vue hors de la bande (relevé d'une autre version) ne fait plus tomber l'étude.
+            if droite > gauche:
+                extrait = bande.crop((gauche, 0, droite, bande.height))
+                extrait.thumbnail((736, 300))
+                carte.paste(extrait, (12, 66))
         regle = fiche.get("regle", "")
         for rang, debut_ligne in enumerate(range(0, min(len(regle), 190), 95)):
             dessin.text((12, 372 + rang * 20), regle[debut_ligne : debut_ligne + 95], fill="#172033", font=petite)
