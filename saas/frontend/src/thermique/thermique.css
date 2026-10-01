@@ -3391,3 +3391,38 @@ circle.th-seg--measure {
   margin: 0.5rem 0;
   font-weight: 700;
 }
+/* D227 : une étape par famille. L'autre famille s'estompe, la sienne s'épaissit. */
+.th-metrics .th-metric-element.is-estompe {
+  opacity: 0.15;
+  pointer-events: none;
+}
+
+.th-metrics--parois .th-metric-element:not(.is-menuiserie):not(.is-estompe) {
+  stroke-width: 4;
+}
+
+.th-metrics--menuiseries .th-metric-element.is-menuiserie {
+  stroke-width: 8;
+  stroke-linecap: butt;
+}
+
+.th-metrics--menuiseries .th-metric-element.is-menuiserie.is-selected {
+  stroke-width: 11;
+}
+
+.th-metrics--menuiseries .th-metric-element__halo {
+  stroke-width: 15;
+}
+
+/* D228 : la lecture de l'IA et les corrections du relevé d'une menuiserie, repliées. */
+.th-element-releve {
+  margin-top: 0.6rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--po2-color-line);
+}
+
+.th-element-releve > summary {
+  cursor: pointer;
+  color: var(--po2-color-muted);
+  font-weight: 700;
+}

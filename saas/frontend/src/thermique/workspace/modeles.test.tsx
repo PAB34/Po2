@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import type { MenuiseriesDuProjet, ModeleMenuiserie, StudyContent, StudyReleveElement } from "../api";
-import { BaieDeLaMenuiserie, ChoixDuModele } from "./ElementPanel";
+import { BaieDeLaMenuiserie, ChoixDuModele, ElementPanel } from "./ElementPanel";
 import { baieDeLElement, baiesDuNiveau, cotesDesMenuiseries, menuiseriesDeMemeLargeur, nomPropose, texteDeLaCote } from "./modeles";
 import { BibliothequeModeles, ModeleDeMenuiserie } from "./ModelesMenuiseries";
 
@@ -107,6 +107,30 @@ describe("modèles de menuiserie (D219 à D222)", () => {
     expect(html).toContain("Modèle mesuré");
     expect(html).toContain("M1 120×215 · 120×215");
     expect(html).toMatch(/<option value="M1 120×215" selected="">/);
+  });
+
+  it("la fiche d'une menuiserie est allégée : modèle et baie devant, relevé replié, plus d'affectation (D228, D229)", () => {
+    const element = menuiserie(0, 1.2, { exposition: "SO", azimut_deg: 225, indice: "trait fin double" });
+    const content = { locaux: [], enveloppe: { objets: [], liaisons: [], releve_brut: { elements: [element] } } } as unknown as StudyContent;
+    const html = renderToStaticMarkup(
+      <ElementPanel
+        content={content}
+        room={null}
+        selected={{ troncon: "T1", debut_m: 0, fin_m: 1.2 }}
+        onSelect={() => undefined}
+        busy={false}
+        message={null}
+        onOperation={() => undefined}
+        menuiseries={{ composants: [], modeles: [modele], morceaux_a_verifier: [] } as unknown as MenuiseriesDuProjet}
+        onChoisirModele={() => undefined}
+      />,
+    );
+    expect(html).toContain("SO (225° depuis le nord)");
+    expect(html).toContain("Modèle mesuré");
+    expect(html).toContain("<summary>Corriger le relevé</summary>");
+    expect(html).not.toContain("Affecter aussi");
+    expect(html).toContain("trait fin double");
+    expect(html.indexOf("Modèle mesuré")).toBeLessThan(html.indexOf("trait fin double"));
   });
 
   it("la bibliothèque liste les modèles avec leurs dimensions et leurs poses", () => {

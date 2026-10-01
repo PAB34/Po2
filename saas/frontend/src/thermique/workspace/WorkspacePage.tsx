@@ -970,7 +970,14 @@ export function WorkspacePage() {
                 // Modèle de menuiserie : chaque menuiserie cliquée le reçoit (D220).
                 if (modeleAPoser && shownStudy) {
                   const vise = viserSurLePlan(
-                    { ...shownStudy.content, enveloppe: { ...shownStudy.content.enveloppe, liaisons: [] } },
+                    {
+                      ...shownStudy.content,
+                      enveloppe: {
+                        ...shownStudy.content.enveloppe,
+                        liaisons: [],
+                        objets: (shownStudy.content.enveloppe.objets ?? []).filter((shape) => shape.category === "menuiserie_exterieure"),
+                      },
+                    },
                     shownStudy.content.locaux,
                     point,
                     { element: PRISE_ELEMENT_PAROIS_PX / pixelsPerPt, pont: 0 },
@@ -1024,7 +1031,19 @@ export function WorkspacePage() {
                       ? null
                       : viserSurLePlan(
                           vue.clic === "elements"
-                            ? { ...shownStudy.content, enveloppe: { ...shownStudy.content.enveloppe, liaisons: [] } }
+                            ? {
+                                ...shownStudy.content,
+                                enveloppe: {
+                                  ...shownStudy.content.enveloppe,
+                                  liaisons: [],
+                                  // D227 : à l'étape des parois, seuls les murs s'attrapent ; à celle des
+                                  // menuiseries, seules les menuiseries.
+                                  objets: (shownStudy.content.enveloppe.objets ?? []).filter(
+                                    (shape) =>
+                                      !vue.famille || (shape.category === "menuiserie_exterieure") === (vue.famille === "menuiseries"),
+                                  ),
+                                },
+                              }
                             : shownStudy.content,
                           shownStudy.content.locaux,
                           point,
@@ -1184,7 +1203,7 @@ export function WorkspacePage() {
                       className="po2-button po2-button--ghost th-ouvrir-vues"
                       disabled={vuesDuProjet.length === 0}
                       title={vuesDuProjet.length ? "Ouvrir une coupe ou une élévation pour y mesurer" : "Aucune coupe ni élévation lue dans le projet"}
-                      onClick={() => ouvrirLaFenetre(etape === "enveloppe" ? "menuiserie" : etape === "locaux" ? "hauteur" : undefined)}
+                      onClick={() => ouvrirLaFenetre(etape === "menuiseries" ? "menuiserie" : etape === "locaux" ? "hauteur" : undefined)}
                     >
                       Coupes et élévations
                     </button>
@@ -1257,14 +1276,15 @@ export function WorkspacePage() {
                             grouperPonts={etape !== "ponts"}
                             coteVisee={rangCote}
                             familles={vue}
-                            accentMenuiseries={etape === "enveloppe"}
+                            accentMenuiseries={etape === "enveloppe" || etape === "menuiseries"}
+                            famille={vue.famille}
                             memeBaie={
                               elementCourant?.type === "menuiserie" ? baieDeLElement(shownStudy.content, elementCourant) : undefined
                             }
                           />
                       )}
                       {/* D221 : à l'étape des menuiseries, chacune porte sa cote, héritée du modèle posé. */}
-                      {!editionState.draft && (etape === "enveloppe" || modeleAPoser) && (
+                      {!editionState.draft && (etape === "menuiseries" || modeleAPoser) && (
                         <CotesMenuiseries cotes={cotesDesMenuiseries(shownStudy.content, menuiseries.data?.modeles)} toScreen={toScreen} />
                       )}
                     </>
@@ -1419,7 +1439,8 @@ export function WorkspacePage() {
                       locaux, ils n'apparaissent que si l'un d'eux a été désigné ailleurs (D155). */}
                   {shownStudy && !editionState.draft && (vue.listeElements !== "aucune" || elementsState.selected) && (
                     <ElementPanel
-                      parois={vue.listeElements === "parois"}
+                      parois={vue.listeElements === "parois" || vue.listeElements === "menuiseries"}
+                      famille={vue.famille}
                       content={shownStudy.content}
                       room={selectedRoom}
                       selected={elementsState.selected}
@@ -1438,7 +1459,7 @@ export function WorkspacePage() {
                   )}
                   {modeleMessage && !modeleAPoser && elementsState.selected && <p className="th-alert">{modeleMessage}</p>}
                   {/* D222 : la bibliothèque des modèles du projet, à l'étape des menuiseries. */}
-                  {etape === "enveloppe" && token && !elementsState.selected && !editionState.draft && (
+                  {etape === "menuiseries" && token && !elementsState.selected && !editionState.draft && (
                     <section className="th-modeles-section">
                       <h2>Modèles de menuiserie du projet</h2>
                       <BibliothequeModeles
@@ -1525,7 +1546,7 @@ export function WorkspacePage() {
           planche={plancheOuverte}
           planSheetId={sheetId}
           menuiseries={menuiseries.data}
-          outilPrefere={etape === "enveloppe" ? "menuiserie" : etape === "locaux" ? "hauteur" : undefined}
+          outilPrefere={etape === "menuiseries" ? "menuiserie" : etape === "locaux" ? "hauteur" : undefined}
           outilArme={outilArme}
           onPoserHauteur={sheet?.nature === "plan" && study ? poserHauteur : undefined}
           onPoserModele={sheet?.nature === "plan" && study ? poserModele : undefined}

@@ -29,6 +29,11 @@ do_not_auto_read:
 **229 côtés** (et non plus 222 : les côtés contre les 2 terrasses sont distingués depuis F), **170,12 m
 déperditifs**, 289 formes, 77 liaisons. Tout lot qui ne touche pas au calcul doit les laisser intacts.
 
+**2026-10-01 (nuit) — étapes Parois et Menuiseries séparées ✅ EN PROD** (D227–D229,
+`docs/thermique/etapes-parois-menuiseries-decisions.md`). Six étapes ; chaque étape n'épaissit et ne laisse
+attraper que sa famille ; étape Menuiseries : compteur « sans modèle », cotes, bibliothèque, fenêtre prête à
+mesurer ; fiche d'une menuiserie allégée (relevé replié), « Affecter aussi à » retiré de l'écran.
+
 **2026-10-01 (soir) — menuiseries réunies et exposition ✅ EN PROD** (D223–D225,
 `docs/thermique/menuiseries-reunies-exposition-decisions.md`). Morceaux d'une menuiserie réunis **dans le
 relevé** à chaque recalcul (même tronçon, même composant et modèle, ≤ 6 cm, indéterminé absorbé) ; une étude

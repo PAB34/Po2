@@ -215,7 +215,10 @@ export function StudyMetrics({
   familles = { cotes: true, elements: true, ponts: true },
   accentMenuiseries = false,
   memeBaie = [],
+  famille,
 }: {
+  /** D227 : la famille mise en avant à l'étape (parois ou menuiseries) ; l'autre s'estompe. */
+  famille?: "parois" | "menuiseries";
   /** Les autres morceaux de la menuiserie désignée, d'un tronçon à l'autre (D224). */
   memeBaie?: StudyElementRef[];
   rooms: StudyRoom[];
@@ -294,7 +297,7 @@ export function StudyMetrics({
     memeBaie.some((ref) => faitPartieDe(ref, refDeForme(shape)));
 
   return (
-    <g className={`th-metrics${accentMenuiseries ? " th-metrics--parois" : ""}`}>
+    <g className={`th-metrics${accentMenuiseries ? " th-metrics--parois" : ""}${famille ? ` th-metrics--${famille}` : ""}`}>
       {(familles.elements ? shapes : [])
         .filter((shape) => (shape.points_pdf?.length ?? 0) >= 2 && visible(shape.source_parcours?.piece, show.elements))
         // La forme visée passe en dernier : dessinée avant les autres couches du mur, elle disparaissait
@@ -309,6 +312,7 @@ export function StudyMetrics({
             vise ? "is-selected" : "",
             shape.review_required ? "is-doute" : "",
             shape.category === "menuiserie_exterieure" ? "is-menuiserie" : "",
+            famille && (shape.category === "menuiserie_exterieure") !== (famille === "menuiseries") ? "is-estompe" : "",
           ]
             .filter(Boolean)
             .join(" ");

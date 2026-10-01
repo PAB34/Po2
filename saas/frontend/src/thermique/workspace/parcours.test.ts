@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { HauteursDuPlan, Sheet, Study, StudyContent, StudyReleveElement, VueCoupe } from "../api";
-import { avancement, etapeCourante, parcours, paroisDuNiveau, pontsDuNiveau } from "./parcours";
+import { avancement, etapeCourante, parcours, paroisDuNiveau, pontsDuNiveau, vueDeLEtape } from "./parcours";
 
 const element = (reste: Partial<StudyReleveElement> = {}): StudyReleveElement => ({
   troncon: "T01",
@@ -75,9 +75,10 @@ describe("le parcours du niveau", () => {
       "analyse",
       "locaux",
       "enveloppe",
+      "menuiseries",
       "ponts",
     ]);
-    expect(etapes[2].titre).toBe("Locaux et hauteur");
+    expect(etapes.map((item) => item.titre).slice(2)).toEqual(["Locaux et hauteur", "Parois", "Menuiseries", "Ponts thermiques"]);
     expect(etapes[1].etat).toBe("en_cours");
     expect(etapes[2].etat).toBe("attente");
     // L'entrée proposée est l'analyse : la planche est prête, le relevé manque.
@@ -88,6 +89,24 @@ describe("le parcours du niveau", () => {
     const etapes = parcours(planche({ nord: null }), undefined);
     expect(etapes[0].etat).toBe("en_cours");
     expect(etapes[0].reste).toContain("nord");
+  });
+
+  it("l'étape des menuiseries compte celles sans modèle, murs-rideaux à part (D227)", () => {
+    const menuiserie = (debut: number, reste: Partial<StudyReleveElement> = {}) =>
+      element({ type: "menuiserie", debut_m: debut, fin_m: debut + 1, composant: "M1", ...reste });
+    const etapes = parcours(
+      planche(),
+      etude([
+        menuiserie(0, { modele: "M1 100×215" }),
+        menuiserie(3),
+        menuiserie(6, { menuiserie_type: "mur-rideau" }),
+        element({ troncon: "T09", a_verifier: true }),
+      ]),
+    );
+    const menuiseries = etapes.find((item) => item.id === "menuiseries");
+    expect(menuiseries).toMatchObject({ reste: "1 menuiserie sans modèle sur 2", etat: "en_cours" });
+    expect(vueDeLEtape("menuiseries")).toMatchObject({ famille: "menuiseries", clic: "elements", cotes: false });
+    expect(vueDeLEtape("enveloppe").famille).toBe("parois");
   });
 
   it("compte les ponts à juger séparément des parois", () => {
@@ -102,7 +121,7 @@ describe("le parcours du niveau", () => {
     );
     const enveloppe = etapes.find((item) => item.id === "enveloppe");
     const ponts = etapes.find((item) => item.id === "ponts");
-    expect(enveloppe?.reste).toBe("1 élément à vérifier");
+    expect(enveloppe?.reste).toBe("1 paroi à vérifier");
     // Deux ponts douteux et un déjà confirmé : c'est bien deux qui restent.
     expect(ponts?.reste).toBe("2 ponts à juger sur 3");
     expect(ponts?.etat).toBe("en_cours");

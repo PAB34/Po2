@@ -156,6 +156,8 @@ export type StudyReleveElement = {
   pieces_en_plus?: string[];
   /** Modèle de menuiserie posé par le thermicien (D220). */
   modele?: string | null;
+  /** Genre de menuiserie lu par l'IA (fenêtre, porte, mur-rideau…). */
+  menuiserie_type?: string;
   /** Exposition de la menuiserie selon le nord posé (D225) : secteur et azimut en degrés. */
   exposition?: string;
   azimut_deg?: number | null;

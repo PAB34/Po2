@@ -193,6 +193,120 @@ function Detail({
   modeles?: ModeleMenuiserie[];
   onChoisirModele?: (element: StudyReleveElement, nom: string) => void;
 }) {
+  const menuiserie = element.type === "menuiserie";
+  const lecture = (
+    <>
+      {element.indice && (
+        <p className="th-element-indice">
+          Ce que l'agent a lu : « {element.indice} »
+          {element.confiance != null ? ` (confiance ${Math.round(element.confiance * 100)} %)` : ""}
+        </p>
+      )}
+      {ecartsAvecLAgent(element).length > 0 && (
+        <ul className="th-element-ecarts">
+          {ecartsAvecLAgent(element).map((ecart) => (
+            <li key={ecart.champ}>
+              {LIBELLES_CHAMP[ecart.champ] ?? ecart.champ} : <del>{String(ecart.avant)}</del> → {String(ecart.apres)}
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+  const gestes = element.exclu ? (
+    <>
+      <p className="th-alert th-alert--warn">Écarté : {element.motif_exclusion}</p>
+      <button
+        type="button"
+        className="po2-button po2-button--ghost"
+        disabled={busy}
+        onClick={() => onOperation({ type: "element_reactiver", element: refDeElement(element) })}
+      >
+        Remettre dans le calcul
+      </button>
+    </>
+  ) : (
+    <>
+      {element.a_verifier && (
+        <button
+          type="button"
+          className="po2-button po2-button--secondary"
+          disabled={busy}
+          onClick={() => onOperation({ type: "element_confirmer", element: refDeElement(element) })}
+        >
+          C'est juste, confirmer
+        </button>
+      )}
+      <Correction
+        element={element}
+        content={content}
+        busy={busy}
+        onApply={(changes, portee) => onOperation({ type: "element_corriger", element: refDeElement(element), changes, portee })}
+      />
+      <div className="th-element-ecarter">
+        <label>
+          Écarter cet élément, parce que
+          <input
+            value={motif}
+            placeholder="ex. trait de cotation pris pour une menuiserie"
+            onChange={(event) => onMotif(event.target.value)}
+            disabled={busy}
+          />
+        </label>
+        <button
+          type="button"
+          className="po2-button po2-button--danger"
+          disabled={busy || motif.trim().length === 0}
+          onClick={() => onOperation({ type: "element_ecarter", element: refDeElement(element), motif })}
+        >
+          Écarter
+        </button>
+        <p className="th-muted">Il reste dans l'étude, en grisé sur le plan, et peut revenir.</p>
+      </div>
+    </>
+  );
+
+  // D228 : la fiche d'une menuiserie montre l'essentiel ; la lecture de l'IA et les corrections du relevé
+  // sont repliées. « Affecter aussi à… » n'est plus proposé (D229).
+  if (menuiserie) {
+    return (
+      <article className="th-element-detail">
+        <header>
+          <strong>
+            Menuiserie {element.composant ?? ""}
+            {element.menuiserie_type ? ` · ${element.menuiserie_type}` : ""}
+          </strong>
+          <Etat element={element} />
+        </header>
+        {element.exclu && <p className="th-alert th-alert--warn">Écartée : {element.motif_exclusion}</p>}
+        <p className="th-muted">
+          Exposition :{" "}
+          {expositionLisible(element) ? (
+            <strong>
+              {expositionLisible(element)}
+              {element.azimut_deg != null ? ` (${element.azimut_deg}° depuis le nord)` : ""}
+            </strong>
+          ) : (
+            "nord à caler (onglet Planche)"
+          )}
+        </p>
+        {!element.exclu && onChoisirModele && (
+          <ChoixDuModele element={element} modeles={modeles} busy={busy} onChoisir={(nom) => onChoisirModele(element, nom)} />
+        )}
+        {baie && <BaieDeLaMenuiserie baie={baie} onMesurer={onMesurerBaie} />}
+        <details className="th-element-releve">
+          <summary>Corriger le relevé</summary>
+          <p className="th-muted">
+            {element.troncon} de {element.debut_m} à {element.fin_m} m
+            {(element.morceaux_reunis?.length ?? 0) > 1 && ` · ${element.morceaux_reunis!.length} morceaux relevés réunis`}
+          </p>
+          {lecture}
+          {gestes}
+        </details>
+      </article>
+    );
+  }
+
   return (
     <>
       {room && estPont(element) && (
@@ -205,106 +319,8 @@ function Detail({
           </strong>
           <Etat element={element} />
         </header>
-        {element.indice && (
-          <p className="th-element-indice">
-            Ce que l'agent a lu : « {element.indice} »
-            {element.confiance != null ? ` (confiance ${Math.round(element.confiance * 100)} %)` : ""}
-          </p>
-        )}
-        {ecartsAvecLAgent(element).length > 0 && (
-          <ul className="th-element-ecarts">
-            {ecartsAvecLAgent(element).map((ecart) => (
-              <li key={ecart.champ}>
-                {LIBELLES_CHAMP[ecart.champ] ?? ecart.champ} : <del>{String(ecart.avant)}</del> → {String(ecart.apres)}
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {element.type === "menuiserie" && (
-          <p className="th-muted">
-            Exposition :{" "}
-            {expositionLisible(element) ? (
-              <strong>
-                {expositionLisible(element)}
-                {element.azimut_deg != null ? ` (${element.azimut_deg}° depuis le nord)` : ""}
-              </strong>
-            ) : (
-              "nord à caler (onglet Planche)"
-            )}
-            {(element.morceaux_reunis?.length ?? 0) > 1 && ` · ${element.morceaux_reunis!.length} morceaux relevés réunis`}
-          </p>
-        )}
-        {element.type === "menuiserie" && !element.exclu && onChoisirModele && (
-          <ChoixDuModele element={element} modeles={modeles} busy={busy} onChoisir={(nom) => onChoisirModele(element, nom)} />
-        )}
-        {element.type === "menuiserie" && baie && <BaieDeLaMenuiserie baie={baie} onMesurer={onMesurerBaie} />}
-        {element.type === "menuiserie" && !element.exclu && (
-          <AffecterAussiA
-            element={element}
-            pieces={content.locaux.map((local) => local.nom)}
-            piece={room?.nom ?? null}
-            busy={busy}
-            onAffecter={(noms) =>
-              onOperation({ type: "element_corriger", element: refDeElement(element), changes: { pieces_en_plus: noms } })
-            }
-          />
-        )}
-
-        {element.exclu ? (
-          <>
-            <p className="th-alert th-alert--warn">Écarté : {element.motif_exclusion}</p>
-            <button
-              type="button"
-              className="po2-button po2-button--ghost"
-              disabled={busy}
-              onClick={() => onOperation({ type: "element_reactiver", element: refDeElement(element) })}
-            >
-              Remettre dans le calcul
-            </button>
-          </>
-        ) : (
-          <>
-            {element.a_verifier && (
-              <button
-                type="button"
-                className="po2-button po2-button--secondary"
-                disabled={busy}
-                onClick={() => onOperation({ type: "element_confirmer", element: refDeElement(element) })}
-              >
-                C'est juste, confirmer
-              </button>
-            )}
-            <Correction
-              element={element}
-              content={content}
-              busy={busy}
-              onApply={(changes, portee) =>
-                onOperation({ type: "element_corriger", element: refDeElement(element), changes, portee })
-              }
-            />
-            <div className="th-element-ecarter">
-              <label>
-                Écarter cet élément, parce que
-                <input
-                  value={motif}
-                  placeholder="ex. trait de cotation pris pour une menuiserie"
-                  onChange={(event) => onMotif(event.target.value)}
-                  disabled={busy}
-                />
-              </label>
-              <button
-                type="button"
-                className="po2-button po2-button--danger"
-                disabled={busy || motif.trim().length === 0}
-                onClick={() => onOperation({ type: "element_ecarter", element: refDeElement(element), motif })}
-              >
-                Écarter
-              </button>
-              <p className="th-muted">Il reste dans l'étude, en grisé sur le plan, et peut revenir.</p>
-            </div>
-          </>
-        )}
+        {lecture}
+        {gestes}
       </article>
     </>
   );
@@ -468,7 +484,10 @@ export function ElementPanel({
   sheetId = null,
   onMesurerBaie,
   onChoisirModele,
+  famille,
 }: {
+  /** D227 : l'étape ne liste que les parois, ou que les menuiseries. */
+  famille?: "parois" | "menuiseries";
   content: StudyContent;
   room: StudyRoom | null;
   selected: StudyElementRef | null;
@@ -487,7 +506,12 @@ export function ElementPanel({
   onChoisirModele?: (element: StudyReleveElement, nom: string) => void;
 }) {
   const [motif, setMotif] = useState("");
-  const liste = elementsDuLocal(content, room).filter((item) => !parois || !estPont(item));
+  const liste = elementsDuLocal(content, room).filter(
+    (item) =>
+      (!parois || !estPont(item)) &&
+      // D227 : chaque étape ne liste que sa famille.
+      (!famille || (item.type === "menuiserie") === (famille === "menuiseries")),
+  );
   const element = trouverElement(content, selected);
   const comptes = compterElements(content);
   const douteuxIci = liste.filter((item) => !item.exclu && item.a_verifier).length;
@@ -528,7 +552,7 @@ export function ElementPanel({
     <section className="th-elements">
       {/* Seule à l'étape des parois, la liste doit dire de quel local il s'agit. */}
       {parois && room && <h2 className="th-panel__title">{room.nom}</h2>}
-      <h2>{parois ? "Parois et menuiseries" : "Éléments d'enveloppe"}</h2>
+      <h2>{famille === "menuiseries" ? "Menuiseries" : famille === "parois" ? "Parois" : parois ? "Parois et menuiseries" : "Éléments d'enveloppe"}</h2>
       <p className="th-muted">
         {liste.length} sur ce local · {douteuxIci} à vérifier — niveau : {comptes.aVerifier} sur {comptes.total}
         {comptes.ecartes > 0 ? ` · ${comptes.ecartes} écarté${comptes.ecartes > 1 ? "s" : ""}` : ""}

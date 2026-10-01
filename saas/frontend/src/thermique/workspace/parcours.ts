@@ -1,5 +1,6 @@
 import type { HauteursDuPlan, Sheet, Study, StudyContent, StudyReleveElement, StudyRoom, VueCoupe } from "../api";
 import { estPont } from "./elements";
+import { baiesDuNiveau } from "./modeles";
 import type { MetricsShow } from "./StudyMetrics";
 import { validatedRoomCount } from "./study";
 
@@ -12,7 +13,7 @@ import { validatedRoomCount } from "./study";
  *
  * Fonction pure : elle ne lit que l'étude, pour être vérifiable sans écran.
  */
-export type EtapeId = "planche" | "analyse" | "lecture" | "locaux" | "enveloppe" | "ponts" | "hauteurs";
+export type EtapeId = "planche" | "analyse" | "lecture" | "locaux" | "enveloppe" | "menuiseries" | "ponts" | "hauteurs";
 
 /** « fait » : rien ne reste. « en_cours » : il reste du travail. « attente » : le préalable manque. */
 export type EtatEtape = "fait" | "en_cours" | "attente";
@@ -70,6 +71,17 @@ export function avancement(elements: StudyReleveElement[], exigeant = false): Av
     ).length,
     ecartes: elements.filter((element) => element.exclu).length,
   };
+}
+
+/**
+ * Les menuiseries du niveau (baies entières, D224) et celles qui n'ont pas encore de modèle mesuré (D227). Un
+ * mur-rideau n'en attend pas : sa hauteur est celle du local qu'il borde (D196).
+ */
+export function avancementMenuiseries(content: StudyContent): { total: number; sansModele: number } {
+  const baies = baiesDuNiveau(content).filter(
+    (baie) => !baie.some((morceau) => String(morceau.menuiserie_type ?? "").toLowerCase().includes("rideau")),
+  );
+  return { total: baies.length, sansModele: baies.filter((baie) => !baie[0].modele).length };
 }
 
 const pluriel = (nombre: number, mot: string) => `${nombre} ${mot}${nombre > 1 ? "s" : ""}`;
@@ -181,7 +193,8 @@ export function parcours(
     return [
       ...etapes,
       { id: "locaux", titre: "Locaux et hauteur", reste: "après l'analyse", etat: "attente", panneau: "fiche", calques: null },
-      { id: "enveloppe", titre: "Parois et menuiseries", reste: "après l'analyse", etat: "attente", panneau: "fiche", calques: null },
+      { id: "enveloppe", titre: "Parois", reste: "après l'analyse", etat: "attente", panneau: "fiche", calques: null },
+      { id: "menuiseries", titre: "Menuiseries", reste: "après l'analyse", etat: "attente", panneau: "fiche", calques: null },
       { id: "ponts", titre: "Ponts thermiques", reste: "après l'analyse", etat: "attente", panneau: "fiche", calques: null },
     ];
   }
@@ -189,7 +202,8 @@ export function parcours(
   const locaux = content.locaux.length;
   const valides = study ? validatedRoomCount(study) : 0;
   const sansHauteur = locauxSansHauteur(content, hauteurs).length;
-  const parois = avancement(paroisDuNiveau(content));
+  const parois = avancement(paroisDuNiveau(content).filter((element) => element.type !== "menuiserie"));
+  const menuiseries = avancementMenuiseries(content);
   // Les ponts se jugent un par un, sans exception : voir `avancement`.
   const ponts = avancement(pontsDuNiveau(content), true);
 
@@ -207,14 +221,28 @@ export function parcours(
     },
     {
       id: "enveloppe",
-      titre: "Parois et menuiseries",
+      titre: "Parois",
       reste:
         parois.restants === 0
           ? `${parois.total} relevées${parois.ecartes > 0 ? `, ${pluriel(parois.ecartes, "écartée")}` : ""}`
-          : `${pluriel(parois.restants, "élément")} à vérifier`,
+          : `${pluriel(parois.restants, "paroi")} à vérifier`,
       etat: parois.restants === 0 ? "fait" : "en_cours",
       panneau: "fiche",
       calques: { metres: true, ponts: false, elements: true, toutesCotes: false },
+    },
+    {
+      // D227 : les menuiseries ont leur étape, où rien d'autre ne se dessine ni ne s'attrape.
+      id: "menuiseries",
+      titre: "Menuiseries",
+      reste:
+        menuiseries.total === 0
+          ? "aucune menuiserie relevée"
+          : menuiseries.sansModele === 0
+            ? `${pluriel(menuiseries.total, "menuiserie")}, toutes avec un modèle`
+            : `${pluriel(menuiseries.sansModele, "menuiserie")} sans modèle sur ${menuiseries.total}`,
+      etat: menuiseries.sansModele === 0 ? "fait" : "en_cours",
+      panneau: "fiche",
+      calques: { metres: false, ponts: false, elements: true, toutesCotes: false },
     },
     {
       id: "ponts",
@@ -249,9 +277,11 @@ export type VueEtape = {
   /** Fiche du local (nature, côtés, validation, édition du contour). */
   ficheLocal: boolean;
   /** Liste des éléments d'enveloppe du local, et laquelle. */
-  listeElements: "aucune" | "parois" | "toutes";
+  listeElements: "aucune" | "parois" | "menuiseries" | "toutes";
   /** Les locaux s'estompent : on regarde le plan dessous, pas le zonage. */
   locauxDiscrets: boolean;
+  /** D227 : la famille d'éléments mise en avant et seule attrapable ; les autres s'estompent. */
+  famille?: "parois" | "menuiseries";
 };
 
 export function vueDeLEtape(etape: EtapeId): VueEtape {
@@ -259,7 +289,9 @@ export function vueDeLEtape(etape: EtapeId): VueEtape {
     case "locaux":
       return { cotes: true, elements: false, ponts: false, clic: "locaux", ficheLocal: true, listeElements: "aucune", locauxDiscrets: false };
     case "enveloppe":
-      return { cotes: true, elements: true, ponts: false, clic: "elements", ficheLocal: false, listeElements: "parois", locauxDiscrets: true };
+      return { cotes: true, elements: true, ponts: false, clic: "elements", ficheLocal: false, listeElements: "parois", locauxDiscrets: true, famille: "parois" };
+    case "menuiseries":
+      return { cotes: false, elements: true, ponts: false, clic: "elements", ficheLocal: false, listeElements: "menuiseries", locauxDiscrets: true, famille: "menuiseries" };
     case "ponts":
       return { cotes: false, elements: false, ponts: true, clic: "ponts", ficheLocal: false, listeElements: "aucune", locauxDiscrets: true };
     default:
