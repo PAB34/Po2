@@ -3384,3 +3384,10 @@ circle.th-seg--measure {
   align-items: center;
   gap: 0.4rem;
 }
+/* Modèle choisi depuis la fiche d'une menuiserie (D226). */
+.th-choix-modele {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0.5rem 0;
+  font-weight: 700;
+}

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import type {
   Baie,
   MenuiseriesDuProjet,
+  ModeleMenuiserie,
   StudyContent,
   StudyElementChanges,
   StudyElementRef,
@@ -177,6 +178,8 @@ function Detail({
   onOperation,
   baie = null,
   onMesurerBaie,
+  modeles = [],
+  onChoisirModele,
 }: {
   element: StudyReleveElement;
   content: StudyContent;
@@ -187,6 +190,8 @@ function Detail({
   onOperation: (operation: StudyOperation) => void;
   baie?: Baie | null;
   onMesurerBaie?: () => void;
+  modeles?: ModeleMenuiserie[];
+  onChoisirModele?: (element: StudyReleveElement, nom: string) => void;
 }) {
   return (
     <>
@@ -229,6 +234,9 @@ function Detail({
             )}
             {(element.morceaux_reunis?.length ?? 0) > 1 && ` · ${element.morceaux_reunis!.length} morceaux relevés réunis`}
           </p>
+        )}
+        {element.type === "menuiserie" && !element.exclu && onChoisirModele && (
+          <ChoixDuModele element={element} modeles={modeles} busy={busy} onChoisir={(nom) => onChoisirModele(element, nom)} />
         )}
         {element.type === "menuiserie" && baie && <BaieDeLaMenuiserie baie={baie} onMesurer={onMesurerBaie} />}
         {element.type === "menuiserie" && !element.exclu && (
@@ -299,6 +307,36 @@ function Detail({
         )}
       </article>
     </>
+  );
+}
+
+/** Choisir, dans la bibliothèque du projet, le modèle mesuré de cette menuiserie (D226). */
+export function ChoixDuModele({
+  element,
+  modeles,
+  busy,
+  onChoisir,
+}: {
+  element: StudyReleveElement;
+  modeles: ModeleMenuiserie[];
+  busy: boolean;
+  /** Nom du modèle, ou chaîne vide pour le retirer. */
+  onChoisir: (nom: string) => void;
+}) {
+  const actuel = element.modele ?? "";
+  return (
+    <label className="th-choix-modele">
+      Modèle mesuré
+      <select value={actuel} disabled={busy || (!modeles.length && !actuel)} onChange={(event) => onChoisir(event.target.value)}>
+        <option value="">{modeles.length ? "— aucun : choisir dans la bibliothèque —" : "— aucun modèle mesuré —"}</option>
+        {modeles.map((modele) => (
+          <option key={modele.nom} value={modele.nom}>
+            {modele.nom} · {Math.round(modele.largeur_cm)}×{Math.round(modele.hauteur_m * 100)}
+          </option>
+        ))}
+        {actuel && !modeles.some((modele) => modele.nom === actuel) && <option value={actuel}>{actuel} (retiré de la bibliothèque)</option>}
+      </select>
+    </label>
   );
 }
 
@@ -429,6 +467,7 @@ export function ElementPanel({
   menuiseries,
   sheetId = null,
   onMesurerBaie,
+  onChoisirModele,
 }: {
   content: StudyContent;
   room: StudyRoom | null;
@@ -444,6 +483,8 @@ export function ElementPanel({
   sheetId?: number | null;
   /** Ouvre « Coupes et élévations » prête à mesurer la menuiserie (D214). */
   onMesurerBaie?: () => void;
+  /** Pose un modèle de la bibliothèque sur la menuiserie et tous ses morceaux (D226). */
+  onChoisirModele?: (element: StudyReleveElement, nom: string) => void;
 }) {
   const [motif, setMotif] = useState("");
   const liste = elementsDuLocal(content, room).filter((item) => !parois || !estPont(item));
@@ -475,6 +516,8 @@ export function ElementPanel({
           onOperation={onOperation}
           baie={baieDeElement(menuiseries, sheetId, element)}
           onMesurerBaie={onMesurerBaie}
+          modeles={menuiseries?.modeles ?? []}
+          onChoisirModele={onChoisirModele}
         />
         {message && <p className="th-alert">{message}</p>}
       </section>

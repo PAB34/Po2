@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import type { MenuiseriesDuProjet, ModeleMenuiserie, StudyContent, StudyReleveElement } from "../api";
-import { BaieDeLaMenuiserie } from "./ElementPanel";
+import { BaieDeLaMenuiserie, ChoixDuModele } from "./ElementPanel";
 import { baieDeLElement, baiesDuNiveau, cotesDesMenuiseries, menuiseriesDeMemeLargeur, nomPropose, texteDeLaCote } from "./modeles";
 import { BibliothequeModeles, ModeleDeMenuiserie } from "./ModelesMenuiseries";
 
@@ -98,6 +98,15 @@ describe("modèles de menuiserie (D219 à D222)", () => {
     );
     expect(html).toContain('value="M 120×215"');
     expect(html).toContain("Enregistrer le modèle et le poser");
+  });
+
+  it("la fiche d'une menuiserie choisit son modèle dans la bibliothèque (D226)", () => {
+    const html = renderToStaticMarkup(
+      <ChoixDuModele element={menuiserie(0, 1.2, { modele: "M1 120×215" })} modeles={[modele]} busy={false} onChoisir={() => undefined} />,
+    );
+    expect(html).toContain("Modèle mesuré");
+    expect(html).toContain("M1 120×215 · 120×215");
+    expect(html).toMatch(/<option value="M1 120×215" selected="">/);
   });
 
   it("la bibliothèque liste les modèles avec leurs dimensions et leurs poses", () => {

@@ -587,7 +587,11 @@ export function WorkspacePage() {
         });
         queryClient.setQueryData<Study>(studyQueryKey(planche), enregistre);
         void queryClient.invalidateQueries({ queryKey: menuiseriesQueryKey(projectId) });
-        setModeleMessage(`« ${nom} » posé sur ${refs.length} menuiserie${refs.length > 1 ? "s" : ""}.`);
+        setModeleMessage(
+          nom
+            ? `« ${nom} » posé sur ${refs.length} menuiserie${refs.length > 1 ? "s" : ""}.`
+            : "Modèle retiré : la menuiserie reprend sa largeur relevée.",
+        );
       } catch (echec) {
         setModeleMessage(echec instanceof Error ? echec.message : "Le modèle n'a pas été posé.");
       }
@@ -1426,8 +1430,13 @@ export function WorkspacePage() {
                       menuiseries={menuiseries.data}
                       sheetId={sheetId}
                       onMesurerBaie={vuesDuProjet.length ? () => ouvrirLaFenetre("menuiserie") : undefined}
+                      onChoisirModele={(element, nom) =>
+                        // D226 : un modèle de la bibliothèque, posé sur toute la baie (D224).
+                        affecterModele(baieDeLElement(shownStudy.content, element), nom)
+                      }
                     />
                   )}
+                  {modeleMessage && !modeleAPoser && elementsState.selected && <p className="th-alert">{modeleMessage}</p>}
                   {/* D222 : la bibliothèque des modèles du projet, à l'étape des menuiseries. */}
                   {etape === "enveloppe" && token && !elementsState.selected && !editionState.draft && (
                     <section className="th-modeles-section">

@@ -31,3 +31,7 @@ menuiserie, qui suive le nord quand on le change.
   nord, en 8 secteurs (N, NE, E, SE, S, SO, O, NO) et en degrés. Le serveur l'écrit dans le relevé à chaque
   recalcul (`exposition`, `azimut_deg`), donc aussi quand le nord change ; l'écran la calcule en direct depuis
   la flèche du nord. Secteur sur la cote du plan, angle exact dans la fiche. Sans nord : « nord à caler ».
+
+- **D226 — Modèle choisi depuis la fiche** (2026-10-01). La fiche d'une menuiserie cliquée sur le plan propose
+  « Modèle mesuré » : une liste des modèles de la bibliothèque du projet. Le choix pose le modèle sur toute la
+  baie (D224) ; « aucun » le retire, la menuiserie reprend sa largeur relevée.
