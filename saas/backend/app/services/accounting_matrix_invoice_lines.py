@@ -24,6 +24,7 @@ from app.models.invoice import (
     EnergyInvoiceSite,
 )
 from app.services.accounting_matrix_apply import InvoiceLine
+from app.services.prm_scope import inactive_prm_ids, is_in_scope
 
 
 def extract_invoice_lines(
@@ -85,8 +86,11 @@ def _extract_energy_import_lines(db: Session, city_id: int | None, invoice_id: s
     if invoice is None:
         raise ValueError("Import de facture fluide non normalisé : lancez d'abord l'analyse/normalisation.")
 
+    inactive = inactive_prm_ids(db, city_id)
     lines: list[InvoiceLine] = []
     for site in invoice.sites:
+        if not is_in_scope(site.prm_id, inactive):
+            continue
         for period in site.periods:
             for line in period.lines:
                 billed_item = _first_text(

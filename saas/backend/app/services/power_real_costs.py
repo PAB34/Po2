@@ -27,6 +27,7 @@ from app.models.invoice import (
     EnergyInvoicePeriod,
     EnergyInvoiceSite,
 )
+from app.services.prm_scope import in_scope_clause
 
 PENALTY_CODES = {"network_overrun", "network_overrun_quadratic"}
 FIXED_ROUTING_CODES = {"network_fixed_total"}
@@ -63,6 +64,7 @@ def get_real_power_costs_by_prm(
             EnergyInvoice.city_id == city_id,
             EnergyInvoiceSite.prm_id.isnot(None),
             EnergyInvoiceLine.normalized_code.in_(_RELEVANT_CODES),
+            in_scope_clause(city_id),
         )
     ).all()
 

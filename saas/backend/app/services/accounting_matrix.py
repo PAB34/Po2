@@ -36,6 +36,7 @@ from app.models.invoice import (
     EnergyInvoicePeriod,
     EnergyInvoiceSite,
 )
+from app.services.prm_scope import in_scope_clause
 
 # Mots vides retirés lors de la dérivation d'un nom court d'antenne depuis la
 # désignation de site (ENGIE/EDF), pour rester lisible (cf. antenna_code DALKIA).
@@ -541,7 +542,11 @@ def prefill_energy_matrices(db: Session, city_id: int | None) -> dict:
             .join(EnergyInvoicePeriod, EnergyInvoiceLine.invoice_period_id == EnergyInvoicePeriod.id)
             .join(EnergyInvoiceSite, EnergyInvoicePeriod.invoice_site_id == EnergyInvoiceSite.id)
             .join(EnergyInvoice, EnergyInvoiceSite.invoice_id == EnergyInvoice.id)
-            .where(EnergyInvoice.city_id == city_id, EnergyInvoiceLine.normalized_code.isnot(None))
+            .where(
+                EnergyInvoice.city_id == city_id,
+                EnergyInvoiceLine.normalized_code.isnot(None),
+                in_scope_clause(city_id),
+            )
             .distinct()
         ).all()
         if code and code.strip()
@@ -579,6 +584,7 @@ def prefill_energy_matrices(db: Session, city_id: int | None) -> dict:
                 EnergyInvoice.city_id == city_id,
                 EnergyInvoiceSite.prm_id.isnot(None),
                 EnergyInvoiceSite.site_name.isnot(None),
+                in_scope_clause(city_id),
             )
         ).all()
         if prm and name
