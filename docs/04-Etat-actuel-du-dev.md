@@ -19,11 +19,21 @@ do_not_auto_read:
 
 ## 🔜 Reprise prochaine session
 
-> Mise à jour : **2026-09-28, fin de session Claude** (avant compactage). Tout est **poussé et en
-> production** : `main` = `31ff802f` (migration **0087** `calage_json` appliquée par le déploiement).
-> Dépôt : `C:\Users\pa.borja\Documents\Po2-thermique`, branche `feat/thermique-socle-raster` = `main`.
+> Mise à jour : **2026-10-01, fin de journée Claude**. Tout est **poussé et en production** (`main` =
+> `feat/thermique-socle-raster`). Dépôt : `C:\Users\pa.borja\Documents\Po2-thermique`.
 
 ### ▶️ REPRENDRE ICI
+
+**CAP DÉCIDÉ LE 2026-10-01 : consolider le R+1 jusqu'à ce qu'il soit parfait, AVANT tout autre niveau.**
+- La passe globale automatique (`run_etude_niveau.py --mode cli`) est **insuffisante** : essai A/B sur le R+2,
+  23 / 25 / 36 objets contre 130 au R+1 (le R+1 avait été fait en session interactive, mode « attente »). La
+  façon de passer les consignes à l'agent n'est pas en cause. **Ne relancer aucun niveau avec elle.**
+- Ensuite : **reporter le relevé du R+1 sur les autres niveaux** par le calage, sans IA
+  (`docs/thermique/report-entre-niveaux-decisions.md`, D233–D237, principe validé, 4 questions à confirmer
+  au moment de coder) ; puis détection « par l'exemple » des menuiseries répétées ; l'IA seulement pour des
+  lectures ciblées.
+- Étude R+2 automatique produite (`Etudes-thermique/projet1/R2/etude-R2.json`, 21 incohérences) : à ne pas
+  prendre pour base ; elle servira au mieux pour son contour de façade (99 tronçons, 154,6 m).
 
 **Chiffres de référence du R+1** (`banc.db` du bloc-notes, instantané antérieur à la prod) : 227 éléments,
 **229 côtés** (et non plus 222 : les côtés contre les 2 terrasses sont distingués depuis F), **170,12 m
