@@ -1,0 +1,644 @@
+# SIG de l'agglo — récupérer les propriétaires : audit, cadre, décisions
+
+> Créé le **2026-09-03** (session Claude). Statut : **étapes 1 (reconnaissance) et 2 (extraction) FAITES.**
+> Rien n'est encore écrit en base Po2 : reste l'étape 3 (connecteur produit).
+> Portail : `https://sig.agglopole.fr/vmap2/` (vMap 2026.06, éditeur Veremes).
+> Inventaire détaillé → `sig-agglo-inventaire-couches-foncieres.md`.
+
+---
+
+## 1. Pourquoi ce sujet
+
+Le module Patrimoine sait **où** sont les bâtiments (IGN, adresse, référence cadastrale) mais pas
+**à qui** appartient la parcelle. Le SIG de Sète Agglopôle Méditerranée, auquel l'utilisateur a un
+accès nominatif, expose la donnée propriétaire (origine DGFiP/MAJIC). Question posée : peut-on
+écrire un programme qui la récupère et l'analyse ?
+
+Réponse : **oui**, l'API est propre, authentifiée et scriptable. Les vraies questions sont le
+**cadre d'usage** (§5) et le **périmètre utile** (§7).
+
+---
+
+## 2. Existant vérifié dans Po2 (avant d'ajouter quoi que ce soit)
+
+| Brique | État | Fichier |
+| --- | --- | --- |
+| Bâtiments avec référence cadastrale normalisée | **en prod** | `app/models/building.py:15-19` (`dgfip_reference_norm`, `dgfip_unique_key`, `dgfip_source_rows_json`) |
+| Normalisation INSEE + préfixe + section + plan | **en prod** | `app/services/building_naming.py:444` |
+| Attachement IGN (adresse + cadastre) | **en prod** | `POST /buildings/{id}/ign-attachment` |
+| Adresses DGFiP/MAJIC à proximité (rayon 200 m) | **codé, mais fichier absent** | `app/core/config.py:13` `dgfip_majic_file_path` vide → l'écran affiche « le fichier DGFiP/MAJIC n'est pas configuré » (`BuildingDetailPage.tsx:939`) |
+| Référentiel ASTECH (444 biens, cadastre hérité) | **en prod** | `/patrimoine/astech` |
+
+**Constat structurant** : le produit a déjà **un trou nommé** à cet endroit — la source MAJIC était
+prévue comme un *fichier* à déposer, jamais fourni. Le SIG peut devenir cette source, **en API**
+plutôt qu'en fichier. Rien à réécrire : c'est un **connecteur** à brancher sur un besoin déjà
+modélisé (clé de jointure = référence cadastrale / `id_par`).
+
+---
+
+## 3. L'API : ce qui a été établi le 2026-09-03
+
+| Élément | Valeur |
+| --- | --- |
+| Base API | `https://sig.agglopole.fr/rest_vmap2/v2` (déclarée dans `/vmap2/conf/properties.json`) |
+| Connexion | `POST /vitis/privatetoken`, corps JSON `{user, password, duration}` |
+| Jeton | renvoyé dans `data.token`, porté **brut** dans l'en-tête `Authorization` (ni Basic ni Bearer) |
+| Catalogue | `GET /vmap/layers` → **1 069 couches** |
+| Attributs | `GET /vmap/layers/{layer_id}/query?limit=N&filter=<json>` |
+| Filtre | `{"relation":"AND","operators":[{"column":"id_com","compare_operator":"=","value":"34301"}]}` — testé, fonctionne |
+| Volumétrie | la réponse porte `total_row_number` → comptage sans télécharger |
+
+Privilèges du compte utilisé : `vitis_user`, `vmap_cadastre_medium_user`, `vmap_user`.
+
+**Voies fermées** (et c'est très bien ainsi) : le **WFS est désactivé** sur le service MapServer
+(`wms2/private/<hash>`), et `vitis/genericqueries/columns` (SQL générique, réservé aux admins)
+répond `ERROR_INSUFFICIENT_PRIVILEGE`. La seule voie ouverte est **l'API métier de consultation**,
+celle qu'utilise l'application elle-même. On reste donc strictement dans l'usage prévu de l'outil.
+
+---
+
+## 4. Ce que le SIG contient réellement (126 couches foncières, 79 lisibles, 47 refusées)
+
+### 4.1 Les couches décisives
+
+| # | Table | Lignes | Contenu |
+| --- | --- | ---: | --- |
+| **317** | `foncier.vmp_foncier_public` | **17 040** | **Foncier présumé public (DGFP 2025)** : `id_par`, `ddenom`, `type`, `ccodro`/`l_ccodro`, `surfcad_m2`, `assimile_sam`, `nb_proprio`, `dtmajic` |
+| **474** | `agglo_s_cadastre.vmp_uf_proprietaire` | **63 809** | **MAJIC nominatif complet** : `ddenom`, `dnomlp`/`dprnlp`, `dnomus`/`dprnus`, `dqualp`, `dlign3`→`dlign6` (adresse du propriétaire), `dnuper`, `dnupro`, `id_uf`, `id_com` |
+| **943** | `agglo_s_cadastre.vmap_fond_cadastral_parcelle` | 173 365 | Parcelles : `id_par`, `section`, `parcelle`, `sup_m2`, `sup_fiscale`, `x`, `y`, `jdatat` |
+| — | `s_cadastre.v_vmap_unite_fonciere` | 63 811 | `id_uf`, `id_dnupro`, `nb_parcelles`, `superficie` |
+| — | `s_cadastre.v_vmap_batiment` | 100 722 | Bâti cadastral : `id`, `section`, `dur_code`/`dur_lib` (dur/léger) |
+| **604** | `foncier.vmp_cadhist` | 91 537 | Historique de parcelle (`an_ajout`, `an_suppr`, `existe_encore`) |
+| **1370** | `agglo_s_cadastre.vmp_parcelles_sans_infos_majic` | 85 | Parcelles sans information foncière — la liste des trous |
+| **694** | `foncier.vmp_perimetre_competence_foncier_et_espaces_nat` | 123 | Parcelles confiées à la gestion de SAM (délibérations, dates) |
+
+### 4.2 Le point qui oriente tout
+
+La couche **474** (nominative, personnes physiques comprises) n'a pas de colonne nommée `id_par`.
+> **Corrigé le 2026-09-03 après extraction** : son `id_uf` **porte en fait un identifiant de
+> parcelle** (même format sur 14 caractères), et se joint directement au cadastre pour **97,7 %**
+> des lignes. La crainte d'un « travail de rapprochement » exprimée ici lors de l'audit était
+> infondée — voir §9. Reste la maille *unité foncière*, qui laisse 26 % des parcelles de l'agglo
+> sans propriétaire direct.
+
+La couche **317** porte **`id_par` ET `ddenom`** : jointure **directe** avec le cadastre de Po2 —
+et elle ne contient **que des personnes morales publiques**. Typologie mesurée sur 1 000 lignes :
+EPCI 66 %, État 19 %, Offices HLM 5 %, Communes 4 %, Syndicats 3 %, Région/Département, CCAS.
+Le champ `l_ccodro` distingue propriétaire / gérant / emphytéote / bailleur à construction.
+
+**Autrement dit : le chemin le plus court est aussi celui qui ne copie aucune donnée personnelle.**
+Sur Sète (`id_com = 34301`) : **1 624 parcelles publiques**, mesuré par comptage sans téléchargement.
+
+---
+
+## 5. Cadre d'usage
+
+La donnée de la couche **474** est une **donnée à caractère personnel** (nom, prénom, civilité,
+adresse du propriétaire) dont la rediffusion est encadrée (art. **L. 107 A** du livre des
+procédures fiscales, et RGPD pour finalité / minimisation / durée). La couche **317** ne contient
+que des personnes morales publiques : elle ne pose pas ce problème.
+
+Consulter est acquis (agent habilité, compte nominatif). Ce qui change avec un programme, c'est la
+**copie dans une autre base**. Garde-fous proposés :
+
+1. **Prévenir l'administrateur SIG de l'agglo** — une phrase suffit. C'est aussi le plus court
+   chemin vers un **compte de service** (qui ne casse pas au départ de l'agent) et vers la
+   confirmation qu'on tape la bonne couche.
+2. **Minimiser** : commencer par la couche 317 seule (§7 Q1). Elle répond à « qu'est-ce que la
+   Ville possède ? » sans copier une seule identité de particulier.
+3. **Ne jamais exposer** de donnée nominative dans une page publique, un export libre ou un log.
+
+---
+
+## 6. Plan — l'étape 1 est faite
+
+**Étape 1 — reconnaissance. ✅ FAITE (2026-09-03).**
+`saas/backend/scripts/sig_agglo_recon.py`, lecture seule : se connecte, inventorie les couches,
+et pour chaque couche foncière relève **colonnes + volumétrie**. Une ligne est bien demandée
+(`limit=1`, seul moyen de connaître les colonnes) mais **reste en mémoire** : seuls les noms de
+colonnes et les comptages sont écrits. Résultat →
+`sig-agglo-inventaire-couches-foncieres.md`.
+
+```bash
+# .env à la racine du dépôt (ignoré par git, cf. .gitignore:7-9)
+SIG_AGGLO_BASE_URL=https://sig.agglopole.fr/rest_vmap2/v2
+SIG_AGGLO_USER=...
+SIG_AGGLO_PASSWORD=...
+```
+
+```bash
+python saas/backend/scripts/sig_agglo_recon.py --out sig_recon --sample
+```
+
+**Étape 2 — extraction et analyse. ✅ FAITE (2026-09-03).**
+`sig_agglo_extract.py` (510 284 lignes, 6 couches, dossier hors git + manifeste daté) puis
+`sig_agglo_analyse.py` (rapport `rapport-proprietaires.md`). Résultats → §9.
+
+```bash
+python saas/backend/scripts/sig_agglo_extract.py --out sig_agglo_data
+python saas/backend/scripts/sig_agglo_analyse.py --data sig_agglo_data
+```
+
+**Étape 3 — connecteur produit.** Service `app/services/sig_agglo.py` + table de rapprochement
+parcelle → propriété, branchés sur l'écran bâtiment qui attend déjà cette donnée. Là seulement on
+écrit en base.
+
+---
+
+## 7. Questions — Q1 à Q3 tranchées le 2026-09-03
+
+- **Q1 — Quelle couche ? → (c) TOUT, personnes physiques comprises.** Décision de l'utilisateur,
+  prise après exposé des trois options et du cadre juridique. La proposition initiale (317 seule,
+  sans donnée personnelle) n'est pas retenue : le besoin porte sur l'ensemble de la donnée
+  propriétaire. **Conséquence assumée** : Po2 manipule des données à caractère personnel, ce qui
+  engage §5 (information de l'admin SIG, non-rediffusion, durée de conservation).
+- **Q2 / Q3 — Périmètre ? → toute l'agglo, toutes les parcelles.** 14 communes, sans restriction
+  aux bâtiments déjà connus de Po2 : l'objectif inclut la découverte de patrimoine absent de Po2.
+- **Q4 — Rafraîchissement ?** Extraction ponctuelle ou synchronisation ? Les fichiers fonciers sont
+  millésimés annuellement (`dtmajic`) : un rafraîchissement annuel suffit sans doute.
+- **Q5 — Compte utilisé ?** Nominatif (immédiat) ou compte de service demandé à l'agglo (propre) ?
+- **Q6 — Stockage ?** Nouvelle table `parcel_ownership` ou enrichissement des colonnes `dgfip_*`
+  de `buildings` ? *Proposition : table dédiée — une parcelle a plusieurs titulaires de droits
+  (`l_ccodro`), un bâtiment plusieurs parcelles.*
+- **Q7 — Et le fichier MAJIC prévu à l'origine ?** Le connecteur SIG le remplace-t-il définitivement
+  (`dgfip_majic_file_path` devient mort) ou les deux sources coexistent-elles ?
+
+---
+
+## 8. Décisions datées
+
+| Date | Décision | Motif |
+| --- | --- | --- |
+| 2026-09-03 | Audit avant code ; reconnaissance **sans copie de donnée nominative** | Règle « fil du dev » + minimisation RGPD : on n'extrait rien tant qu'on ne sait pas ce qu'on extrait |
+| 2026-09-03 | API ciblée = `rest_vmap2/v2`, **pas de scraping** de l'interface | Route confirmée ; un client HTTP est stable, un scraping ne l'est pas |
+| 2026-09-03 | On passe par **l'API métier de consultation** (`/vmap/layers/{id}/query`) | WFS désactivé et SQL générique interdit au compte : on reste dans l'usage prévu de l'outil |
+| 2026-09-03 | **Cible pressentie = couche 317** (foncier présumé public) | Seule couche qui porte à la fois `id_par` et le propriétaire ; et elle ne contient aucune personne physique |
+| 2026-09-03 | **Périmètre retenu : TOUT, toute l'agglo** (couche 474 comprise, particuliers inclus) | Choix de l'utilisateur après exposé des options et du cadre RGPD ; la recommandation « 317 seule » n'est pas retenue |
+| 2026-09-03 | Le dossier d'extraction porte **son propre `.gitignore` à `*`** | La donnée personnelle ne doit pas pouvoir entrer dans git, même par `git add -A` — protection câblée, pas procédurale |
+| 2026-09-03 | Un **`MANIFESTE.md`** daté accompagne toute extraction | Origine, finalité, volumétrie : répondre dans six mois à « d'où vient ce fichier » |
+| 2026-09-03 | Les rapports de synthèse **nomment les personnes morales, agrègent les particuliers** (`--noms-particuliers` pour lever) | Le CSV porte la donnée complète comme décidé ; un rapport de synthèse n'a pas besoin de désigner des particuliers |
+
+---
+
+## 9. Étape 2 exécutée — ce que l'extraction a donné (2026-09-03)
+
+**510 284 lignes extraites** en 6 couches (`sig_agglo_extract.py`), **93 Mo**, dans `sig_agglo_data/`
+(hors git). Analyse → `sig_agglo_data/rapport-proprietaires.md` (`sig_agglo_analyse.py`).
+
+**Découverte structurante** : `id_uf` de la couche 474 **porte un identifiant de parcelle**.
+La jointure au cadastre est donc **directe** — 62 367 lignes sur 63 809 (**97,7 %**) — contrairement
+à ce que laissait craindre l'audit initial. Il n'y a pas de rapprochement à construire.
+
+| Mesure | Valeur |
+| --- | --- |
+| Propriétaires distincts | 43 802 (32 039 comptes communaux) |
+| Personnes physiques / morales | 80 % / 20 % des lignes — mais 39 % de la surface aux morales |
+| Couverture (14 communes agglo) | 62 367 parcelles sur 84 248 = **74 %** |
+| Propriétaires hors Hérault | 9 300 lignes (15 %) |
+| Foncier public | 72,5 km² aux communes, 31,9 km² au Conservatoire du littoral, 30,8 km² à l'État |
+| Ville de Sète | **599 parcelles, 1,3 km²** (+ agglo 316 parcelles, + Sète Thau Habitat 218) |
+
+**Limite mesurée** : la couche est à la maille **unité foncière**. 63 811 UF couvrent 86 154
+parcelles, dont 10 664 UF en regroupent plusieurs (jusqu'à 125) ; seule la parcelle « tête » porte
+l'identifiant. Passer de 74 % à ~100 % suppose de rattacher les parcelles secondaires, via
+`id_dnupro` (jointure simple, à tenter d'abord) ou par intersection géométrique (`--avec-geom`).
+
+**Piège écarté** : le fond cadastral couvre **27 communes** (les 14 de l'agglo + les limitrophes).
+Rapporter la couverture à ses 170 383 parcelles donne un taux faussement bas de 36,6 % ; le bon
+dénominateur est le périmètre agglo.
+
+---
+
+## 10. Classeur unique et adresse des biens (2026-09-03)
+
+Demande : tout dans **un seul fichier, une seule feuille**, avec l'adresse **du bien** en plus de
+celle du propriétaire. → `sig_agglo_classeur.py` produit `foncier-agglo.xlsx` (63 809 lignes ×
+34 colonnes, une ligne = un propriétaire sur un bien).
+
+**L'adresse du propriétaire n'est pas celle du bien.** `dlign3`→`dlign6` donnent le *domicile*
+du propriétaire (pour la Ville de Sète : l'Hôtel de Ville). L'adresse du bien vient d'ailleurs :
+
+| Source | Couverture | Rattachement |
+| --- | --- | --- |
+| `adresse.v_sete_adresse` (couche **226**, 9 974 adresses) | Sète | **exact** : la couche porte `section` + `parcelle` (jusqu'à 3 parcelles par adresse) |
+| `referentiels.vmp_ban` (couche **397**, 80 514 adresses) | tout le territoire | **approché** : points seuls, on prend le plus proche du centroïde de parcelle |
+
+Résultat : **6 812 exactes + 40 181 approchées = 73,6 %** des lignes adressées. Qualité des
+approchées : **médiane 14 m**, 75ᵉ centile 23 m, 8 % au-delà de 50 m. Sète est couverte à **99 %**.
+Les 15 374 parcelles sans adresse sont à plus de 100 m de tout point adresse (surface médiane
+2 561 m² : du foncier rural, sans adresse postale) ; s'y ajoutent les 1 442 lignes sans parcelle.
+
+**Obstacle technique traité** : les centroïdes de parcelle sont en **degrés WGS84**, la BAN en
+**Lambert-93**. `pyproj` n'est pas installé sur le poste → la projection conique conforme est
+implémentée dans le script et **vérifiée sur les données réelles avant usage** : l'écart médian
+parcelle ↔ adresse la plus proche vaut 31 m (une projection fausse donnerait des kilomètres). Le
+script refuse de produire les adresses au-delà de 500 m d'écart médian.
+
+**Détail d'import** : MAJIC cale le numéro de voie sur 4 chiffres (`0007 RUE PAUL VALERY`). Le
+script le dépouille — sans quoi tout rapprochement d'adresse échouerait, comme sur ASTECH.
+
+| Date | Décision | Motif |
+| --- | --- | --- |
+| 2026-09-03 | Adresse du bien = **exact (226) d'abord, BAN (397) en repli**, source et distance affichées ligne à ligne | Aucune source ne couvre tout ; l'utilisateur doit pouvoir juger une adresse approchée, pas la subir |
+| 2026-09-03 | Projection Lambert-93 **implémentée et validée sur les données**, pas supposée juste | `pyproj` absent du poste entreprise ; une projection fausse est silencieuse et contamine tout |
+
+---
+
+## 11. Hors agglo (Agde…) : ce qu'on peut et ne peut pas obtenir — testé le 2026-09-04
+
+Question posée : le SIG donne-t-il la même chose sur des communes hors du territoire de l'agglo ?
+**Réponse mesurée : le cadastre et le foncier public oui, les propriétaires nominatifs non.**
+
+Le SIG couvre **27 communes** en cadastre (les 14 de l'agglo + 13 voisines), mais seulement
+**14 en MAJIC nominatif**. Vérifié commune par commune :
+
+| Périmètre | Parcelles | Propriétaires nominatifs | Foncier public | Adresses BAN |
+| --- | ---: | ---: | ---: | ---: |
+| 14 communes de l'agglo | 84 248 | **63 809** | 9 777 | oui |
+| 13 communes voisines (dont **Agde : 18 799 parcelles**) | 86 135 | **0** | **7 263** (Agde : 1 490) | oui |
+| Au-delà (Montpellier, Pézenas, Lattes…) | **0** | 0 | 0 | non |
+
+**Contrôle d'exhaustivité** : les **8 couches** du SIG portant un champ propriétaire (`ddenom`,
+`dnuper`, `dnupro`…) ont été interrogées une à une sur Agde. **Seule la couche 317 répond** ;
+474 et 532 renvoient 0, les autres sont bornées à l'agglo par construction. Il n'y a donc pas
+d'autre porte d'entrée dans le SIG.
+
+**Interprétation** : ce n'est pas une limite technique mais un **périmètre de convention**. Les
+fichiers MAJIC sont délivrés par la DGFiP à un EPCI pour son territoire ; Agde relève d'Hérault
+Méditerranée, pas de Sète Agglopôle. Aucun contournement à chercher côté SIG — obtenir Agde en
+nominatif suppose une démarche auprès de la DGFiP ou d'Hérault Méditerranée, ce qui est une
+question de convention, pas de code.
+
+**Livrable** : `sig_agglo_classeur.py --source public` produit
+`foncier-public-27-communes.xlsx` — 17 040 lignes, 23 colonnes, dont **7 263 parcelles publiques
+hors agglo**. Colonne `Dans l'agglo` pour filtrer. **Aucune donnée personnelle** (personnes
+morales publiques uniquement), donc ce classeur-là n'a pas les contraintes du précédent.
+
+| Date | Décision | Motif |
+| --- | --- | --- |
+| 2026-09-04 | Mode `--source public` ajouté, couvrant les 27 communes | Le foncier public est la seule donnée propriétaire disponible hors agglo, et elle est exploitable telle quelle |
+
+---
+
+## 6. Classeur à la maille LOCAL — existant vérifié et décisions (2026-09-08)
+
+### 6.1 Ce qui est vérifié, pas supposé
+
+Toutes les lignes ci-dessous ont été mesurées sur les fichiers de `sig_agglo_data/`
+et par appels réels à l'API, le 2026-09-08.
+
+| Constat | Mesure |
+| --- | ---: |
+| Locaux dans la table en masse (`cadastre_locaux.csv`) | 181 064 lignes / **176 695 invariants** |
+| Locaux détaillés par les fiches (`fiche_locaux.csv`) | 172 664 |
+| Local → compte propriétaire, via `INVAR` puis `(ID_COM, DNUPRO)` | **173 581 / 176 695 = 98,2 %** |
+| Local → **adresse postale** du propriétaire | **76 783 / 172 664 = 44,5 %** |
+| Parcelles dont la fiche est refusée par le serveur | **378** |
+| dont parcelles portant réellement des locaux | 21 (950 locaux, **0,5 %** du parc) |
+
+### 6.2 Les 378 parcelles en échec ne sont pas récupérables
+
+Le rattrapage a été relancé : il **boucle sur des `401`**. Diagnostic fait à la main —
+la réponse est `ERROR_GENERIC_CONTROLLER_GET`, pas une expiration de jeton ni un refus
+de privilège. Le serveur échoue sur ces parcelles-là, quel que soit le jeton. Le client
+interprète tout `401` comme un jeton mort et se ré-authentifie en boucle : d'où
+1 500 authentifications pour 0 ligne écrite.
+
+**Décision** : ne plus les rejouer. 357 sont des parcelles nues (aucun local connu) ;
+les 21 restantes portent 950 locaux dont on garde le **nom** du propriétaire par la
+table en masse — seuls le type, l'occupation et l'année de construction manquent.
+Un correctif du script est proposé en 6.5.
+
+### 6.3 L'adresse des copropriétaires est verrouillée par un privilège
+
+C'est le point qui décide de la forme du classeur.
+
+La fiche d'une parcelle en copropriété ne nomme qu'**un** propriétaire — le syndicat —
+avec son adresse. Les 1 480 appartements d'une même parcelle ont chacun leur
+propriétaire dans `aBatis`, mais **avec son seul nom** (`DDENOM`), sans adresse.
+
+Trois portes ont été essayées :
+
+1. `GET /cadastre/proprietaires` — ne renvoie que `DDENOM`, `DNUPRO`, `COMMUNE`. Pas d'adresse. Vérifié.
+2. Reconstituer un annuaire de comptes depuis `fiche_proprietaires.csv` (un compte qui
+   possède une parcelle en propre ailleurs y a son adresse) : **47 941 comptes adressés**,
+   ce qui ne couvre que **44,5 %** des locaux. Mesuré.
+3. `GET /cadastre/fichedescriptiveinvariant/{INVAR}` — **la route existe** : elle répond
+   `401 ERROR_INSUFFICIENT_PRIVILEGE`, là où une route inconnue répond `500`. Notre compte
+   est `vmap_cadastre_medium_user` ; il lui faudrait vraisemblablement le niveau `high`.
+
+**Conséquence directe pour le projet d'intendance** : sur les ~55 % de locaux en
+copropriété, on connaît le **nom** du propriétaire mais pas où lui écrire. Le levier
+n'est pas technique — c'est une demande d'élévation de privilège auprès du SIG de l'agglo.
+
+### 6.4 Ce que le classeur peut contenir, et ce qu'il ne peut pas
+
+Contrôlé sur le payload brut d'une fiche : `aBatis` ne porte que 9 champs, tous déjà
+capturés. **Aucune surface de local n'existe dans la source** — la seule surface est la
+contenance de la parcelle (`DCNTPA`, `sup_fiscale`). Rien à réextraire.
+
+Schéma retenu, une ligne par local :
+
+| Colonne | Source | Couverture |
+| --- | --- | ---: |
+| Invariant, réf. cadastrale, commune | `cadastre_locaux` | 100 % |
+| Type, nature, occupation, mutation, année | `fiche_locaux` | 95,3 % |
+| **Propriétaire du local** (nom) | `fiche_locaux.DDENOM` puis repli sur les comptes | 98,2 % |
+| Adresse postale du propriétaire | annuaire des comptes | **44,5 %** |
+| **Adresse du bien** (n°, indice, voie) | `cadastre_description_parcelles` | maille parcelle |
+| Contenance de la parcelle | `DCNTPA` | 100 % |
+| Rapprochement BAN | `397_referentiels_vmp_ban` | approché |
+| `Adresse fiable` (booléen) | calculé | — |
+
+L'adresse du bien est **à la maille parcelle** : les 1 480 appartements d'une résidence
+partagent la même. C'est une limite de la source, pas du traitement — elle sera écrite
+telle quelle, sans laisser croire à une précision qui n'existe pas.
+
+### 6.5 Questions ouvertes
+
+1. **Adresse des copropriétaires** : demande-t-on au SIG l'élévation en
+   `vmap_cadastre_high_user` pour ouvrir `fichedescriptiveinvariant` ? Sans elle,
+   la prospection par courrier se limite à 44,5 % du parc.
+2. **Périmètre du classeur** : les 172 664 locaux, ou seulement les communes du bassin
+   de Thau utiles au projet d'intendance ?
+3. **Données personnelles** : le classeur portera noms et adresses de personnes physiques.
+   Confirmer qu'il reste dans `sig_agglo_data/` (hors git) et n'est jamais commité.
+4. **`COMPLET.xlsx` / `COMPLET_FUSION.xlsx`** : ils ne viennent pas de l'agent. Contenu à
+   confirmer avant de les intégrer ou de les écarter.
+5. **Correctif du script** : distinguer les trois `401` (jeton mort / privilège insuffisant /
+   erreur serveur) et tenir une liste d'échecs définitifs, pour ne plus reboucler.
+
+| Date | Décision | Motif |
+| --- | --- | --- |
+| 2026-09-08 | Abandon des 378 parcelles en échec | Erreur serveur reproductible, 0,5 % du parc, nom du propriétaire conservé par ailleurs |
+| 2026-09-08 | Pas de réextraction des fiches | `aBatis` ne contient aucun champ non capturé ; aucune surface de local n'existe dans la source |
+| 2026-09-08 | Classeur écrit avec 44,5 % d'adresses propriétaires, colonne de fiabilité explicite | Le manque est un verrou de privilège, pas un défaut de traitement — il doit se voir |
+
+### 6.6 Livré (2026-09-08)
+
+`sig_agglo_classeur_local.py` produit `locaux-agglo.xlsx` — **176 695 lignes × 25 colonnes**,
+une par local, sur les 14 communes. Le classeur reste dans `sig_agglo_data/`, hors git.
+
+| Colonne | Renseignée |
+| --- | ---: |
+| Propriétaire (nom) | 176 546 — **99,9 %** |
+| Adresse du bien (cadastrale, exacte) | 169 377 — **95,9 %** |
+| Code postal (rapproché BAN) | 129 813 — **73,5 %** |
+| **Adresse postale du propriétaire** | 78 169 — **44,2 %** |
+| dont propriétaires hors agglo (prospects non résidents) | **19 502** |
+
+Copropriété : 105 113 locaux (59 %). Le classeur part de la table en masse et non des
+fiches : les 950 locaux des 21 parcelles refusées (§6.2) y figurent donc, avec leur
+propriétaire, seul leur type manquant.
+
+Deux pièges corrigés au passage, tous deux silencieux :
+- `.map` laisse `NaN` pour une parcelle absente, et `NaN != ""` est vrai — sans `fillna`,
+  les 7 318 locaux sans adresse étaient comptés comme adressés ;
+- MAJIC sépare le type de voie (`RUE` dans `L_NATURE_VOIE`) du nom (`DUNOIS` dans
+  `DVOILIB`) là où la BAN les écrit d'un tenant : le rapprochement ne rendait que 3,4 %
+  de codes postaux avant recollage, 73,5 % après.
+
+### 6.7 Contre-enquête : peut-on éviter la demande de privilège ? (2026-09-08)
+
+La première conclusion reposait sur six routes devinées. Reprise avec une méthode.
+
+**Le module ne s'appelle pas `cadastre` mais `openmajic`** (trouvé dans le bundle
+Angular `/vmap2/main.*.js`, config publique sur
+`/vmap2/modules/vmap/forms/configuration/openmajic.json`).
+
+**Inventaire exhaustif de ses routes.** Un nom de route inexistant renvoie `500`,
+un nom réel mais interdit renvoie `401 ERROR_INSUFFICIENT_PRIVILEGE` : ce contraste
+permet de balayer sans deviner. Sur ~60 noms testés, le module expose **cinq** routes :
+
+| Route | État |
+| --- | --- |
+| `invariants`, `proprietaires`, `adresses`, `descriptionparcelles`, `fichedescriptiveparcelle` | ouvertes |
+| **`fichedescriptiveinvariant/{INVAR}`** | **401 privilège** — seule porte vers l'adresse par local |
+
+**Les vues ouvertes ont été sondées colonne par colonne.** Le paramètre `attributs`
+est reconnu par l'API : une colonne existante revient valorisée, une colonne absente
+renvoie `[]`. Testé sur `proprietaires` et `invariants` pour `DLIGN3/4/5/6`, `JDATNSS`,
+`DNOMLP`, `DSUPOT`, `DCAPEC`, `DTELOC`… : **aucune adresse, aucune surface**. Les vues
+sont volontairement réduites aux colonnes affichées par le client.
+
+**Autres portes fermées** : `vitis/tables` sur `s_majic` et `s_openmajic` (500),
+les couches `s_openmajic` 1382/1383 (500), `vitis/privileges` et `vitis/users` (401).
+
+**Une porte réellement ouverte, au gain limité** : sur les 1 069 couches du SIG, la
+couche **474 `agglo_s_cadastre.vmp_uf_proprietaire`** porte `dlign3/4/5/6` pour 63 809
+parcelles. Déjà extraite. Croisée à l'annuaire des fiches, elle apporte **1 398 comptes
+nouveaux** : la couverture passe de 44,2 % à **45,3 %**. Intégrée au classeur.
+
+**Conclusion** : non, sans élévation de privilège on ne dépasse pas ~45 %. Le plafond
+n'est pas un défaut d'extraction, c'est le périmètre de la vue servie à un compte
+`vmap_cadastre_medium_user`. Toutes les autres pistes sont épuisées et documentées.
+
+**Trouvailles collatérales, accessibles sans privilège supplémentaire** :
+- couche **1461 `logement.vmp_cerema_coproff`** — 2 773 copropriétés avec **nom du
+  syndic, e-mail et téléphone**. Contact direct des gestionnaires, là où le cadastre
+  ne donne que des noms de copropriétaires sans adresse ;
+- couche **1162 `logement.vmp_vacance_lovac`** — 710 logements vacants localisés.
+
+| Date | Décision | Motif |
+| --- | --- | --- |
+| 2026-09-08 | Pas de demande de privilège au SIG (choix utilisateur), plafond assumé à 45,3 % | Toutes les portes alternatives ont été testées et sont fermées |
+| 2026-09-08 | Couche 474 ajoutée en renfort de l'annuaire | +1 398 comptes adressés pour aucun coût d'extraction |
+
+### 6.8 Classeur agrégé — « tout ce que le SIG sait de chaque bien » (2026-09-08)
+
+`sig_agglo_inventaire.py` sonde les **1 069 couches** du catalogue et relève leurs
+colonnes. Résultat : **559 lisibles** par ce compte, et **23 seulement portent un
+identifiant de parcelle**. Le reste (réseaux d'eau, routes, fonds de plan, BD TOPO)
+n'a aucune clé cadastrale et ne décrit pas les biens.
+
+`sig_agglo_classeur_total.py` produit `locaux-agglo-complet.xlsx` :
+**176 695 lignes × 191 colonnes**, plus une feuille `Dictionnaire` donnant pour
+chaque colonne son origine, son mode de rattachement et son taux de remplissage.
+
+Apports principaux, mesurés en nombre de locaux touchés :
+
+| Bloc | Locaux | Rattachement |
+| --- | ---: | --- |
+| Historique cadastral (604) | 175 753 | id_par |
+| Surface réelle, coordonnées GPS (943) | 171 173 | id_par |
+| Unité foncière (532) | 164 308 | id_par |
+| **Adresse fine de Sète** (226) | **62 119** | clé reconstituée |
+| Terrain > 50 m² / > 200 m² (442, 128) | 54 670 / 44 369 | id_par |
+| **Copropriété + syndic** (1461) | 53 049 | parcelle la plus proche ≤ 60 m |
+| Foncier public (317) | 14 445 | id_par |
+| Ravalement, ORI, zones A, signalements | < 5 000 | id_par |
+
+**Quatre défauts corrigés après contrôle**, tous silencieux :
+1. **La vacance salissait 30 470 lignes pour 710 logements.** Le rattachement se fait
+   à la parcelle : marquer « vacant » tous les lots d'un immeuble parce qu'un seul
+   l'est était faux. Les colonnes sont renommées « Parcelle — vacance » et un
+   compteur dit combien de logements vacants porte la parcelle. Pour la copropriété
+   le même mécanisme est juste — tous les lots en font partie — et il est conservé.
+2. **Trois couches (320, 104, 230) redupliquaient le fond cadastral 943** déjà joint :
+   écartées.
+3. **La couche des adresses de Sète ne portait que `section` + `parcelle`.** Clé
+   reconstituée au format MAJIC : 0 → **62 119 locaux** rattachés.
+4. **63 colonnes étaient entièrement vides** (couches dont la clé `idu` n'est pas
+   renseignée à la source). Retirées de la feuille, conservées au dictionnaire :
+   ce qui a été tenté sans succès reste tracé.
+
+| Date | Décision | Motif |
+| --- | --- | --- |
+| 2026-09-08 | Agrégation limitée aux couches portant une clé parcellaire | Les autres exigeraient un calcul d'intersection, impossible sans `shapely` sur ce poste, et ne décrivent pas les biens |
+| 2026-09-08 | Rattachement géographique borné à 60 m, distance écrite dans le classeur | Un rapprochement approché doit pouvoir être jugé, pas subi |
+| 2026-09-08 | Colonnes vides retirées de la feuille, tracées au dictionnaire | 63 colonnes de décor sur 176 695 lignes nuisent à l'exploitation |
+
+### 6.9 Correction : les copropriétés avaient une clé exacte (2026-09-08)
+
+La §6.8 annonçait le rattachement des copropriétés « à la parcelle la plus proche,
+≤ 60 m ». **C'était une approximation inutile.** La couche COPROFF porte un champ
+`idtup` dont les valeurs sont des références de parcelle en bonne et due forme
+(`34301000AN0097`). L'inventaire l'avait manqué parce qu'il cherchait des **noms**
+de colonnes connus (`id_par`, `id_uf`…), et `idtup` n'en fait pas partie.
+
+**Correction de méthode** : `sig_agglo_inventaire.py` détecte désormais une clé
+aussi par la **forme des valeurs** — commune (5) + préfixe (3) + section (2) +
+numéro (4). Un premier essai confondait les SIRET, qui font également 14
+caractères ; deux garde-fous les écartent (code commune de l'Hérault, section
+portant au moins une lettre).
+
+Bilan du rebalayage : **35 couches** portent une clé parcellaire au lieu de 33, dont
+deux vraies découvertes — **COPROFF** (rattachement exact) et **758
+`environnement.cdl_espaces_proteges`** (Conservatoire du littoral, 2 238 parcelles).
+
+| Couche | Avant | Après |
+| --- | --- | --- |
+| Copropriétés (1461) | 53 049 locaux, ≤ 60 m, approché | **100 997 locaux, exact** |
+| Logements vacants (1162) | 30 470, ≤ 60 m | 29 100, dont 295 par adresse exacte |
+
+**LOVAC reste approché** : la couche ne porte ni référence de parcelle ni adresse
+structurée, seulement un libellé de voie (`0005   AV   RAOUL BONNECAZE`) et un
+point. Le rapprochement se fait d'abord sur l'adresse exacte (commune + numéro +
+voie, les adresses ambiguës étant écartées), puis sur la parcelle la plus proche.
+Deux colonnes disent, ligne par ligne, **quelle méthode** a été employée et **à
+quelle distance** — un rapprochement approché doit pouvoir être jugé.
+
+Classeur final : **176 695 lignes × 205 colonnes**.
+
+| Date | Décision | Motif |
+| --- | --- | --- |
+| 2026-09-08 | Détection des clés par la forme des valeurs, pas seulement par le nom | Une clé exacte se cachait derrière un nom de colonne non standard ; chercher par nom l'avait rendue invisible |
+| 2026-09-08 | Copropriétés rattachées par `idtup`, sans approximation | La donnée exacte existait ; l'approximation était un défaut de reconnaissance, pas une limite de la source |
+
+### 6.10 Audit systématique des rattachements (2026-09-08)
+
+Après la découverte de §6.9, tous les rattachements ont été repris un par un.
+**Quatre défauts de plus**, dont un qui touchait la colonne la plus utile.
+
+**1. « Propriétaire hors agglo » classait Agde dans l'agglo.** La colonne comparait
+le code postal du propriétaire à ceux du référentiel d'adresses du SIG — lequel
+couvre **27 communes**, dont 13 qui ne sont pas dans l'agglo (Agde, Pézenas,
+Fabrègues, Florensac, Cournonterral…). **1 375 propriétaires non résidents étaient
+comptés comme locaux.** La comparaison se fait désormais sur le **nom de commune**
+contre les 14 véritables. Cible corrigée : 19 931 → **21 306**.
+
+**2. Deux couches n'avaient pas de clé du tout.** Les départs et contours de feux
+(77, 346) ont bien une colonne nommée `idu`, mais elle contient
+`20190915_FABREGUES_1254_ef4` : un identifiant d'incendie, pas une parcelle.
+L'inventaire les retenait sur la foi du **nom** de la colonne. Une clé trouvée par
+son nom n'est désormais retenue que si sa valeur en a aussi la **forme**. Le
+nombre de couches joignables retombe de 35 à **33**, et les 53 colonnes de décor
+qu'elles produisaient disparaissent (70 colonnes vides → 17).
+
+**3. L'ORI ne se rattachait pas.** Sa colonne `parcelle` vaut `AO690` — section et
+numéro collés, sans zéros. Le découpage est ajouté : 0 → **788 locaux**.
+
+**4. Les couches « composteurs » valaient mieux qu'un booléen.** Elles portent la
+surface de la parcelle, la surface bâtie et le nombre de maisons. Leur différence
+donne la **surface de jardin**, désormais calculée et exposée.
+
+**Redondance corrigée** : la couche 474 était jointe en entier alors que le
+classeur porte déjà nom et adresse du propriétaire. Elle est réduite à ce qu'elle
+ajoute — civilité, nom et prénom séparés, 4ᵉ ligne d'adresse — sous un libellé qui
+dit ce qu'elle est vraiment : le propriétaire **de la parcelle**, donc le syndicat
+en copropriété.
+
+**Nuance documentée, pas un défaut** : l'unité foncière (532) est jointe par
+`id_uf`, qui a la forme d'une référence de parcelle. Mais **10 664 unités
+regroupent plusieurs parcelles** : la ligne ne décrit alors que la parcelle
+principale.
+
+**Hors agglo, vérifié cette fois sur le module MAJIC lui-même** : les fiches de
+parcelles d'Agde, Aumelas, Aumes et Castelnau-de-Guers répondent toutes `401`. Le
+constat de §5 tient, et pour la même raison — un périmètre de convention DGFiP.
+Hors agglo, il reste **87 239 parcelles** avec surface et coordonnées, et
+**7 263 parcelles de foncier public** nominatives ; aucun propriétaire privé.
+
+Classeur final : **176 695 lignes × 212 colonnes**.
+
+| Date | Décision | Motif |
+| --- | --- | --- |
+| 2026-09-08 | Une clé n'est retenue que si le nom **et** la forme concordent | Deux couches passaient sur la foi du seul nom et produisaient 53 colonnes vides |
+| 2026-09-08 | Appartenance à l'agglo jugée sur le nom de commune, jamais sur le code postal | Le référentiel d'adresses déborde l'agglo de 13 communes |
+
+## 7. Croisement avec les DPE de l'ADEME (2026-09-08)
+
+**Aucune clé n'est nécessaire** : `data.ademe.fr` est une API ouverte. Rien du
+classeur n'est envoyé — seul le code INSEE de la commune demandée sort.
+
+Jeu retenu : `meg-83tjwtg8dyz4vv7h1dqe`, « DPE Logements existants depuis juillet
+2021 » (15,5 M lignes en France). `sig_agglo_dpe.py` en extrait **34 156 DPE** sur
+les 14 communes — 15 770 à Sète, 5 384 à Frontignan, 2 841 à Mèze.
+
+### 7.1 Ce que le DPE apporte, et ce qu'il ne porte pas
+
+Il apporte ce que le cadastre n'a pas : étiquette DPE et GES, **surface habitable**,
+coût annuel des cinq usages, consommation au m², type de chauffage, année de
+construction, date du diagnostic.
+
+Il ne porte **aucune référence cadastrale** — les 230 champs ont été passés en
+revue : ni parcelle, ni section, ni invariant. Le rattachement est donc indirect.
+
+### 7.2 Rattachement : deux voies, mesurées
+
+| Voie | Résultat |
+| --- | ---: |
+| Adresse exacte (commune + numéro + voie) | **12 600 DPE (36,9 %)** |
+| Coordonnées Lambert-93, DPE géocodés à l'adresse, ≤ 60 m | + 18 168 |
+| **Total rattaché** | **30 768 / 34 156 (90 %)** |
+
+La normalisation des voies est ce qui décide de tout : le cadastre range
+`Boulevard` dans `L_NATURE_VOIE` et `VERDUN` dans `DVOILIB`, la BAN écrit
+`Boulevard de Verdun` d'un tenant. Sans recoller les deux champs et sans
+neutraliser les particules (`de`, `du`, `des`…), le rapprochement par adresse
+tombe à **0,6 %** ; avec, il atteint **36,9 %**.
+
+Les 5 280 DPE que la BAN n'a pas géocodés sont écartés du rapprochement
+géographique : leur point est approximatif et n'apprendrait rien. Distance
+médiane des rattachements retenus : **14 m** ; 95 % sont sous 40 m.
+
+### 7.3 L'agrégation est à la maille parcelle, et c'est assumé
+
+Rien ne dit lequel des 200 appartements d'un immeuble porte le DPE relevé — et le
+classeur ne contient aucune surface de local pour départager. Les colonnes DPE
+sont donc des **agrégats de parcelle** : nombre de DPE, étiquette dominante, part
+de F–G, surface habitable moyenne, coût moyen, année médiane, chauffage dominant.
+
+Une colonne **`DPE — fiabilité`** dit ligne par ligne ce que vaut la donnée :
+
+| Niveau | Sens |
+| --- | --- |
+| élevée | maison, un seul DPE sur la parcelle, rattaché par adresse exacte |
+| moyenne | maison ou DPE unique, mais position approchée |
+| faible | moyenne de plusieurs logements — statistique d'immeuble |
+
+Le garde-fou n'est pas théorique : sur les parcelles portant une maison, la
+médiane est bien de **1 DPE**, mais la moyenne monte à 8,3 et le maximum à 173 —
+des rattachements géographiques qui ramassent l'immeuble voisin. Sans cette
+colonne, ces valeurs se liraient comme le DPE de la maison.
+
+Couverture : **84 122 locaux** touchés (47,6 %) — 21,7 % des maisons (tous les
+logements n'ont pas de DPE, il s'en établit à la vente ou à la location) et 61 %
+des appartements, mais en statistique d'immeuble.
+
+Classeur final : **176 695 lignes × 224 colonnes**.
+
+| Date | Décision | Motif |
+| --- | --- | --- |
+| 2026-09-08 | DPE agrégés par parcelle, jamais attribués à un logement | Aucune clé ne relie un DPE à un lot ; l'attribuer serait refaire l'erreur de la vacance |
+| 2026-09-08 | Colonne `DPE — fiabilité` plutôt qu'un filtre en amont | L'utilisateur choisit son niveau d'exigence ; la donnée d'immeuble reste un signal commercial |

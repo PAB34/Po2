@@ -1128,7 +1128,7 @@ Frictions relevées dans le code et à l'usage :
 | # | Question | Décision |
 |---|---|---|
 | Q35 | Dans quel ordre ? | **Poser les 292 biens d'abord.** Toute refonte des gestes s'appliquerait sinon à une carte qui ne contient pas le travail. Bouton « 5 · Poser les biens sans position sur leur adresse », même moteur (BAN) que le bouton unitaire existant. |
-| Q36 | Modèle d'interaction | **Le bâtiment comme point de départ.** Cliquer un bâtiment Po2 montrera ses locaux ET les biens ASTECH proches non rattachés, chacun avec « rattacher au bâtiment » / « en faire un local » / « écarter ». C'est le sens de travail qui manque — aujourd'hui tout va d'ASTECH vers Po2. **À construire après Q35.** |
+| Q36 | Modèle d'interaction | ~~**Le bâtiment comme point de départ.** Cliquer un bâtiment Po2 montrera ses locaux ET les biens ASTECH proches non rattachés, chacun avec « rattacher au bâtiment » / « en faire un local » / « écarter ».~~ **ANNULÉE le 2026-09-01** — voir §25.6. Ne pas la reprendre. |
 
 **Ce que Q35 livre.** Traitement **par lots** côté serveur (25 par appel), l'écran
 rappelle jusqu'à épuisement en affichant l'avancement : une seule requête de 292
@@ -1183,6 +1183,23 @@ rattachés de nouveau sur leur bâtiment (18 positions propres, exactement l'ét
 **La leçon, à ne pas réintroduire** : une position fausse est pire qu'une absence de
 position — elle a l'air d'une donnée. Et un traitement en masse doit exclure ce qui est
 déjà traité, pas seulement ce qui est vide.
+
+### 25.6 Q36 annulée (2026-09-01)
+
+**« Le bâtiment comme point de départ » est abandonné.** La décision n'a jamais été
+construite, et elle ne le sera pas : les gestes qu'elle devait apporter ont depuis été
+livrés autrement, un à un, là où le besoin s'est présenté —
+
+- le panneau du bâtiment liste déjà ses locaux et le nombre de biens ASTECH sur chacun ;
+- « rattacher ce bien à ce bâtiment » y figure (§23) ;
+- « en faire un local » existe au dépôt sur la carte, au clic droit et au panneau (§27) ;
+- le clic droit ouvre la création et le changement de typologie depuis n'importe quel
+  point de la carte (§27).
+
+Rouvrir un second modèle d'interaction par-dessus ces gestes ajouterait un deuxième
+chemin pour chaque action — et c'est exactement la divergence entre chemins qui a produit
+les défauts de §27 et §28. **Ne pas la reprendre**, y compris si un audit ultérieur la
+signale comme « décidée mais non construite ».
 
 
 ## 26. Lecture de la carte — décisions 2026-08-24
