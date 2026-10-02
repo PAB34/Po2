@@ -78,6 +78,10 @@ livrables.
 À vérifier par la mission : l'orientation réelle des façades (« ELEVSUD-OUEST » désigne-t-il deux façades, ou une
 façade sud-ouest ?) ; elle sera confirmée quand le nord sera validé (étape 2).
 
+## Réponse du thermicien (2026-10-02)
+
+- **Niveaux comme le guide** : `N0` (rez-de-chaussée), `N1`, `N2`…, `S1` pour le sous-sol (question 1 tranchée).
+
 ## Questions
 
 1. **Niveaux** : `N0` pour le rez-de-chaussée, `N1`, `N2`… et `S1`, `S2` pour les sous-sols, comme le guide ? Ou

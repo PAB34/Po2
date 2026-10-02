@@ -57,7 +57,16 @@ dépose ses livrables, depuis le poste (Claude Code) comme depuis claude.ai (con
 4. Lot suivant : OAuth pour le connecteur claude.ai, puis les prompts des étapes, puis l'affichage des livrables
    sur le site.
 
-## Questions
+## Réponses du thermicien (2026-10-02)
+
+1. **OAuth directement** (pas de jeton personnel) : le connecteur marche dans claude.ai et dans Claude Code dès ce lot.
+2. **Premier essai : l'étape 4**, import du contour au nu intérieur du R+1 (mission M1), plutôt que l'étape 0.
+3. **Paquet officiel `mcp` ajouté au serveur** : accord.
+4. **Codes des niveaux comme le guide** : `N0` (rez-de-chaussée), `N1`, `N2`…, `S1` pour le sous-sol.
+
+Conséquences : D294 devient « OAuth 2.1 seul » ; D297 devient « essai : étape 4 sur le R+1 ».
+
+## Questions (posées avant les réponses)
 
 1. **Accès** : jeton personnel d'abord (D294-1, le plus rapide), ou directement OAuth pour travailler aussi dans
    claude.ai dès le premier lot ?
