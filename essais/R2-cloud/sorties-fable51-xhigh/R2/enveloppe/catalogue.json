@@ -8,25 +8,24 @@
    {
     "nature": "mur",
     "epaisseur_cm": 12,
-    "indice": "voile extérieur gris, trait noir épais au nu"
+    "indice": "trait noir épais puis gris sous le nu extérieur"
    },
    {
     "nature": "isolant",
     "epaisseur_cm": 12,
-    "indice": "rangée d'alvéoles hexagonales blanches au milieu du gris"
+    "indice": "rangée d'alvéoles hexagonales"
    },
    {
     "nature": "mur",
     "epaisseur_cm": 20,
-    "indice": "voile intérieur gris, trait noir épais au nu"
+    "indice": "gris bordé d'un trait noir épais côté intérieur"
    }
   ],
-  "regle": "Bande grise d'environ 44 cm bordée de deux traits noirs épais, une rangée d'alvéoles hexagonales à 12-25 cm sous le nu extérieur ; nu extérieur autour de 0 (de -2 à +13)",
+  "regle": "Bande grise d'environ 44 cm bordée de deux traits noirs épais, une rangée d'alvéoles hexagonales à 12-25 cm sous le nu extérieur ; nu extérieur autour de 0 (de -2 à +13). Sur la façade sud de R2 (T21-T36) le total lu sur la règle est 45-55 cm (voile intérieur lu 20-25) et le nu extérieur va de +26 à -13 selon le biais du guide ; aux abouts de redans l'about est biseauté (face intérieure qui remonte, T32-T33).",
   "premiere_vue": {
-   "troncon": "T01",
-   "debut_m": 0.45,
-   "fin_m": 4.26,
-   "autre_niveau": true
+   "troncon": "T25",
+   "debut_m": 76.38,
+   "fin_m": 79.8
   }
  },
  {
@@ -277,11 +276,11 @@
     "indice": "carré gris cerné de noir"
    }
   ],
-  "regle": "Rangée de carrés gris cernés de noir, 20 à 33 cm, alignés sur la ligne guide (entre +7 et -28), reliés par un trait fin ; en rive de la petite terrasse (bordés par les lames) et aussi en rive nord de la terrasse de lecture (R2, 28.4-29.2 m, sans lames adjacentes). Ce n'est pas PO1 : petits, en série, sans mur-rideau.",
+  "regle": "Rangée de carrés gris cernés de noir, 20 à 33 cm, alignés sur la ligne guide (entre +7 et -28), reliés par un trait fin ; en rive de la petite terrasse et en rive nord de la terrasse de lecture. Aussi en rive de l'encoche extérieure au sud de 5.3 (70.4-73.15 m) : carrés de 20 cm mêlés à des blocs de 38-42 cm, à -3/-25, en biais dans T23. Ce n'est pas PO1 : petits, en série, sans mur-rideau.",
   "premiere_vue": {
-   "troncon": "T06",
-   "debut_m": 28.3,
-   "fin_m": 28.75
+   "troncon": "T22",
+   "debut_m": 70.38,
+   "fin_m": 71.72
   }
  },
  {
@@ -293,20 +292,19 @@
    {
     "nature": "vitrage",
     "epaisseur_cm": 4,
-    "indice": "double trait fin continu"
+    "indice": "double trait fin"
    },
    {
     "nature": "cadre",
     "epaisseur_cm": 5,
-    "indice": "petits dormants carrés à chaque tableau"
+    "indice": "petits dormants carrés"
    }
   ],
-  "regle": "Double trait fin avec de petits dormants carrés régulièrement répartis ; un vantail ouvre vers la terrasse (arc). Ce n'est pas M1 : pas de trait parallèle à -25/-33 ni de poteaux, et ce n'est pas M3 : la baie n'est pas prise entre des abouts de P1 en redans.",
+  "regle": "Double trait fin avec de petits dormants carrés régulièrement répartis ; un vantail ouvre vers la terrasse (arc). Ce n'est pas M1 : pas de trait parallèle à -25/-33 ni de poteaux, et ce n'est pas M3 : la baie n'est pas prise entre des abouts de P1 en redans. Autour de la trémie « vide sur petite terrasse » (T26-T30) : double/triple trait fin 10-20 cm derrière le trait épais de rive de trémie (à 0 dans T29-T30, à -50 dans T28), dormants carrés seulement aux angles et aux abouts de P1 ; trois côtés droits (2.8 + 2.9 + 2.0 m) que le guide ne suit pas exactement (T27 en biais, T28 décalé).",
   "premiere_vue": {
-   "troncon": "T22",
-   "debut_m": 75.72,
-   "fin_m": 78.37,
-   "autre_niveau": true
+   "troncon": "T29",
+   "debut_m": 83.95,
+   "fin_m": 86.64
   }
  },
  {
@@ -315,12 +313,11 @@
   "genre": "liaison",
   "decision": "a_confirmer",
   "couches": [],
-  "regle": "Deux lignes de vitrage M4 qui se rejoignent à angle droit, avec des traits fins verticaux et sans remplissage gris : c'est un coin vitré de la terrasse, sans mur béton.",
+  "regle": "Deux lignes de vitrage M4 qui se rejoignent à angle droit sur un petit dormant carré, avec des traits fins verticaux et sans remplissage gris : coin vitré de la terrasse, sans mur béton. Vu aussi aux angles NE (≈83.97 dans T28, ≈83.2 dans T29) et NW (≈86.78 dans T29, ≈86.35 dans T30) de la trémie vide sur petite terrasse à R2 ; la position lue varie de 0.4-0.8 m selon la bande car le guide est décalé de la baie.",
   "premiere_vue": {
-   "troncon": "T22",
-   "debut_m": 78.37,
-   "fin_m": 78.64,
-   "autre_niveau": true
+   "troncon": "T28",
+   "debut_m": 83.76,
+   "fin_m": 83.95
   }
  },
  {
@@ -365,32 +362,31 @@
  },
  {
   "id": "P4",
-  "nom": "Massif triangulaire béton accolé à une lame isolée (dents de scie ouest)",
+  "nom": "Massif triangulaire béton accolé à une lame isolée (dents de scie)",
   "genre": "paroi",
   "decision": "a_confirmer",
   "couches": [
    {
     "nature": "mur",
     "epaisseur_cm": 30,
-    "indice": "massif gris, épaisseur variable de 0 à 70 cm"
+    "indice": "gris plein en triangle, épaisseur variable"
    },
    {
     "nature": "isolant",
     "epaisseur_cm": 12,
-    "indice": "rangée d'alvéoles le long de la face en biais"
+    "indice": "rangée d'alvéoles le long de la lame"
    },
    {
     "nature": "mur",
     "epaisseur_cm": 12,
-    "indice": "voile intérieur, trait noir épais"
+    "indice": "trait noir épais côté extérieur"
    }
   ],
-  "regle": "Remplissage gris en triangle : une face droite et l'autre en biais, rangée d'alvéoles le long de la lame ; épaisseur variable de 0 à plus de 90 cm (≠ P1 constant) ; isolé (≠ P3)",
+  "regle": "Remplissage gris en triangle : une face droite et l'autre en biais, rangée d'alvéoles le long de la lame ; épaisseur variable de 0 à plus de 90 cm (≠ P1 constant) ; isolé (≠ P3). Vu aussi au départ du massif de la façade sud à 99.1 m (T36) : la face extérieure s'infléchit de 37° et la face intérieure de 52°, le gris s'élargit sous les alvéoles.",
   "premiere_vue": {
-   "troncon": "T49",
-   "debut_m": 126.0,
-   "fin_m": 127.97,
-   "autre_niveau": true
+   "troncon": "T36",
+   "debut_m": 99.1,
+   "fin_m": 99.31
   }
  },
  {
@@ -484,6 +480,19 @@
    "troncon": "T15",
    "debut_m": 59.3,
    "fin_m": 59.8
+  }
+ },
+ {
+  "id": "L10",
+  "nom": "About de cloison à l'angle sud-ouest de la trémie (jonction baie M4 / about P1)",
+  "genre": "liaison",
+  "decision": "a_confirmer",
+  "couches": [],
+  "regle": "Double trait noir de 7 cm perpendiculaire au guide, de 0 à -90, à l'extrémité du voile P1 bordant la trémie, là où commence la baie M4 ; sans gris ni alvéoles ; prolonge la ligne du P1 vers l'intérieur (revu dans T31 à -70/-90 sous l'about du P1). Diffère de L4 : pas de mur-rideau M1, c'est l'about d'un P1 prolongé par une cloison.",
+  "premiere_vue": {
+   "troncon": "T30",
+   "debut_m": 88.35,
+   "fin_m": 88.45
   }
  }
 ]
