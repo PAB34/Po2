@@ -52,6 +52,16 @@ Date : 2026-10-02. Objectif 1 de la boussole (R+1 parfait). Remplace le lot B de
   coupe, modèles de menuiserie et bibliothèque. (4) Plus tard, depuis la liste des sauvegardes : « Reprendre ses
   locaux », « Afficher ses murs en calque de suggestions » ou « Tout restaurer ».
 
+- **D254 — Indéterminés (demande du 2026-10-02).** Un élément « Indéterminé » (ex. « T68 de 165,95 à 167,5 m ») se
+  supprime d'un clic dans sa fiche ou par **Suppr** ; à l'étape Parois, « Supprimer tous les indéterminés »
+  supprime tous ceux du niveau après une confirmation qui dit combien et sur quelle longueur de façade. Écartés,
+  donc réactivables. (R+1 à l'import : 10 indéterminés, 7,76 m — claustras, blocs, guide dévié.)
+
+**Fait le 2026-10-02 (avant le reste du lot C2)** : D252 pour la **suppression** et D254. Un mur ou un indéterminé
+supprimé quitte le plan à l'instant (l'écran retire son dessin, comme le serveur le fera) et l'enregistrement part
+tout seul, en arrière-plan ; un geste fait pendant l'enregistrement n'est pas perdu. Les autres gestes (valider une
+composition…) gardent encore « Enregistrer ». Les poignées (D249) viennent ensuite.
+
 ## Ce que cela change ailleurs (à traiter dans le même lot ou noté)
 
 - **Découpage pièce par pièce (D18 à D20) : on le garde.** Il coupe aujourd'hui les intervalles d'un tronçon. Il

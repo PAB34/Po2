@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import {
   thermiqueApi,
@@ -22,6 +22,11 @@ import { studyQueryKey } from "./study";
  * et confirmer les 92 éléments douteux un par un ferait attendre cinq minutes pour rien. Les gestes
  * s'accumulent, le serveur ne recalcule qu'à la demande ou à l'enregistrement — et c'est ce recalcul
  * qui met le **plan** à jour, ce que l'écran annonce.
+ *
+ * Exception (D252) : **supprimer** un mur ou un indéterminé se voit à l'instant et s'enregistre tout seul,
+ * en arrière-plan. Les gestes sont donc tenus dans des références : plusieurs gestes d'un même clic
+ * (« tous les indéterminés ») s'enchaînent sans se marcher dessus, et un enregistrement ne perd pas les
+ * gestes faits pendant qu'il tournait.
  */
 export function useStudyElements({
   token,
@@ -40,19 +45,36 @@ export function useStudyElements({
   const [local, setLocal] = useState<StudyContent | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const operationsRef = useRef<StudyOperation[]>([]);
+  const annuleesRef = useRef<StudyOperation[]>([]);
+  const localRef = useRef<StudyContent | null>(null);
+  const busyRef = useRef(false);
+  const fileEnregistrement = useRef<Promise<boolean>>(Promise.resolve(true));
+
+  const poser = useCallback((suivantes: StudyOperation[], annuleesSuivantes: StudyOperation[], contenu: StudyContent | null) => {
+    operationsRef.current = suivantes;
+    annuleesRef.current = annuleesSuivantes;
+    localRef.current = contenu;
+    setOperations(suivantes);
+    setAnnulees(annuleesSuivantes);
+    setLocal(contenu);
+  }, []);
+
+  const occupe = useCallback((valeur: boolean) => {
+    busyRef.current = valeur;
+    setBusy(valeur);
+  }, []);
 
   const reset = useCallback(() => {
-    setOperations([]);
-    setAnnulees([]);
-    setLocal(null);
+    poser([], [], null);
     setMessage(null);
-  }, []);
+  }, [poser]);
 
   const apply = useCallback(
     (operation: StudyOperation) => {
-      const base = local ?? study?.content;
+      const base = localRef.current ?? study?.content;
       if (!base) {
-        return;
+        return false;
       }
       if (operation.type === "element_corriger") {
         const vise = base.enveloppe.releve_brut.elements.find((element) =>
@@ -61,15 +83,14 @@ export function useStudyElements({
         const refus = vise ? refusDeCorrection(vise, operation.changes) : "Cet élément n'existe plus.";
         if (refus) {
           setMessage(refus);
-          return;
+          return false;
         }
       }
-      setLocal(appliquerEnLocal(base, operation));
-      setOperations((current) => [...current, operation]);
-      setAnnulees([]);
+      poser([...operationsRef.current, operation], [], appliquerEnLocal(base, operation));
       setMessage(null);
+      return true;
     },
-    [local, study],
+    [poser, study],
   );
 
   /** Envoie une liste de gestes au serveur et affiche le niveau qu'elle donne, sans enregistrer. */
@@ -78,10 +99,11 @@ export function useStudyElements({
       if (!token || !sheetId || liste.length === 0) {
         return null;
       }
-      setBusy(true);
+      occupe(true);
       setMessage(null);
       try {
         const apercu = await thermiqueApi.remodelStudy(token, sheetId, liste);
+        localRef.current = apercu.content;
         setLocal(apercu.content);
         setMessage(reussite);
         return apercu.content;
@@ -89,44 +111,52 @@ export function useStudyElements({
         setMessage(echec instanceof Error ? echec.message : "Le recalcul a échoué.");
         return null;
       } finally {
-        setBusy(false);
+        occupe(false);
       }
     },
-    [sheetId, token],
+    [occupe, sheetId, token],
   );
 
   const undo = useCallback(() => {
-    if (!study?.content || operations.length === 0) {
+    if (busyRef.current) {
+      setMessage("Enregistrement en cours : annulez dans un instant.");
+      return;
+    }
+    if (!study?.content || operationsRef.current.length === 0) {
       setMessage("Aucune correction locale à annuler.");
       return;
     }
-    const suivant = annulerOperation({ operations, annulees });
-    setOperations(suivant.operations);
-    setAnnulees(suivant.annulees);
-    setLocal(suivant.operations.length ? rejouerOperations(study.content, suivant.operations) : null);
+    const suivant = annulerOperation({ operations: operationsRef.current, annulees: annuleesRef.current });
+    poser(
+      suivant.operations,
+      suivant.annulees,
+      suivant.operations.length ? rejouerOperations(study.content, suivant.operations) : null,
+    );
     setMessage(
       suivant.operations.length
         ? "Dernière correction annulée — recalculez le plan pour actualiser le résultat."
         : "Dernière correction annulée. Aucune correction locale en attente.",
     );
-  }, [annulees, operations, study]);
+  }, [poser, study]);
 
   const redo = useCallback(() => {
-    if (!study?.content || annulees.length === 0) {
+    if (busyRef.current) {
+      setMessage("Enregistrement en cours : rétablissez dans un instant.");
+      return;
+    }
+    if (!study?.content || annuleesRef.current.length === 0) {
       setMessage("Aucune correction locale à rétablir.");
       return;
     }
-    const suivant = retablirOperation({ operations, annulees });
-    setOperations(suivant.operations);
-    setAnnulees(suivant.annulees);
-    setLocal(rejouerOperations(study.content, suivant.operations));
+    const suivant = retablirOperation({ operations: operationsRef.current, annulees: annuleesRef.current });
+    poser(suivant.operations, suivant.annulees, rejouerOperations(study.content, suivant.operations));
     setMessage("Correction rétablie — recalculez le plan pour actualiser le résultat.");
-  }, [annulees, operations, study]);
+  }, [poser, study]);
 
   /** Envoie les gestes accumulés au serveur pour voir leur effet sur le plan, sans enregistrer. */
   const recompute = useCallback(async () => {
-    await apercevoir(operations, "Plan à jour. Les corrections ne sont pas encore enregistrées.");
-  }, [apercevoir, operations]);
+    await apercevoir(operationsRef.current, "Plan à jour. Les corrections ne sont pas encore enregistrées.");
+  }, [apercevoir]);
 
   /**
    * Pose un pont que l'agent n'a pas vu, là où le thermicien a cliqué (remarque C, D157), **aussitôt**
@@ -134,7 +164,7 @@ export function useStudyElements({
    */
   const ajouterPont = useCallback(
     (point_pdf: PdfPoint, type_pont: string, reference_pont?: string) => {
-      const base = local ?? study?.content;
+      const base = localRef.current ?? study?.content;
       if (!base) return;
       const operation = preparerAjout(base, point_pdf, type_pont);
       if (!operation) {
@@ -142,37 +172,62 @@ export function useStudyElements({
         return;
       }
       const geste = reference_pont ? { ...operation, reference_pont } : operation;
-      setLocal(appliquerEnLocal(base, geste));
-      setOperations((current) => [...current, geste]);
-      setAnnulees([]);
+      poser([...operationsRef.current, geste], [], appliquerEnLocal(base, geste));
       setSelected({ troncon: geste.troncon, debut_m: geste.abscisse_m, fin_m: geste.abscisse_m });
       setMessage("Pont ajouté. Il sera enregistré avec les autres corrections.");
     },
-    [local, study],
+    [poser, study],
   );
 
+  /**
+   * Enregistre les gestes en attente. Seuls ceux envoyés sont retirés de l'attente : un geste fait pendant
+   * l'enregistrement reste en attente, rejoué sur l'étude que le serveur vient de rendre.
+   */
   const save = useCallback(async () => {
-    if (!token || !sheetId || operations.length === 0) {
+    const envoyees = operationsRef.current;
+    if (!token || !sheetId || envoyees.length === 0) {
       return true;
     }
-    setBusy(true);
+    occupe(true);
     setMessage(null);
     try {
       const enregistre = await thermiqueApi.saveStudy(token, sheetId, {
-        operations,
+        operations: envoyees,
         motif: "elements",
         valider: false,
       });
       queryClient.setQueryData<Study>(studyQueryKey(sheetId), enregistre);
-      reset();
+      const reste = operationsRef.current.slice(envoyees.length);
+      poser(reste, [], reste.length ? rejouerOperations(enregistre.content, reste) : null);
       return true;
     } catch (echec) {
       setMessage(echec instanceof Error ? echec.message : "L'enregistrement a échoué.");
       return false;
     } finally {
-      setBusy(false);
+      occupe(false);
     }
-  }, [operations, queryClient, reset, sheetId, token]);
+  }, [occupe, poser, queryClient, sheetId, token]);
+  const saveRef = useRef(save);
+  saveRef.current = save;
+
+  /**
+   * Supprime (écarte, réactivable) un ou plusieurs éléments : ils quittent le plan à l'instant et
+   * l'enregistrement part tout seul, à la suite d'un éventuel enregistrement en cours (D252).
+   */
+  const supprimer = useCallback(
+    (refs: StudyElementRef[], motif: string) => {
+      const posees = refs.filter((ref) => apply({ type: "element_ecarter", element: ref, motif }));
+      if (posees.length === 0) return;
+      setSelected(null);
+      fileEnregistrement.current = fileEnregistrement.current.then(() => saveRef.current());
+      void fileEnregistrement.current.then((ok) => {
+        if (ok) {
+          setMessage(posees.length > 1 ? `${posees.length} éléments supprimés et enregistrés.` : "Supprimé et enregistré.");
+        }
+      });
+    },
+    [apply],
+  );
 
   return {
     selected,
@@ -184,7 +239,8 @@ export function useStudyElements({
     canRedo: annulees.length > 0,
     busy,
     message,
-    apply,
+    apply: (operation: StudyOperation) => void apply(operation),
+    supprimer,
     ajouterPont,
     recompute: () => void recompute(),
     save: () => void save(),

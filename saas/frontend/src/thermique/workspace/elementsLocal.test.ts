@@ -95,6 +95,28 @@ describe("appliquer un geste sans attendre le serveur", () => {
     expect(lire(revenu).motif_exclusion).toBeUndefined();
   });
 
+  it("un élément écarté quitte le plan aussitôt, morceaux découpés par local compris (D252)", () => {
+    const content = {
+      enveloppe: {
+        releve_brut: { elements: [element(), element({ troncon: "T02" })], catalogue: [], observations: [] },
+        objets: [
+          { id: "a", source_parcours: { troncon: "T01", debut_m: 0, fin_m: 1.5, piece: "Bureau" } },
+          { id: "b", source_parcours: { troncon: "T01", debut_m: 1.5, fin_m: 4.2, piece: "Salle" } },
+          { id: "c", source_parcours: { troncon: "T02", debut_m: 0, fin_m: 4.2 } },
+        ],
+        lignes_metre: [
+          { points_pdf: [[0, 0], [1, 0]], source_parcours: { troncon: "T01", debut_m: 0, fin_m: 4.2 } },
+          { points_pdf: [[0, 0], [1, 0]], source_parcours: { troncon: "T02", debut_m: 0, fin_m: 4.2 } },
+        ],
+      },
+    } as unknown as StudyContent;
+    const apres = appliquerEnLocal(content, { type: "element_ecarter", element: ref, motif: "mur supprimé" });
+    expect(apres.enveloppe.objets?.map((forme) => forme.id)).toEqual(["c"]);
+    expect(apres.enveloppe.lignes_metre?.map((ligne) => ligne.source_parcours.troncon)).toEqual(["T02"]);
+    // Le geste se rejoue sur l'étude d'origine : l'annuler fait revenir le dessin.
+    expect(content.enveloppe.objets).toHaveLength(3);
+  });
+
   it("ignore un geste qui ne vise aucun élément connu", () => {
     const avant = etude([element()]);
     const apres = appliquerEnLocal(avant, {

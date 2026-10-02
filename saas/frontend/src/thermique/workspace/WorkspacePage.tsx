@@ -16,7 +16,7 @@ import { NorthOverlay } from "./NorthOverlay";
 import { PlanMenu, type PlanAction } from "./PlanMenu";
 import { METRICS_DEFAUT, StudyMetrics, type MetricsShow } from "./StudyMetrics";
 import { StudyCoherenceReport, StudyCoverageBanner, StudyOverlay, StudyRoomCreationPanel, StudyRoomList, StudyRoomPanel } from "./StudyPanel";
-import { ElementPanel } from "./ElementPanel";
+import { ElementPanel, IndeterminesDuNiveau, MOTIF_INDETERMINE_SUPPRIME, MOTIF_MUR_SUPPRIME } from "./ElementPanel";
 import { FenetreCoupe, type OutilDeMesure } from "./FenetreCoupe";
 import { menuiseriesQueryKey } from "./baies";
 import { PontsPanel } from "./PontsPanel";
@@ -536,14 +536,21 @@ export function WorkspacePage() {
 
   // Le pont en cours amène le plan à lui : l'étape sert à les distinguer un à un (Q4).
   const elementCourant = shownStudy ? trouverElement(shownStudy.content, elementsState.selected) : null;
-  // D244 : à l'étape des parois, la touche Suppr supprime le mur désigné (écarté, réactivable).
-  const murDesigne = etape === "enveloppe" && elementCourant?.type === "paroi" && !elementCourant.exclu ? elementCourant : null;
+  // D244, D254 : à l'étape des parois, la touche Suppr supprime le mur ou l'indéterminé désigné (écarté,
+  // réactivable) ; il quitte le plan à l'instant et l'enregistrement part tout seul (D252).
+  const murDesigne =
+    etape === "enveloppe" && (elementCourant?.type === "paroi" || elementCourant?.type === "indetermine") && !elementCourant.exclu
+      ? elementCourant
+      : null;
   useEffect(() => {
     if (!murDesigne || editionState.draft) return;
     const supprimer = (event: KeyboardEvent) => {
       if (event.key !== "Delete" || cibleEditable(event.target)) return;
       event.preventDefault();
-      elementsState.apply({ type: "element_ecarter", element: refDeElement(murDesigne), motif: "mur supprimé par le thermicien" });
+      elementsState.supprimer(
+        [refDeElement(murDesigne)],
+        murDesigne.type === "paroi" ? MOTIF_MUR_SUPPRIME : MOTIF_INDETERMINE_SUPPRIME,
+      );
     };
     window.addEventListener("keydown", supprimer);
     return () => window.removeEventListener("keydown", supprimer);
@@ -1447,6 +1454,13 @@ export function WorkspacePage() {
                       Cliquez un mur ou une menuiserie sur le plan, ou ouvrez un local, pour vérifier ses parois.
                     </p>
                   )}
+                  {etape === "enveloppe" && shownStudy && !elementsState.selected && !editionState.draft && (
+                    <IndeterminesDuNiveau
+                      content={shownStudy.content}
+                      busy={elementsState.busy}
+                      onSupprimer={(refs) => elementsState.supprimer(refs, MOTIF_INDETERMINE_SUPPRIME)}
+                    />
+                  )}
                   {vue.ficheLocal && !elementsState.selected && (
                     <StudyRoomPanel
                       room={selectedRoom}
@@ -1485,6 +1499,7 @@ export function WorkspacePage() {
                       busy={elementsState.busy}
                       message={elementsState.message}
                       onOperation={elementsState.apply}
+                      onSupprimer={(element, motif) => elementsState.supprimer([refDeElement(element)], motif)}
                       menuiseries={menuiseries.data}
                       sheetId={sheetId}
                       onMesurerBaie={vuesDuProjet.length ? () => ouvrirLaFenetre("menuiserie") : undefined}

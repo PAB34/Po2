@@ -31,6 +31,9 @@ import { baieDeElement, provenanceBaie } from "./baies";
 import { expositionLisible } from "./modeles";
 import { NATURES_COUCHE, changesDeComposition, couchesValidees } from "./parois";
 
+export const MOTIF_MUR_SUPPRIME = "mur supprimé par le thermicien";
+export const MOTIF_INDETERMINE_SUPPRIME = "indéterminé supprimé par le thermicien";
+
 const LIBELLES_CHAMP: Record<string, string> = {
   type: "type",
   composant: "composant",
@@ -182,6 +185,7 @@ function Detail({
   onMesurerBaie,
   modeles = [],
   onChoisirModele,
+  onSupprimer,
 }: {
   element: StudyReleveElement;
   content: StudyContent;
@@ -190,6 +194,7 @@ function Detail({
   motif: string;
   onMotif: (valeur: string) => void;
   onOperation: (operation: StudyOperation) => void;
+  onSupprimer?: (element: StudyReleveElement, motif: string) => void;
   baie?: Baie | null;
   onMesurerBaie?: () => void;
   modeles?: ModeleMenuiserie[];
@@ -225,9 +230,21 @@ function Detail({
           }
         }}
         onSupprimer={() =>
-          onOperation({ type: "element_ecarter", element: refDeElement(element), motif: "mur supprimé par le thermicien" })
+          onSupprimer
+            ? onSupprimer(element, MOTIF_MUR_SUPPRIME)
+            : onOperation({ type: "element_ecarter", element: refDeElement(element), motif: MOTIF_MUR_SUPPRIME })
         }
       />
+    ) : null;
+  // D254 : un indéterminé se supprime d'un clic, sans motif à écrire (il reste réactivable).
+  const supprimerIndetermine =
+    element.type === "indetermine" && !element.exclu && onSupprimer ? (
+      <div className="th-inline">
+        <button type="button" className="po2-button po2-button--danger" disabled={busy} onClick={() => onSupprimer(element, MOTIF_INDETERMINE_SUPPRIME)}>
+          Supprimer cet élément
+        </button>
+        <span className="th-muted">ou touche Suppr ; il reste réactivable.</span>
+      </div>
     ) : null;
   const lecture = (
     <>
@@ -355,6 +372,7 @@ function Detail({
           <Etat element={element} />
         </header>
         {composition}
+        {supprimerIndetermine}
         {element.type === "paroi" && !element.exclu ? (
           // D243 : pour un mur, la composition d'abord ; la lecture de l'IA et les autres corrections sont repliées.
           <details className="th-element-releve">
@@ -370,6 +388,60 @@ function Detail({
         )}
       </article>
     </>
+  );
+}
+
+/** Les éléments indéterminés encore actifs du niveau (D254). */
+export function indeterminesActifs(content: StudyContent): StudyReleveElement[] {
+  return content.enveloppe.releve_brut.elements.filter((element) => element.type === "indetermine" && !element.exclu);
+}
+
+/**
+ * D254 : tous les indéterminés du niveau supprimés d'un geste, après confirmation qui dit combien et sur
+ * quelle longueur de façade (ils sortent du calcul ; chacun reste réactivable).
+ */
+export function IndeterminesDuNiveau({
+  content,
+  busy,
+  onSupprimer,
+}: {
+  content: StudyContent;
+  busy: boolean;
+  onSupprimer: (refs: StudyElementRef[]) => void;
+}) {
+  const [confirmer, setConfirmer] = useState(false);
+  const liste = indeterminesActifs(content);
+  if (liste.length === 0) return null;
+  const longueur = Math.round(liste.reduce((total, element) => total + longueurM(element), 0) * 100) / 100;
+  const nombre = `${liste.length} élément${liste.length > 1 ? "s" : ""} indéterminé${liste.length > 1 ? "s" : ""}`;
+  return (
+    <section className="th-indetermines">
+      <p className="th-muted">
+        {nombre} sur ce niveau ({longueur.toLocaleString("fr-FR")} m de façade). Cliquez-en un sur le plan pour le voir.
+      </p>
+      {confirmer ? (
+        <div className="th-inline">
+          <button
+            type="button"
+            className="po2-button po2-button--danger"
+            disabled={busy}
+            onClick={() => {
+              onSupprimer(liste.map(refDeElement));
+              setConfirmer(false);
+            }}
+          >
+            Oui, supprimer les {liste.length}
+          </button>
+          <button type="button" className="th-link" onClick={() => setConfirmer(false)}>
+            Annuler
+          </button>
+        </div>
+      ) : (
+        <button type="button" className="po2-button po2-button--ghost" disabled={busy} onClick={() => setConfirmer(true)}>
+          Supprimer tous les indéterminés
+        </button>
+      )}
+    </section>
   );
 }
 
@@ -633,10 +705,13 @@ export function ElementPanel({
   sheetId = null,
   onMesurerBaie,
   onChoisirModele,
+  onSupprimer,
   famille,
 }: {
   /** D227 : l'étape ne liste que les parois, ou que les menuiseries. */
   famille?: "parois" | "menuiseries";
+  /** D252 : suppression instantanée, enregistrée en arrière-plan. */
+  onSupprimer?: (element: StudyReleveElement, motif: string) => void;
   content: StudyContent;
   room: StudyRoom | null;
   selected: StudyElementRef | null;
@@ -691,6 +766,7 @@ export function ElementPanel({
           onMesurerBaie={onMesurerBaie}
           modeles={menuiseries?.modeles ?? []}
           onChoisirModele={onChoisirModele}
+          onSupprimer={onSupprimer}
         />
         {message && <p className="th-alert">{message}</p>}
       </section>

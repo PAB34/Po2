@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import type { StudyContent, StudyReleveElement } from "../api";
-import { EditeurComposition } from "./ElementPanel";
+import { EditeurComposition, IndeterminesDuNiveau } from "./ElementPanel";
 import { changesDeComposition, couchesValidees, epaisseurTotaleCm, formesEtapeParois } from "./parois";
 
 const paroi = (reste: Partial<StudyReleveElement> = {}): StudyReleveElement =>
@@ -69,5 +69,35 @@ describe("un mur = une ligne de métré qui porte une composition (D242, D243)",
     expect(renderToStaticMarkup(
       <EditeurComposition element={paroi({ corrige: true })} autres={0} busy={false} onValider={() => undefined} onSupprimer={() => undefined} />,
     )).toContain("validée");
+  });
+});
+
+describe("les indéterminés se suppriment, un à un ou tous d'un geste (D254)", () => {
+  const content = (elements: StudyReleveElement[]) =>
+    ({ enveloppe: { releve_brut: { elements, catalogue: [], observations: [] } } }) as unknown as StudyContent;
+
+  it("annonce leur nombre et leur longueur avant de proposer de tous les supprimer", () => {
+    const html = renderToStaticMarkup(
+      <IndeterminesDuNiveau
+        content={content([
+          paroi({ type: "indetermine", debut_m: 165.95, fin_m: 167.5 }),
+          paroi({ type: "indetermine", debut_m: 10, fin_m: 10.4 }),
+          paroi({ type: "indetermine", debut_m: 20, fin_m: 21, exclu: true }),
+          paroi(),
+        ])}
+        busy={false}
+        onSupprimer={() => undefined}
+      />,
+    );
+    expect(html).toContain("2 éléments indéterminés");
+    expect(html).toContain("1,95 m");
+    expect(html).toContain("Supprimer tous les indéterminés");
+  });
+
+  it("ne montre rien quand il n'en reste aucun", () => {
+    const html = renderToStaticMarkup(
+      <IndeterminesDuNiveau content={content([paroi()])} busy={false} onSupprimer={() => undefined} />,
+    );
+    expect(html).toBe("");
   });
 });

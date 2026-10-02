@@ -5,7 +5,7 @@ import type {
   StudyOperation,
   StudyReleveElement,
 } from "../api";
-import { memeElement, refDeElement } from "./elements";
+import { faitPartieDe, memeElement, refDeElement } from "./elements";
 import { appliquerAjout } from "./pontsAjoutes";
 
 /**
@@ -16,8 +16,8 @@ import { appliquerAjout } from "./pontsAjoutes";
  * un aller-retour serveur à chaque clic demanderait cinq minutes d'attente pure.
  *
  * Ces fonctions reproduisent donc, sur la copie affichée, exactement ce que le serveur fera au recalcul.
- * Elles ne touchent que le **relevé brut** — la source de vérité (D99) — jamais le dessin : le plan ne
- * changera qu'au recalcul, et l'écran le dit.
+ * Elles ne touchent que le **relevé brut** — la source de vérité (D99) — et, pour un élément écarté, retirent
+ * son dessin (D252) ; le reste du plan ne change qu'au recalcul, et l'écran le dit.
  */
 
 /** Les mêmes contrôles que le serveur, pour refuser tout de suite ce qu'il refuserait. */
@@ -112,8 +112,27 @@ export function appliquerEnLocal(content: StudyContent, operation: StudyOperatio
     }
   });
 
+  // D252 : un élément écarté quitte aussitôt le plan, comme le serveur le fera au recalcul (il ne dessine
+  // que les éléments actifs) ; on n'attend plus le recalcul pour voir un mur ou un indéterminé disparaître.
+  const enveloppe =
+    operation.type === "element_ecarter"
+      ? {
+          ...content.enveloppe,
+          objets: content.enveloppe.objets?.filter((forme) => !dessineLElement(forme.source_parcours, ref)),
+          lignes_metre: content.enveloppe.lignes_metre?.filter((ligne) => !dessineLElement(ligne.source_parcours, ref)),
+        }
+      : content.enveloppe;
   return {
     ...content,
-    enveloppe: { ...content.enveloppe, releve_brut: { ...content.enveloppe.releve_brut, elements } },
+    enveloppe: { ...enveloppe, releve_brut: { ...content.enveloppe.releve_brut, elements } },
   };
+}
+
+/** Ce tracé est-il le dessin (entier ou un morceau découpé par local) de cet élément ? */
+function dessineLElement(
+  source: { troncon?: string; debut_m?: number; fin_m?: number } | undefined,
+  ref: StudyElementRef,
+): boolean {
+  if (!source?.troncon || source.debut_m == null || source.fin_m == null) return false;
+  return faitPartieDe(ref, { troncon: source.troncon, debut_m: source.debut_m, fin_m: source.fin_m });
 }
