@@ -67,15 +67,14 @@
    {
     "nature": "mur",
     "epaisseur_cm": 44,
-    "indice": "gris plein à hachure diagonale légère, sans alvéoles"
+    "indice": "remplissage gris plein sans alvéoles, traits noirs épais"
    }
   ],
-  "regle": "Remplissage gris sans rangée d'alvéoles, bordé de traits noirs épais, souvent en biais ; l'isolant de P1/P2 le quitte et part vers l'extérieur ou vers l'intérieur",
+  "regle": "Correction de la règle : remplissage gris plein, sans rangée d'alvéoles, bordé de traits noirs épais, de 40 à 44 cm. On le trouve en façade (tour sud-est, souvent en biais, là où l'isolant de P1/P2 le quitte). On le trouve aussi en trumeau de la cage d'escalier ou en pile d'angle de la gaine d'ascenseur, vu depuis les locaux (U02, U12, U14) : une baie M6 ou la porte palière s'y accroche. Il diffère de P6 (voile de cage de 25 cm) et de P7 (voile de gaine de 50 cm).",
   "premiere_vue": {
-   "troncon": "T16",
-   "debut_m": 62.39,
-   "fin_m": 63.21,
-   "autre_niveau": true
+   "troncon": "U02",
+   "debut_m": 10011.53,
+   "fin_m": 10011.91
   }
  },
  {
@@ -643,6 +642,164 @@
    "troncon": "T70",
    "debut_m": 147.52,
    "fin_m": 148.26
+  }
+ },
+ {
+  "id": "P6",
+  "nom": "Voile béton non isolé de cage d'escalier ou de gaine d'ascenseur (environ 25 cm)",
+  "genre": "paroi",
+  "decision": "a_confirmer",
+  "couches": [
+   {
+    "nature": "mur",
+    "epaisseur_cm": 25,
+    "indice": "bande grise entre traits noirs épais, sans alvéoles"
+   }
+  ],
+  "regle": "Bande grise de 24 à 28 cm bordée de deux traits noirs épais, sans alvéoles ni hachure ondulée. Le nu intérieur est sur le guide (0 à +2) et le nu extérieur entre +24 et +28. Au-dessus, on voit l'intérieur d'une cage d'escalier (marches, cercle de giration, main courante) ou d'une gaine d'ascenseur (cabine). Il diffère de P3 (bloc plein de 40 à 44 cm), de P7 (50 cm) et de P1/P2 (rangée d'alvéoles). Nouveau parce que l'épaisseur est différente et qu'il donne sur une cage ou une gaine.",
+  "premiere_vue": {
+   "troncon": "U02",
+   "debut_m": 10011.91,
+   "fin_m": 10014.71
+  }
+ },
+ {
+  "id": "P7",
+  "nom": "Voile béton épais non isolé de la gaine d'ascenseur (environ 50 cm)",
+  "genre": "paroi",
+  "decision": "a_confirmer",
+  "couches": [
+   {
+    "nature": "mur",
+    "epaisseur_cm": 50,
+    "indice": "bande grise de 50 cm, sans alvéoles"
+   }
+  ],
+  "regle": "Bande grise d'environ 50 cm (de +2 à +53) bordée de traits noirs épais, sans alvéoles. Au-dessus se trouve la cabine d'ascenseur (rectangle barré). C'est le voile ouest de la gaine d'ascenseur, côté 5.1 Fiction ; sa zone fait 0,52 m de large dans U15. Nouveau : il est nettement plus épais que P3 (40 à 44 cm) et deux fois plus que P6 (25 cm).",
+  "premiere_vue": {
+   "troncon": "U09",
+   "debut_m": 10220.88,
+   "fin_m": 10222.6
+  }
+ },
+ {
+  "id": "P8",
+  "nom": "Cloison mince de gaines techniques (CF, CVC EU EP, ventilation)",
+  "genre": "paroi",
+  "decision": "a_confirmer",
+  "couches": [
+   {
+    "nature": "autre",
+    "epaisseur_cm": 8,
+    "indice": "trait noir épais et trait fin, sans remplissage"
+   }
+  ],
+  "regle": "Cloison sans remplissage gris : un trait noir épais vers +8 doublé d'un trait fin vers +2, coupés de petits traits transversaux. Au-dessus, les gaines (textes CF Cf, CVC EU EP, ventilation) sont fermées par un trait épais vers +88. Elle diffère de P6 (bande grise de 25 cm) et de M7 (triple trait fin à montants carrés, texte PF1/2H). La composition (plaque, carreau de plâtre ou portes de gaine) reste à vérifier.",
+  "premiere_vue": {
+   "troncon": "U11",
+   "debut_m": 10235.45,
+   "fin_m": 10236.92
+  }
+ },
+ {
+  "id": "M7",
+  "nom": "Cloison vitrée pare-flamme PF1/2H de la boîte à vents / boîte à lumière",
+  "genre": "menuiserie",
+  "decision": "a_confirmer",
+  "couches": [
+   {
+    "nature": "vitrage",
+    "epaisseur_cm": 4,
+    "indice": "traits fins centraux continus"
+   },
+   {
+    "nature": "cadre",
+    "epaisseur_cm": 6,
+    "indice": "montants carrés d'environ 7 cm tous les 2,07 m"
+   }
+  ],
+  "regle": "Triple trait fin continu entre 0 et +8/+12 (+8/+17 sur U16), avec de petits montants carrés d'environ 7 x 12 cm tous les 2,07 m environ. Le texte PF1/2H est côté haut, dans la boîte. Côté pièce, il y a du mobilier (lampes sur tige, postes, comptoir). Les angles à 90° sont marqués par un double trait vertical et un petit carré. Ce n'est pas M4 (baie de façade sur terrasse), ni M6 (pas de traits parallèles à -5/-45), ni M1 (pas de trait parallèle ni de poteau PO1).",
+  "premiere_vue": {
+   "troncon": "U06",
+   "debut_m": 10026.34,
+   "fin_m": 10029.48
+  }
+ },
+ {
+  "id": "M8",
+  "nom": "Porte palière d'ascenseur coulissante",
+  "genre": "menuiserie",
+  "decision": "a_confirmer",
+  "couches": [
+   {
+    "nature": "autre",
+    "epaisseur_cm": 11,
+    "indice": "deux vantaux coulissants en rectangles fins superposés"
+   }
+  ],
+  "regle": "Ouverture d'environ 1,2 m dans le mur nord de la gaine d'ascenseur, entre deux abouts gris pleins qui descendent jusqu'à -36 côté palier. Deux rectangles fins superposés (vantaux coulissants) entre +9 et +20, sans arc. La cabine (texte 1.75x1.6) est au-dessus. Nouveau : ce n'est ni une baie vitrée ni M9 (porte battante avec arc).",
+  "premiere_vue": {
+   "troncon": "U13",
+   "debut_m": 10353.98,
+   "fin_m": 10354.76
+  }
+ },
+ {
+  "id": "M9",
+  "nom": "Porte battante coupe-feu de la cage d'escalier (CF 1/2 h + ferme-porte)",
+  "genre": "menuiserie",
+  "decision": "a_confirmer",
+  "couches": [
+   {
+    "nature": "cadre",
+    "epaisseur_cm": 10,
+    "indice": "dormant et vantail en double trait fin +3/+13"
+   }
+  ],
+  "regle": "Interruption d'environ 0,97 m du voile P6, entre deux bouts noirs, avec un double trait fin à +3/+13 et un arc de battant d'environ 0,9 m tourné vers le haut (côté cage). Textes 1 UP et CF1/2H+FP à l'envers. Elle diffère de M2 (porte dans le mur-rideau vers l'escalier extérieur) et de M8 (vantaux coulissants sans arc).",
+  "premiere_vue": {
+   "troncon": "U04",
+   "debut_m": 10020.25,
+   "fin_m": 10021.22
+  }
+ },
+ {
+  "id": "L12",
+  "nom": "Angle de cage d'escalier ou de gaine d'ascenseur non isolée, vu du local (angle rentrant)",
+  "genre": "liaison",
+  "decision": "a_confirmer",
+  "couches": [],
+  "regle": "Coin à 90° d'un voile gris non isolé (P3, P6, P7) de cage ou de gaine. En bout de tronçon, le voile perpendiculaire remonte vers le haut (côté cage) sur toute la bande, ou le voile se termine par un bout noir. Le local entoure le volume non chauffé (270° côté local). Quand l'angle tombe sur une borne, la zone du voile perpendiculaire est relevée des deux côtés : c'est une seule liaison. Il diffère de L11 (angle vu depuis le vide de terrasse) et de L1 (bande à alvéoles).",
+  "premiere_vue": {
+   "troncon": "U03",
+   "debut_m": 10017.66,
+   "fin_m": 10017.94
+  }
+ },
+ {
+  "id": "L13",
+  "nom": "About de refend ou de cloison côté cage ou gaine (dans le volume non chauffé)",
+  "genre": "liaison",
+  "decision": "a_confirmer",
+  "couches": [],
+  "regle": "Jambe perpendiculaire qui part du voile P6 ou de la cloison P8 vers le HAUT, côté cage ou gaine. C'est soit un refend gris d'environ 21 cm (séparation escalier / gaine de ventilation), soit un double trait noir d'environ 12 cm (cloison entre deux gaines). Il diffère de L3, L8 et L9, qui partent vers le bas, côté local chauffé.",
+  "premiere_vue": {
+   "troncon": "U04",
+   "debut_m": 10021.22,
+   "fin_m": 10021.45
+  }
+ },
+ {
+  "id": "L14",
+  "nom": "Angle de cloison vitrée PF de la boîte à vents",
+  "genre": "liaison",
+  "decision": "a_confirmer",
+  "couches": [],
+  "regle": "Deux cloisons vitrées M7 à angle droit : un double trait fin remonte vers le haut, avec un petit carré de montant d'angle, sans gris. Le local entoure la boîte. Même configuration que L6, mais sur une cloison intérieure pare-flamme M7 et non sur des baies de terrasse M4 : c'est pourquoi il fait l'objet d'une fiche à part.",
+  "premiere_vue": {
+   "troncon": "U18",
+   "debut_m": 10426.11,
+   "fin_m": 10426.17
   }
  }
 ]
