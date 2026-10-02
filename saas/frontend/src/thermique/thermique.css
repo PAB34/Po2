@@ -3563,6 +3563,20 @@ circle.th-seg--measure {
   stroke: #2563eb;
   stroke-opacity: 0.6;
 }
+.th-paroi-local__baie {
+  stroke: #2563eb;
+  stroke-width: 7px;
+  stroke-linecap: butt;
+}
+.th-paroi-surfaces {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0;
+}
+.th-paroi-surfaces__baies {
+  margin: 0;
+  padding-left: 18px;
+}
 .th-coupure-paroi {
   fill: #fff;
   stroke: #1f2937;

@@ -1,4 +1,4 @@
-import type { StudyContent, StudyCouche, StudyParoiLocal, StudyReleveElement, StudyRoom } from "../api";
+import type { ModeleMenuiserie, StudyContent, StudyCouche, StudyParoiLocal, StudyReleveElement, StudyRoom } from "../api";
 import type { ToScreen } from "../components/TileSheetViewer";
 import { EditeurComposition } from "./ElementPanel";
 import {
@@ -7,6 +7,7 @@ import {
   paroisDeperditives,
   paroisDuLocal,
   paroisSemblables,
+  surfacesParoi,
   type ParoiRef,
 } from "./paroisLocaux";
 
@@ -45,6 +46,14 @@ export function ParoisDesLocaux({
           <g key={`${room.id}-${paroi.rang}`} className={`th-paroi-local is-${etat}${vise ? " is-choisie" : ""}`}>
             {vise && <line className="th-paroi-local__halo" x1={ax} y1={ay} x2={bx} y2={by} />}
             <line className="th-paroi-local__trait" x1={ax} y1={ay} x2={bx} y2={by} />
+            {/* D270 : les menuiseries posées sur la paroi, en bleu sur sa ligne. */}
+            {(paroi.menuiseries ?? []).map((pose, rang) => {
+              const t = pose.trace_pdf ?? [];
+              if (t.length < 2) return null;
+              const [mx0, my0] = toScreen(t[0]);
+              const [mx1, my1] = toScreen(t[t.length - 1]);
+              return <line key={rang} className="th-paroi-local__baie" x1={mx0} y1={my0} x2={mx1} y2={my1} />;
+            })}
             {Math.hypot(bx - ax, by - ay) >= LONGUEUR_ETIQUETTE_PX && (
               <text className="th-paroi-local__etiquette" x={(ax + bx) / 2} y={(ay + by) / 2 - 6} textAnchor="middle">
                 {etiquette(paroi)}
@@ -76,11 +85,17 @@ export function FicheParoi({
   busy,
   onValider,
   onRetour,
+  hauteurLocal = null,
+  modeles = [],
 }: {
   content: StudyContent;
   room: StudyRoom;
   paroi: StudyParoiLocal;
   busy: boolean;
+  /** Hauteur sous plafond du local (coupes ou saisie), pour les surfaces (D269). */
+  hauteurLocal?: number | null;
+  /** Modèles de menuiserie du projet : leur hauteur donne la surface des baies. */
+  modeles?: ModeleMenuiserie[];
   onValider: (couches: StudyCouche[], composant: string | null, aussi: { room: StudyRoom; paroi: StudyParoiLocal }[]) => void;
   onRetour: () => void;
 }) {
@@ -109,6 +124,7 @@ export function FicheParoi({
           Derrière : <strong>{derriere}</strong>
           {paroi.orientation ? ` · orientation ${paroi.orientation}` : ""} · épaisseur lue sur le plan {paroi.epaisseur_cm} cm
         </p>
+        <MenuiseriesEtSurfaces paroi={paroi} hauteurLocal={hauteurLocal} modeles={modeles} />
         {!paroi.composition && paroi.vitree && (
           <p className="th-muted">
             Le relevé voit ici une menuiserie et aucun mur : cette paroi est vitrée, elle se traite à l'étape Menuiseries.
@@ -127,6 +143,48 @@ export function FicheParoi({
         />
       </article>
     </section>
+  );
+}
+
+const m2 = (valeur: number) => `${valeur.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m²`;
+
+/** D269 : les menuiseries posées sur la paroi et ses surfaces (brute, baies, opaque), ce qui manque dit en clair. */
+function MenuiseriesEtSurfaces({
+  paroi,
+  hauteurLocal,
+  modeles,
+}: {
+  paroi: StudyParoiLocal;
+  hauteurLocal: number | null;
+  modeles: ModeleMenuiserie[];
+}) {
+  const poses = paroi.menuiseries ?? [];
+  const surfaces = surfacesParoi(paroi, hauteurLocal, modeles);
+  return (
+    <div className="th-paroi-surfaces">
+      {poses.length > 0 ? (
+        <ul className="th-paroi-surfaces__baies">
+          {poses.map((pose, rang) => (
+            <li key={rang}>
+              Menuiserie {pose.composant ?? ""} · {pose.largeur_m.toLocaleString("fr-FR")} m
+              {pose.modele ? ` · modèle ${pose.modele}` : " · sans modèle"}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="th-muted">Aucune menuiserie posée sur cette paroi.</p>
+      )}
+      <p>
+        Surface : {surfaces.brute_m2 != null ? m2(surfaces.brute_m2) : "—"} brute
+        {poses.length > 0 && ` − ${m2(surfaces.baies_m2)} de baies`}
+        {surfaces.opaque_m2 != null && (
+          <>
+            {" "}= <strong>{m2(surfaces.opaque_m2)} opaques</strong>
+          </>
+        )}
+      </p>
+      {surfaces.manques.length > 0 && <p className="th-muted">À compléter : {surfaces.manques.join(" ; ")}.</p>}
+    </div>
   );
 }
 

@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { StudyContent, StudyParoiLocal, StudyRoom } from "../api";
 import { appliquerEnLocal } from "./elementsLocal";
 import { FicheParoi, ParoisDesLocaux } from "./ParoisDesLocaux";
-import { avancementParois, coupureProche, gesteComposition, paroiVisee, paroisSemblables, trouverParoi } from "./paroisLocaux";
+import { avancementParois, coupureProche, gesteComposition, paroiVisee, paroisSemblables, surfacesParoi, trouverParoi } from "./paroisLocaux";
 
 const P1 = { composant: "P1", couches: [{ nature: "mur", epaisseur_cm: 20 }, { nature: "isolant", epaisseur_cm: 12 }], epaisseur_cm: 32 };
 
@@ -117,5 +117,59 @@ describe("couper une paroi par des points (D264 à D266)", () => {
     const coupe = appliquerEnLocal(content, { type: "cote_couper", local: "L1", point_pdf: [10, 0] });
     const recolle = appliquerEnLocal(coupe, { type: "cote_recoller", local: "L1", point_pdf: [10.2, 0] });
     expect(recolle.coupures_parois).toEqual([]);
+  });
+});
+
+describe("menuiseries posées sur les parois et surfaces (D267 à D270)", () => {
+  const pose = (debut: number, fin: number, modele: string | null) => ({
+    ref: { troncon: "T01", debut_m: debut, fin_m: fin },
+    composant: "M1",
+    modele,
+    menuiserie_type: "fenetre",
+    largeur_m: fin - debut,
+    debut_m: debut,
+    fin_m: fin,
+    trace: [[debut * 10, 0], [fin * 10, 0]] as [number, number][],
+    trace_pdf: [[debut, 0], [fin, 0]] as [number, number][],
+  });
+  const F1 = { nom: "F1", largeur_cm: 120, hauteur_m: 2.15, vue_id: 1, vue: "Façade nord", capture: true, horodatage: null, poses: 1 };
+  const mur = paroi(0, { trace: [[0, 0], [400, 0]], trace_pdf: [[0, 0], [40, 0]], longueur_m: 10, menuiseries: [pose(2, 3.2, "F1"), pose(6, 7, null)] });
+
+  it("surface opaque = brute − baies ; ce qui manque est dit au lieu d'être deviné", () => {
+    expect(surfacesParoi(mur, 2.5, [F1])).toEqual({
+      brute_m2: 25,
+      baies_m2: 2.58,
+      opaque_m2: null,
+      manques: ["1 menuiserie sans modèle (hauteur inconnue)"],
+    });
+    const complet = { ...mur, menuiseries: [pose(2, 3.2, "F1")] };
+    expect(surfacesParoi(complet, 2.5, [F1])).toEqual({ brute_m2: 25, baies_m2: 2.58, opaque_m2: 22.42, manques: [] });
+    expect(surfacesParoi(complet, null, [F1]).manques).toEqual(["hauteur du local à mesurer"]);
+  });
+
+  it("couper la paroi partage ses menuiseries entre les deux morceaux, à leur position", () => {
+    const content = etude([local("L1", "Bureau", [mur])]);
+    const apres = appliquerEnLocal(content, { type: "cote_couper", local: "L1", point_pdf: [20, 0] });
+    const [gauche, droite] = apres.locaux[0].fiche.parois!;
+    expect(gauche.menuiseries!.map((m) => [m.debut_m, m.fin_m])).toEqual([[2, 3.2]]);
+    expect(droite.menuiseries!.map((m) => [m.debut_m, m.fin_m])).toEqual([[1, 2]]);
+  });
+
+  it("la fiche de la paroi liste ses menuiseries et ses surfaces, et le plan les dessine en bleu", () => {
+    const content = etude([local("L1", "Bureau", [mur])]);
+    const fiche = renderToStaticMarkup(
+      <FicheParoi content={content} room={content.locaux[0]} paroi={mur} busy={false} hauteurLocal={2.5} modeles={[F1]}
+        onValider={() => undefined} onRetour={() => undefined} />,
+    );
+    expect(fiche).toContain("modèle F1");
+    expect(fiche).toContain("sans modèle");
+    expect(fiche).toContain("25,00 m²");
+    expect(fiche).toContain("À compléter");
+    const plan = renderToStaticMarkup(
+      <svg>
+        <ParoisDesLocaux content={content} choisie={null} toScreen={(p) => [p[0] * 4, p[1] * 4]} />
+      </svg>,
+    );
+    expect(plan.match(/th-paroi-local__baie/g)).toHaveLength(2);
   });
 });

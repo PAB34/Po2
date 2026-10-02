@@ -242,6 +242,21 @@ export type StudyParoiLocal = {
   composition: (CompositionParoi & { id: string }) | null;
   /** Devant une menuiserie relevée, sans mur : la paroi est vitrée et se traite à l'étape Menuiseries. */
   vitree?: boolean;
+  /** D267 : les menuiseries du relevé posées sur cette paroi. */
+  menuiseries?: MenuiseriePosee[];
+};
+/** Une menuiserie posée sur une paroi de local (D267) : sa portion le long de la paroi. */
+export type MenuiseriePosee = {
+  ref: StudyElementRef;
+  composant: string | null;
+  modele: string | null;
+  menuiserie_type: string | null;
+  largeur_m: number;
+  /** Position le long de la paroi, depuis le début de sa ligne (m). */
+  debut_m: number;
+  fin_m: number;
+  trace: [number, number][];
+  trace_pdf?: PdfPoint[];
 };
 export type StudyRoomSheet = {
   piece: string;

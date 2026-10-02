@@ -336,7 +336,10 @@ def convertir_contours(contenu: dict[str, Any], transform: list[Any], width: flo
         local["contour_pdf"] = contour_pdf
         # Le tracé de chaque côté suit les contours en points PDF : c'est lui qui porte la cote (D80).
         # D260 : les parois du local aussi, dessinées et cliquables à l'étape Parois.
-        for cote in (local.get("fiche") or {}).get("cotes", []) + (local.get("fiche") or {}).get("parois", []):
+        parois = (local.get("fiche") or {}).get("parois", [])
+        # D270 : les menuiseries posées sur les parois se dessinent aussi.
+        poses = [pose for paroi in parois for pose in paroi.get("menuiseries", [])]
+        for cote in (local.get("fiche") or {}).get("cotes", []) + parois + poses:
             trace = cote.get("trace")
             if isinstance(trace, list) and trace:
                 cote["trace_pdf"] = [

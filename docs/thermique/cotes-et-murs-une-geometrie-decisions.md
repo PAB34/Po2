@@ -146,6 +146,25 @@ posées sur les parois (surfaces déduites) ; surfaces et premier tableau des d�
 coupures dessinées en ronds blancs. Essai sur une copie du R+1 : paroi de 8,92 m du Pôle multimédia coupée en son
 milieu → deux parois de 4,46 m, chacune avec sa propre proposition.
 
+## Lot C-3 — les menuiseries posées sur les parois (2026-10-02)
+
+- **D267 — Rattachement.** Au recalcul, chaque menuiserie du relevé (morceaux réunis, écartées exclues) est
+  posée sur la paroi déperditive de son local qu'elle longe : face intérieure parallèle, à moins de 90 cm. On
+  retient la portion qui recouvre la paroi (une baie à cheval sur deux parois coupées se partage). Chaque paroi
+  porte ses `menuiseries` : composant, modèle, largeur posée, position (début, fin le long de la paroi), tracé.
+- **D268 — Paroi vitrée par recouvrement.** Une paroi couverte à 90 % ou plus par ses menuiseries est vitrée,
+  en plus de la règle D263.
+- **D269 — Surfaces dans la fiche de la paroi.** Surface brute = longueur × hauteur du local ; surface des baies =
+  Σ largeur × hauteur du modèle posé (sans modèle : hauteur inconnue, signalée) ; **surface opaque = brute − baies**.
+  Sans hauteur du local : « hauteur du local à mesurer ». Calculées à l'écran pour l'instant (modèles et hauteurs
+  y sont déjà) ; elles passeront au serveur avec le tableau des déperditions.
+- **D270 — Sur le plan**, à l'étape Parois, les menuiseries d'une paroi se dessinent en bleu sur sa ligne.
+
+**Fait le 2026-10-02.** Mesuré sur une copie du R+1 : 58 menuiseries actives (95,14 m), **90,21 m posées sur
+des parois** (95 %, 62 morceaux) ; 44 parois vitrées (94,27 m), 8 parois opaques portant des baies. Les 4,9 m non
+posés sont à examiner (probablement des baies de retour perpendiculaires aux parois, ou devant une paroi non
+déperditive). Couper une paroi partage ses baies entre les morceaux.
+
 ## Questions
 
 1. **Option** : C vous convient-elle, ou préférez-vous A ou B ?

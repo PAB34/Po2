@@ -320,6 +320,10 @@ def _paroi(p0: tuple[float, float], p1: tuple[float, float], groupe: list[dict[s
             "epaisseur_cm": round(float(mur["nu_exterieur_cm"]) - float(mur["nu_interieur_cm"]), 1),
         }
     epaisseurs = sorted(s["epaisseur"] for s in groupe)
+    # D267, D268 : les menuiseries qui longent la paroi ; couverte à 90 % ou plus, la paroi est vitrée.
+    menuiseries = _menuiseries_sur(p0, p1, releve, largeur, hauteur, px_par_m)
+    if longueur > 0 and sum(m["largeur_m"] for m in menuiseries) >= COUVERTURE_VITREE * longueur:
+        vitree = True
     return {
         "adjacence": premier["adjacence"],
         "voisin": premier["voisin"],
@@ -330,7 +334,55 @@ def _paroi(p0: tuple[float, float], p1: tuple[float, float], groupe: list[dict[s
         "trace": [[round(x * 1000 / largeur, 3), round(y * 1000 / hauteur, 3)] for x, y in (p0, p1)],
         "proposition": proposition,
         "vitree": vitree,
+        "menuiseries": menuiseries,
     }
+
+
+COUVERTURE_VITREE = 0.90
+MENUISERIE_MIN_M = 0.05
+PARALLELE_COS = 0.95
+
+
+def _menuiseries_sur(p0: tuple[float, float], p1: tuple[float, float], releve: list[dict[str, Any]], largeur: float,
+                     hauteur: float, px_par_m: float) -> list[dict[str, Any]]:
+    """D267 : les menuiseries du relevé posées sur cette paroi (face intérieure parallèle, à moins de 90 cm), avec la
+    portion qui la recouvre. Une baie à cheval sur deux parois se partage entre elles."""
+    dx, dy = p1[0] - p0[0], p1[1] - p0[1]
+    longueur = math.hypot(dx, dy)
+    if longueur == 0:
+        return []
+    ux, uy = dx / longueur, dy / longueur
+    poses = []
+    for element in releve:
+        if element.get("type") != "menuiserie":
+            continue
+        (ax, ay), (bx, by) = element["_face"].coords[0], element["_face"].coords[-1]
+        fx, fy = bx - ax, by - ay
+        lf = math.hypot(fx, fy)
+        if lf == 0 or abs(fx * ux + fy * uy) / lf < PARALLELE_COS:
+            continue
+        # position le long de la paroi (0 à longueur) et écart perpendiculaire du milieu de la face
+        t0 = (ax - p0[0]) * ux + (ay - p0[1]) * uy
+        t1 = (bx - p0[0]) * ux + (by - p0[1]) * uy
+        mx, my = (ax + bx) / 2 - p0[0], (ay + by) / 2 - p0[1]
+        if abs(mx * -uy + my * ux) > RATTACHEMENT_M * px_par_m:
+            continue
+        debut, fin = max(0.0, min(t0, t1)), min(longueur, max(t0, t1))
+        if (fin - debut) / px_par_m < MENUISERIE_MIN_M:
+            continue
+        q0 = (p0[0] + ux * debut, p0[1] + uy * debut)
+        q1 = (p0[0] + ux * fin, p0[1] + uy * fin)
+        poses.append({
+            "ref": {"troncon": element["troncon"], "debut_m": element["debut_m"], "fin_m": element["fin_m"]},
+            "composant": element.get("composant") or None,
+            "modele": element.get("modele") or None,
+            "menuiserie_type": element.get("menuiserie_type") or None,
+            "largeur_m": round((fin - debut) / px_par_m, 2),
+            "debut_m": round(debut / px_par_m, 2),
+            "fin_m": round(fin / px_par_m, 2),
+            "trace": [[round(x * 1000 / largeur, 3), round(y * 1000 / hauteur, 3)] for x, y in (q0, q1)],
+        })
+    return sorted(poses, key=lambda pose: pose["debut_m"])
 
 
 def _regrouper(sondages: list[dict[str, Any]]) -> list[dict[str, Any]]:

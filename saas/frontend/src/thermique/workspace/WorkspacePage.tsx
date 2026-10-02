@@ -1697,6 +1697,8 @@ export function WorkspacePage() {
                             room={choisie.room}
                             paroi={choisie.paroi}
                             busy={elementsState.busy}
+                            hauteurLocal={hauteurConnue(choisie.room, hauteurs.data)}
+                            modeles={menuiseries.data?.modeles ?? []}
                             onRetour={() => setParoiChoisie(null)}
                             onValider={(couches, composant, aussi) =>
                               elementsState.gesteImmediat([

@@ -1,4 +1,4 @@
-import type { PdfPoint, StudyContent, StudyCouche, StudyOperation, StudyParoiLocal, StudyRoom } from "../api";
+import type { ModeleMenuiserie, PdfPoint, StudyContent, StudyCouche, StudyOperation, StudyParoiLocal, StudyRoom } from "../api";
 
 // Option C (D255 à D262) : un mur = la composition affectée à une paroi d'un local, portion droite de son
 // contour. Les parois viennent des fiches des locaux ; la composition validée est enregistrée à part, par le
@@ -180,13 +180,60 @@ export function appliquerCoupure(content: StudyContent, geste: GesteCoupure): St
         const [a, b] = [paroi.trace[0], paroi.trace[paroi.trace.length - 1]];
         const pdf = paroi.trace_pdf ?? [];
         const [ap, bp] = [pdf[0], pdf[pdf.length - 1]];
-        const arrondi2 = (valeur: number) => Math.round(valeur * 100) / 100;
+        // Les menuiseries posées se partagent entre les deux morceaux, à leur position (D267).
+        const coupe = paroi.longueur_m * t;
+        const poses = paroi.menuiseries ?? [];
+        const gauche = poses
+          .filter((pose) => pose.debut_m < coupe)
+          .map((pose) => ({ ...pose, fin_m: Math.min(pose.fin_m, coupe), largeur_m: arrondi2(Math.min(pose.fin_m, coupe) - pose.debut_m) }));
+        const droite = poses
+          .filter((pose) => pose.fin_m > coupe)
+          .map((pose) => {
+            const debut = Math.max(pose.debut_m, coupe);
+            return { ...pose, debut_m: arrondi2(debut - coupe), fin_m: arrondi2(pose.fin_m - coupe), largeur_m: arrondi2(pose.fin_m - debut) };
+          });
         return [
-          { ...paroi, trace: [a, interpoler(a, b, t)], trace_pdf: [ap, interpoler(ap, bp, t)], longueur_m: arrondi2(paroi.longueur_m * t) },
-          { ...paroi, trace: [interpoler(a, b, t), b], trace_pdf: [interpoler(ap, bp, t), bp], longueur_m: arrondi2(paroi.longueur_m * (1 - t)) },
+          { ...paroi, trace: [a, interpoler(a, b, t)], trace_pdf: [ap, interpoler(ap, bp, t)], longueur_m: arrondi2(paroi.longueur_m * t), menuiseries: gauche },
+          { ...paroi, trace: [interpoler(a, b, t), b], trace_pdf: [interpoler(ap, bp, t), bp], longueur_m: arrondi2(paroi.longueur_m * (1 - t)), menuiseries: droite },
         ];
       });
       return { ...room, fiche: { ...room.fiche, parois: coupees.map((paroi, rang) => ({ ...paroi, rang })) } };
     }),
+  };
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// D269 : surfaces d'une paroi. Brute = longueur × hauteur du local ; baies = Σ largeur × hauteur du modèle posé ;
+// opaque = brute − baies. Ce qui manque est dit, jamais deviné.
+
+export type SurfacesParoi = {
+  brute_m2: number | null;
+  baies_m2: number;
+  opaque_m2: number | null;
+  /** Ce qui empêche le calcul complet, en clair. */
+  manques: string[];
+};
+
+const arrondi2 = (valeur: number) => Math.round(valeur * 100) / 100;
+
+export function surfacesParoi(paroi: StudyParoiLocal, hauteurLocal: number | null, modeles: ModeleMenuiserie[]): SurfacesParoi {
+  const manques: string[] = [];
+  if (hauteurLocal == null) manques.push("hauteur du local à mesurer");
+  let baies = 0;
+  const sansModele = (paroi.menuiseries ?? []).filter((pose) => {
+    const modele = pose.modele ? modeles.find((item) => item.nom === pose.modele) : undefined;
+    if (!modele) return true;
+    baies += pose.largeur_m * modele.hauteur_m;
+    return false;
+  });
+  if (sansModele.length > 0) {
+    manques.push(`${sansModele.length} menuiserie${sansModele.length > 1 ? "s" : ""} sans modèle (hauteur inconnue)`);
+  }
+  const brute = hauteurLocal == null ? null : paroi.longueur_m * hauteurLocal;
+  return {
+    brute_m2: brute == null ? null : arrondi2(brute),
+    baies_m2: arrondi2(baies),
+    opaque_m2: brute == null || sansModele.length > 0 ? null : arrondi2(Math.max(0, brute - baies)),
+    manques,
   };
 }

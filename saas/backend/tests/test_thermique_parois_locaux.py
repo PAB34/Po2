@@ -192,3 +192,26 @@ def test_la_coupure_passe_le_schema_et_un_point_loin_de_la_paroi_ne_coupe_rien()
     assert geste["point_pdf"] == [10.0, 20.0] and geste["local"] == "piece-001"
     loin = edition.appliquer(_etude(), [{"type": "cote_couper", "local": "piece-001", "point": [250.0, 60.0]}])
     assert len(_parois_nord(loin)) == 1
+
+
+def test_une_menuiserie_est_posee_sur_la_paroi_qu_elle_longe():
+    """D267, D268 : la baie relevée de 10 m sur les 50 m du mur nord se pose sur la paroi nord, à sa position ;
+    une paroi couverte à 90 % par ses baies devient vitrée."""
+    contenu = _etude()
+    mur = contenu["enveloppe"]["releve_brut"]["elements"][0]
+    mur["fin_m"] = 40.0
+    contenu["enveloppe"]["releve_brut"]["elements"].append({
+        **mur, "debut_m": 40.0, "fin_m": 50.0, "type": "menuiserie", "composant": "M1", "modele": "F1",
+        "couches": [], "menuiserie_type": "fenetre", "cadre_cm": -4,
+    })
+    resultat = edition.reconstruire(contenu)
+    nord = _paroi_nord(resultat)
+    assert [(m["composant"], m["modele"], m["largeur_m"]) for m in nord["menuiseries"]] == [("M1", "F1", 10.0)]
+    # Sa position est mesurée depuis le début de la ligne de la paroi ; sur le plan, elle va de x = 400 à 500.
+    assert sorted(x for x, _ in nord["menuiseries"][0]["trace"]) == [pytest.approx(400.0), pytest.approx(500.0)]
+    assert nord["vitree"] is False  # 20 % de baies : la paroi reste opaque
+
+    tout_vitre = edition.appliquer(resultat, [{"type": "cote_couper", "local": "piece-001", "point": [400.0, 5.0]}])
+    droite = _parois_nord(tout_vitre)[1]
+    assert droite["longueur_m"] == pytest.approx(10.0, abs=0.01) and droite["vitree"] is True
+    assert droite["menuiseries"][0]["largeur_m"] == pytest.approx(10.0, abs=0.01)
