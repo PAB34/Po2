@@ -96,6 +96,11 @@ plateforme. »
    l'entraînement, et le mentionner dans vos conditions. Une offre ouverte à d'autres bureaux d'études passera
    probablement par l'API, sous les conditions commerciales d'Anthropic (voir l'Agent SDK, solution 12).
 
+## Réponse du thermicien (2026-10-02)
+
+**Question 1 tranchée** : « je suis super chaud de la connexion MCP » → le serveur MCP de la plateforme est la
+colonne vertébrale. Premier lot : `serveur-mcp-plateforme-decisions.md` (D291–D297).
+
 ## Questions
 
 1. **Serveur MCP de la plateforme** comme colonne vertébrale : d'accord ?

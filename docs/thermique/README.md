@@ -15,6 +15,7 @@ dans `docs/Archives/thermique/` (avec la raison de chaque archivage).
 | `reference/guide-etude-thermique-14-etapes.md` | **Le guide du thermicien** : 14 étapes, une étape + un plan par mission. À garder précieusement, à ne pas modifier sans son accord |
 | `reference/refondation-assistant-ia-local-decisions.md` | Le parcours d'une étude (dépôt, tri, lecture, registre des informations, manques, étapes 2 à 14), l'existant face au guide, l'ordre de reprise |
 | `reference/regles-metier-validees.md` | **Toutes les règles thermiques déjà tranchées**, en une page : base du fichier de conventions de chaque projet |
+| `reference/serveur-mcp-plateforme-decisions.md` | **Premier lot de la nouvelle version** : le serveur MCP de la plateforme (outils, livrables, accès, premier essai) |
 | `reference/interaction-claude-plateforme-recherche.md` | Comment Claude travaille avec la plateforme : serveur MCP de la plateforme, connecteur claude.ai, alternatives |
 | `reference/convention-nommage-pieces-decisions.md` | Codes des pièces (`PLAN-N1`, `COUPE-AA`…) et tri par l'IA au dépôt du client |
 | `reference/analyse-par-missions-decisions.md` | Analyse par missions courtes où l'agent exécute du code d'image ; mesure sur le R+1 |

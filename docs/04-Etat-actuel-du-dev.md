@@ -36,7 +36,7 @@ do_not_auto_read:
 - **Méthode d'analyse** : missions courtes où l'agent **exécute du code d'image** et choisit ses zooms ; mesuré sur le
   R+1 (contour de Claude navigateur à 2,1 cm de médiane, 97 % d'accord opaque/vitré) :
   `reference/analyse-par-missions-decisions.md`.
-- **Liaison Claude ↔ plateforme** : serveur MCP de la plateforme (connecteur claude.ai), d'abord local puis publié :
+- **Liaison Claude ↔ plateforme : DÉCIDÉE (MCP)**, premier lot à valider : `reference/serveur-mcp-plateforme-decisions.md` (D291–D297, 4 questions). Recherche :
   `reference/interaction-claude-plateforme-recherche.md`.
 - **En production (2026-10-02)** : option C — un mur = la composition d'une paroi de local ; coupures ;
   menuiseries posées sur les parois ; surfaces brute / baies / opaque ; sauvegarde complète de chaque étude
