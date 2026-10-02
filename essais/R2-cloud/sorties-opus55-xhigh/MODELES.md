@@ -8,3 +8,4 @@ Relevé dans la trace `subagents/agent-*.jsonl` de chaque appel.
 | Locaux | thermicien-plan | claude-opus-5-5 | xhigh | 66 s |
 | Lot 1 | thermicien-enveloppe | claude-opus-5-5 | xhigh | 598 s |
 | Lot 2 | thermicien-enveloppe | claude-opus-5-5 | xhigh | 708 s |
+| Lot 3 | thermicien-enveloppe | claude-opus-5-5 | xhigh | 1416 s |
