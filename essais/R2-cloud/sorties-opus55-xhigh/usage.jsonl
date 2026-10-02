@@ -1,1 +1,2 @@
 {"etape": "Passe globale", "agent": "thermicien-plan", "models": ["claude-opus-5-5"], "effort": ["xhigh"], "duree_s": 1021, "usage": {"input_tokens": 6, "output_tokens": 765, "cache_read_input_tokens": 21572, "cache_creation_input_tokens": 26803, "cache_5m": 26803, "cache_1h": 0}}
+{"etape": "Locaux", "agent": "thermicien-plan", "models": ["claude-opus-5-5"], "effort": ["xhigh"], "duree_s": 66, "usage": {"input_tokens": 8, "output_tokens": 3067, "cache_read_input_tokens": 42069, "cache_creation_input_tokens": 23346, "cache_5m": 23346, "cache_1h": 0}}

@@ -5,3 +5,4 @@ Relevé dans la trace `subagents/agent-*.jsonl` de chaque appel.
 | Étape | Agent | Modèle | Effort | Durée |
 |---|---|---|---|---|
 | Passe globale | thermicien-plan | claude-opus-5-5 | xhigh | 1021 s |
+| Locaux | thermicien-plan | claude-opus-5-5 | xhigh | 66 s |
