@@ -123,27 +123,26 @@
  },
  {
   "id": "M3",
-  "nom": "Fenêtre dans une façade en redans",
+  "nom": "Fenêtre dans une façade en redans (y compris retours perpendiculaires)",
   "genre": "menuiserie",
   "decision": "integre",
   "couches": [
    {
     "nature": "vitrage",
     "epaisseur_cm": 6,
-    "indice": "triple trait fin entre -3 et -9"
+    "indice": "triple trait fin"
    },
    {
     "nature": "cadre",
     "epaisseur_cm": 4,
-    "indice": "petits dormants noirs aux tableaux"
+    "indice": "petits dormants noirs rectangulaires aux deux abouts"
    }
   ],
-  "regle": "Triple trait fin entre deux abouts de mur P1 terminés par de petits dormants",
+  "regle": "Triple trait fin entre deux abouts de mur P1/P4 terminés par de petits dormants ; sur la façade sud en biais de 40° par rapport aux parois (T38, T42) ; sur la façade ouest la baie est le retour du redan, perpendiculaire au guide, 0,8-0,85 m vers l'intérieur (115.65, 118.75) ou vers l'extérieur (122.17), visible seulement dans les recouvrements.",
   "premiere_vue": {
-   "troncon": "T18",
-   "debut_m": 67.14,
-   "fin_m": 67.97,
-   "autre_niveau": true
+   "troncon": "T38",
+   "debut_m": 100.71,
+   "fin_m": 101.67
   }
  },
  {
@@ -362,31 +361,31 @@
  },
  {
   "id": "P4",
-  "nom": "Massif triangulaire béton accolé à une lame isolée (dents de scie)",
+  "nom": "Lame P1 (mur 12 + isolant 12) accolée côté intérieur à un voile béton d'épaisseur variable (massif ou coin des dents de scie)",
   "genre": "paroi",
   "decision": "a_confirmer",
   "couches": [
    {
     "nature": "mur",
-    "epaisseur_cm": 30,
-    "indice": "gris plein en triangle, épaisseur variable"
+    "epaisseur_cm": 12,
+    "indice": "trait noir épais extérieur puis gris, comme P1"
    },
    {
     "nature": "isolant",
     "epaisseur_cm": 12,
-    "indice": "rangée d'alvéoles le long de la lame"
+    "indice": "rangée d'alvéoles hexagonales parallèle à la face extérieure"
    },
    {
     "nature": "mur",
-    "epaisseur_cm": 12,
-    "indice": "trait noir épais côté extérieur"
+    "epaisseur_cm": 40,
+    "indice": "gris plein, épaisseur variable 0 à >65 cm, face intérieure en biais"
    }
   ],
-  "regle": "Remplissage gris en triangle : une face droite et l'autre en biais, rangée d'alvéoles le long de la lame ; épaisseur variable de 0 à plus de 90 cm (≠ P1 constant) ; isolé (≠ P3). Vu aussi au départ du massif de la façade sud à 99.1 m (T36) : la face extérieure s'infléchit de 37° et la face intérieure de 52°, le gris s'élargit sous les alvéoles.",
+  "regle": "Correction de fiche : le massif gris est côté INTÉRIEUR de la lame isolée (sous les alvéoles), pas côté extérieur. Une face droite (extérieure, le long du guide), l'autre en biais ; épaisseur totale variable, de 10-22 cm aux dormants (coins amincis des redans ouest T49, T52, T53) à plus de 90 cm (massif ouest T45-T46, apex sous le P1 à 113.85 puis gris monolithique sans trait intérieur jusqu'à 115.6). ≠ P1 (épaisseur constante 44), ≠ P3 (sans alvéoles).",
   "premiere_vue": {
-   "troncon": "T36",
-   "debut_m": 99.1,
-   "fin_m": 99.31
+   "troncon": "T46",
+   "debut_m": 113.85,
+   "fin_m": 115.55
   }
  },
  {
