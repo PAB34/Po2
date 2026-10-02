@@ -25,6 +25,30 @@
    "etat": "en attente",
    "detail": "agent thermicien-plan ; réponse attendue dans locaux.reponse.json",
    "date": "2026-10-02 07:35:26"
+  },
+  {
+   "etape": "locaux",
+   "etat": "faits",
+   "detail": "9 pièces, dont 0 circulations",
+   "date": "2026-10-02 07:36:06"
+  },
+  {
+   "etape": "catalogue",
+   "etat": "repris",
+   "detail": "../../essais/R2-cloud/catalogue-R1.json",
+   "date": "2026-10-02 07:36:15"
+  },
+  {
+   "etape": "guide",
+   "etat": "fait",
+   "detail": "58 tronçons, 139.23 m",
+   "date": "2026-10-02 07:36:15"
+  },
+  {
+   "etape": "lot-1",
+   "etat": "en attente",
+   "detail": "agent thermicien-enveloppe ; réponse attendue dans reponse-lot-1.json",
+   "date": "2026-10-02 07:36:18"
   }
  ]
 }

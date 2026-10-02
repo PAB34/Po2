@@ -1,0 +1,1613 @@
+{
+ "version": 1,
+ "methode": "parcours_enveloppe_raster",
+ "uses_pdf_vectors": false,
+ "dpi": 300,
+ "echelle": 100,
+ "px_par_m": 118.11023622047246,
+ "page_px": [
+  9934,
+  7017
+ ],
+ "bande_m": {
+  "interieure": 0.9,
+  "exterieure": 0.4,
+  "recouvrement": 0.6
+ },
+ "perimetre_m": 139.23,
+ "troncons": [
+  {
+   "id": "T01",
+   "cote": 1,
+   "origine_px": [
+    2465.0,
+    1758.0
+   ],
+   "direction": [
+    1.0,
+    0.0
+   ],
+   "normale_ext": [
+    0.0,
+    -1.0
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 4.786488888888888,
+   "debut_m": 0.0,
+   "fin_m": 4.786,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T02",
+   "cote": 1,
+   "origine_px": [
+    2465.0,
+    1758.0
+   ],
+   "direction": [
+    1.0,
+    0.0
+   ],
+   "normale_ext": [
+    0.0,
+    -1.0
+   ],
+   "local_debut_m": 4.786488888888888,
+   "local_fin_m": 9.572977777777776,
+   "debut_m": 4.786,
+   "fin_m": 9.573,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T03",
+   "cote": 1,
+   "origine_px": [
+    2465.0,
+    1758.0
+   ],
+   "direction": [
+    1.0,
+    0.0
+   ],
+   "normale_ext": [
+    0.0,
+    -1.0
+   ],
+   "local_debut_m": 9.572977777777776,
+   "local_fin_m": 14.359466666666664,
+   "debut_m": 9.573,
+   "fin_m": 14.359,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T04",
+   "cote": 1,
+   "origine_px": [
+    2465.0,
+    1758.0
+   ],
+   "direction": [
+    1.0,
+    0.0
+   ],
+   "normale_ext": [
+    0.0,
+    -1.0
+   ],
+   "local_debut_m": 14.359466666666664,
+   "local_fin_m": 19.145955555555553,
+   "debut_m": 14.359,
+   "fin_m": 19.146,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T05",
+   "cote": 1,
+   "origine_px": [
+    2465.0,
+    1758.0
+   ],
+   "direction": [
+    1.0,
+    0.0
+   ],
+   "normale_ext": [
+    0.0,
+    -1.0
+   ],
+   "local_debut_m": 19.145955555555553,
+   "local_fin_m": 23.932444444444442,
+   "debut_m": 19.146,
+   "fin_m": 23.932,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T06",
+   "cote": 1,
+   "origine_px": [
+    2465.0,
+    1758.0
+   ],
+   "direction": [
+    1.0,
+    0.0
+   ],
+   "normale_ext": [
+    0.0,
+    -1.0
+   ],
+   "local_debut_m": 23.932444444444442,
+   "local_fin_m": 28.71893333333333,
+   "debut_m": 23.932,
+   "fin_m": 28.719,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T07",
+   "cote": 2,
+   "origine_px": [
+    5857.0,
+    1758.0
+   ],
+   "direction": [
+    -0.7863183388224225,
+    0.6178215519319035
+   ],
+   "normale_ext": [
+    0.6178215519319035,
+    0.7863183388224225
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 0.6029788571933697,
+   "debut_m": 28.719,
+   "fin_m": 29.322,
+   "piece": "terrasse de lecture"
+  },
+  {
+   "id": "T08",
+   "cote": 3,
+   "origine_px": [
+    5801.0,
+    1802.0
+   ],
+   "direction": [
+    0.0011061940134593088,
+    0.9999993881672151
+   ],
+   "normale_ext": [
+    0.9999993881672151,
+    -0.0011061940134593088
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 4.373640771174908,
+   "debut_m": 29.322,
+   "fin_m": 33.696,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T09",
+   "cote": 3,
+   "origine_px": [
+    5801.0,
+    1802.0
+   ],
+   "direction": [
+    0.0011061940134593088,
+    0.9999993881672151
+   ],
+   "normale_ext": [
+    0.9999993881672151,
+    -0.0011061940134593088
+   ],
+   "local_debut_m": 4.373640771174908,
+   "local_fin_m": 8.747281542349816,
+   "debut_m": 33.696,
+   "fin_m": 38.069,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T10",
+   "cote": 3,
+   "origine_px": [
+    5801.0,
+    1802.0
+   ],
+   "direction": [
+    0.0011061940134593088,
+    0.9999993881672151
+   ],
+   "normale_ext": [
+    0.9999993881672151,
+    -0.0011061940134593088
+   ],
+   "local_debut_m": 8.747281542349816,
+   "local_fin_m": 13.120922313524725,
+   "debut_m": 38.069,
+   "fin_m": 42.443,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T11",
+   "cote": 3,
+   "origine_px": [
+    5801.0,
+    1802.0
+   ],
+   "direction": [
+    0.0011061940134593088,
+    0.9999993881672151
+   ],
+   "normale_ext": [
+    0.9999993881672151,
+    -0.0011061940134593088
+   ],
+   "local_debut_m": 13.120922313524725,
+   "local_fin_m": 17.49456308469963,
+   "debut_m": 42.443,
+   "fin_m": 46.816,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T12",
+   "cote": 3,
+   "origine_px": [
+    5801.0,
+    1802.0
+   ],
+   "direction": [
+    0.0011061940134593088,
+    0.9999993881672151
+   ],
+   "normale_ext": [
+    0.9999993881672151,
+    -0.0011061940134593088
+   ],
+   "local_debut_m": 17.49456308469963,
+   "local_fin_m": 21.868203855874537,
+   "debut_m": 46.816,
+   "fin_m": 51.19,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T13",
+   "cote": 3,
+   "origine_px": [
+    5801.0,
+    1802.0
+   ],
+   "direction": [
+    0.0011061940134593088,
+    0.9999993881672151
+   ],
+   "normale_ext": [
+    0.9999993881672151,
+    -0.0011061940134593088
+   ],
+   "local_debut_m": 21.868203855874537,
+   "local_fin_m": 26.24184462704945,
+   "debut_m": 51.19,
+   "fin_m": 55.564,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T14",
+   "cote": 3,
+   "origine_px": [
+    5801.0,
+    1802.0
+   ],
+   "direction": [
+    0.0011061940134593088,
+    0.9999993881672151
+   ],
+   "normale_ext": [
+    0.9999993881672151,
+    -0.0011061940134593088
+   ],
+   "local_debut_m": 26.24184462704945,
+   "local_fin_m": 30.615485398224354,
+   "debut_m": 55.564,
+   "fin_m": 59.937,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T15",
+   "cote": 4,
+   "origine_px": [
+    5805.0,
+    5418.0
+   ],
+   "direction": [
+    -0.9840995171750194,
+    -0.17761796163646693
+   ],
+   "normale_ext": [
+    -0.17761796163646693,
+    0.9840995171750194
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 3.527421030850852,
+   "debut_m": 59.937,
+   "fin_m": 63.465,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T16",
+   "cote": 4,
+   "origine_px": [
+    5805.0,
+    5418.0
+   ],
+   "direction": [
+    -0.9840995171750194,
+    -0.17761796163646693
+   ],
+   "normale_ext": [
+    -0.17761796163646693,
+    0.9840995171750194
+   ],
+   "local_debut_m": 3.527421030850852,
+   "local_fin_m": 7.054842061701704,
+   "debut_m": 63.465,
+   "fin_m": 66.992,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T17",
+   "cote": 5,
+   "origine_px": [
+    4985.0,
+    5270.0
+   ],
+   "direction": [
+    0.01999600119960014,
+    -0.9998000599800071
+   ],
+   "normale_ext": [
+    -0.9998000599800071,
+    -0.01999600119960014
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 3.3873439322802095,
+   "debut_m": 66.992,
+   "fin_m": 70.38,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T18",
+   "cote": 6,
+   "origine_px": [
+    4993.0,
+    4870.0
+   ],
+   "direction": [
+    -0.9995220773430663,
+    -0.03091305393844535
+   ],
+   "normale_ext": [
+    0.03091305393844535,
+    -0.9995220773430663
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 3.286637425157275,
+   "debut_m": 70.38,
+   "fin_m": 73.666,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T19",
+   "cote": 7,
+   "origine_px": [
+    4605.0,
+    4858.0
+   ],
+   "direction": [
+    -0.03893150188475949,
+    0.9992418817088269
+   ],
+   "normale_ext": [
+    0.9992418817088269,
+    0.03893150188475949
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 2.6097118035863223,
+   "debut_m": 73.666,
+   "fin_m": 76.276,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T20",
+   "cote": 8,
+   "origine_px": [
+    4593.0,
+    5166.0
+   ],
+   "direction": [
+    -0.9929098869053521,
+    -0.11886949350275341
+   ],
+   "normale_ext": [
+    -0.11886949350275341,
+    0.9929098869053521
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 4.843406969846282,
+   "debut_m": 76.276,
+   "fin_m": 81.119,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T21",
+   "cote": 9,
+   "origine_px": [
+    4025.0,
+    5098.0
+   ],
+   "direction": [
+    -0.8199580836698828,
+    -0.5724235678450125
+   ],
+   "normale_ext": [
+    -0.5724235678450125,
+    0.8199580836698828
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 2.1890549883961845,
+   "debut_m": 81.119,
+   "fin_m": 83.308,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T22",
+   "cote": 10,
+   "origine_px": [
+    3813.0,
+    4950.0
+   ],
+   "direction": [
+    -0.9805806756909201,
+    -0.19611613513818404
+   ],
+   "normale_ext": [
+    -0.19611613513818404,
+    0.9805806756909201
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 0.8634339709683782,
+   "debut_m": 83.308,
+   "fin_m": 84.172,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T23",
+   "cote": 11,
+   "origine_px": [
+    3713.0,
+    4930.0
+   ],
+   "direction": [
+    -0.07387168551531177,
+    0.997267754456709
+   ],
+   "normale_ext": [
+    0.997267754456709,
+    0.07387168551531177
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 0.9169052101741184,
+   "debut_m": 84.172,
+   "fin_m": 85.089,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T24",
+   "cote": 12,
+   "origine_px": [
+    3705.0,
+    5038.0
+   ],
+   "direction": [
+    -0.983453188589073,
+    -0.1811624294769345
+   ],
+   "normale_ext": [
+    -0.1811624294769345,
+    0.983453188589073
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 1.3085862634495626,
+   "debut_m": 85.089,
+   "fin_m": 86.397,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T25",
+   "cote": 13,
+   "origine_px": [
+    3553.0,
+    5010.0
+   ],
+   "direction": [
+    -0.6448709392097829,
+    -0.7642914835078909
+   ],
+   "normale_ext": [
+    -0.7642914835078909,
+    0.6448709392097829
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 1.41795814387371,
+   "debut_m": 86.397,
+   "fin_m": 87.815,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T26",
+   "cote": 14,
+   "origine_px": [
+    3445.0,
+    4882.0
+   ],
+   "direction": [
+    -0.9838699100999074,
+    -0.17888543819998318
+   ],
+   "normale_ext": [
+    -0.17888543819998318,
+    0.9838699100999074
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 0.7572816883799287,
+   "debut_m": 87.815,
+   "fin_m": 88.573,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T27",
+   "cote": 15,
+   "origine_px": [
+    3357.0,
+    4866.0
+   ],
+   "direction": [
+    -0.8360479108370626,
+    0.5486564414868224
+   ],
+   "normale_ext": [
+    0.5486564414868224,
+    0.8360479108370626
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 1.2962574504232474,
+   "debut_m": 88.573,
+   "fin_m": 89.869,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T28",
+   "cote": 16,
+   "origine_px": [
+    3229.0,
+    4950.0
+   ],
+   "direction": [
+    -0.9904922731777517,
+    -0.13756837127468774
+   ],
+   "normale_ext": [
+    -0.13756837127468774,
+    0.9904922731777517
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 1.230903090327495,
+   "debut_m": 89.869,
+   "fin_m": 91.1,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T29",
+   "cote": 17,
+   "origine_px": [
+    3085.0,
+    4930.0
+   ],
+   "direction": [
+    0.0,
+    -1.0
+   ],
+   "normale_ext": [
+    -1.0,
+    -0.0
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 0.8466666666666666,
+   "debut_m": 91.1,
+   "fin_m": 91.946,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T30",
+   "cote": 18,
+   "origine_px": [
+    3085.0,
+    4830.0
+   ],
+   "direction": [
+    -0.9438583563660173,
+    -0.3303504247281061
+   ],
+   "normale_ext": [
+    -0.3303504247281061,
+    0.9438583563660173
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 0.7176218007341254,
+   "debut_m": 91.946,
+   "fin_m": 92.664,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T31",
+   "cote": 19,
+   "origine_px": [
+    3005.0,
+    4802.0
+   ],
+   "direction": [
+    -0.8574929257125442,
+    0.5144957554275266
+   ],
+   "normale_ext": [
+    -0.5144957554275266,
+    -0.8574929257125442
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 1.382324329204659,
+   "debut_m": 92.664,
+   "fin_m": 94.046,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T32",
+   "cote": 20,
+   "origine_px": [
+    2865.0,
+    4886.0
+   ],
+   "direction": [
+    -0.9858558466698174,
+    -0.16759549393386894
+   ],
+   "normale_ext": [
+    -0.16759549393386894,
+    0.9858558466698174
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 3.4352554464293075,
+   "debut_m": 94.046,
+   "fin_m": 97.482,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T33",
+   "cote": 21,
+   "origine_px": [
+    2465.0,
+    4818.0
+   ],
+   "direction": [
+    -0.01298591791445427,
+    -0.9999156794129789
+   ],
+   "normale_ext": [
+    -0.9999156794129789,
+    0.01298591791445427
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 2.607953237481241,
+   "debut_m": 97.482,
+   "fin_m": 100.09,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T34",
+   "cote": 21,
+   "origine_px": [
+    2465.0,
+    4818.0
+   ],
+   "direction": [
+    -0.01298591791445427,
+    -0.9999156794129789
+   ],
+   "normale_ext": [
+    -0.9999156794129789,
+    0.01298591791445427
+   ],
+   "local_debut_m": 2.607953237481241,
+   "local_fin_m": 5.215906474962482,
+   "debut_m": 100.09,
+   "fin_m": 102.697,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T35",
+   "cote": 22,
+   "origine_px": [
+    2457.0,
+    4202.0
+   ],
+   "direction": [
+    0.9992009587217894,
+    0.039968038348871575
+   ],
+   "normale_ext": [
+    0.039968038348871575,
+    -0.9992009587217894
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 0.8473437292831967,
+   "debut_m": 102.697,
+   "fin_m": 103.545,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T36",
+   "cote": 23,
+   "origine_px": [
+    2557.0,
+    4206.0
+   ],
+   "direction": [
+    -0.3960911114346502,
+    -0.9182112128712345
+   ],
+   "normale_ext": [
+    0.9182112128712345,
+    -0.3960911114346502
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 1.881048690964106,
+   "debut_m": 103.545,
+   "fin_m": 105.426,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T37",
+   "cote": 24,
+   "origine_px": [
+    2469.0,
+    4002.0
+   ],
+   "direction": [
+    -0.07297563831157798,
+    -0.9973337235915658
+   ],
+   "normale_ext": [
+    -0.9973337235915658,
+    0.07297563831157798
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 1.3922454445167982,
+   "debut_m": 105.426,
+   "fin_m": 106.818,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T38",
+   "cote": 25,
+   "origine_px": [
+    2457.0,
+    3838.0
+   ],
+   "direction": [
+    1.0,
+    0.0
+   ],
+   "normale_ext": [
+    0.0,
+    -1.0
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 0.8127999999999999,
+   "debut_m": 106.818,
+   "fin_m": 107.631,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T39",
+   "cote": 26,
+   "origine_px": [
+    2553.0,
+    3838.0
+   ],
+   "direction": [
+    -0.3632082040665476,
+    -0.9317080017359265
+   ],
+   "normale_ext": [
+    0.9317080017359265,
+    -0.3632082040665476
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 2.144591792289515,
+   "debut_m": 107.631,
+   "fin_m": 109.776,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T40",
+   "cote": 27,
+   "origine_px": [
+    2461.0,
+    3602.0
+   ],
+   "direction": [
+    -0.010752066611409407,
+    -0.9999421948610748
+   ],
+   "normale_ext": [
+    -0.9999421948610748,
+    0.010752066611409407
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 3.1497820735903472,
+   "debut_m": 109.776,
+   "fin_m": 112.925,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T41",
+   "cote": 28,
+   "origine_px": [
+    2457.0,
+    3230.0
+   ],
+   "direction": [
+    0.997630328422983,
+    -0.06880209161537815
+   ],
+   "normale_ext": [
+    -0.06880209161537815,
+    -0.997630328422983
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 0.9844661948939073,
+   "debut_m": 112.925,
+   "fin_m": 113.91,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T42",
+   "cote": 29,
+   "origine_px": [
+    2573.0,
+    3222.0
+   ],
+   "direction": [
+    0.0,
+    -1.0
+   ],
+   "normale_ext": [
+    -1.0,
+    -0.0
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 3.2850666666666664,
+   "debut_m": 113.91,
+   "fin_m": 117.195,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T43",
+   "cote": 30,
+   "origine_px": [
+    2573.0,
+    2834.0
+   ],
+   "direction": [
+    0.9999646936289543,
+    0.008403064652344154
+   ],
+   "normale_ext": [
+    0.008403064652344154,
+    -0.9999646936289543
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 4.030275627740062,
+   "debut_m": 117.195,
+   "fin_m": 121.225,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T44",
+   "cote": 31,
+   "origine_px": [
+    3049.0,
+    2838.0
+   ],
+   "direction": [
+    0.1757906384836575,
+    -0.984427575508482
+   ],
+   "normale_ext": [
+    0.984427575508482,
+    0.1757906384836575
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 0.963267070385409,
+   "debut_m": 121.225,
+   "fin_m": 122.188,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T45",
+   "cote": 32,
+   "origine_px": [
+    3069.0,
+    2726.0
+   ],
+   "direction": [
+    0.051878099986412074,
+    -0.9986534247384324
+   ],
+   "normale_ext": [
+    0.9986534247384324,
+    0.051878099986412074
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 2.6112495774160602,
+   "debut_m": 122.188,
+   "fin_m": 124.8,
+   "piece": "escalier"
+  },
+  {
+   "id": "T46",
+   "cote": 33,
+   "origine_px": [
+    3085.0,
+    2418.0
+   ],
+   "direction": [
+    -1.0,
+    0.0
+   ],
+   "normale_ext": [
+    0.0,
+    1.0
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 4.944533333333332,
+   "debut_m": 124.8,
+   "fin_m": 129.744,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T47",
+   "cote": 34,
+   "origine_px": [
+    2501.0,
+    2418.0
+   ],
+   "direction": [
+    0.045407660918649985,
+    0.9989685402102997
+   ],
+   "normale_ext": [
+    0.9989685402102997,
+    -0.045407660918649985
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 0.7458359664757986,
+   "debut_m": 129.744,
+   "fin_m": 130.49,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T48",
+   "cote": 35,
+   "origine_px": [
+    2505.0,
+    2506.0
+   ],
+   "direction": [
+    -0.09334070869305827,
+    -0.9956342260592882
+   ],
+   "normale_ext": [
+    -0.9956342260592882,
+    0.09334070869305827
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 3.265456243773601,
+   "debut_m": 130.49,
+   "fin_m": 133.755,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T49",
+   "cote": 36,
+   "origine_px": [
+    2469.0,
+    2122.0
+   ],
+   "direction": [
+    0.999133073092352,
+    0.04163054471218133
+   ],
+   "normale_ext": [
+    0.04163054471218133,
+    -0.999133073092352
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 0.8135052495903827,
+   "debut_m": 133.755,
+   "fin_m": 134.569,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T50",
+   "cote": 37,
+   "origine_px": [
+    2565.0,
+    2126.0
+   ],
+   "direction": [
+    -0.3939192985791677,
+    -0.9191450300180579
+   ],
+   "normale_ext": [
+    -0.9191450300180579,
+    0.3939192985791677
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 2.063366793482061,
+   "debut_m": 134.569,
+   "fin_m": 136.632,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T51",
+   "cote": 38,
+   "origine_px": [
+    2469.0,
+    1902.0
+   ],
+   "direction": [
+    -0.9965457582448796,
+    -0.08304547985373997
+   ],
+   "normale_ext": [
+    -0.08304547985373997,
+    0.9965457582448796
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 0.8156173394701981,
+   "debut_m": 136.632,
+   "fin_m": 137.448,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T52",
+   "cote": 39,
+   "origine_px": [
+    2373.0,
+    1894.0
+   ],
+   "direction": [
+    0.9771763639228009,
+    -0.2124296443310437
+   ],
+   "normale_ext": [
+    -0.2124296443310437,
+    -0.9771763639228009
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 0.7971266621783236,
+   "debut_m": 137.448,
+   "fin_m": 138.245,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "T53",
+   "cote": 40,
+   "origine_px": [
+    2465.0,
+    1874.0
+   ],
+   "direction": [
+    0.0,
+    -1.0
+   ],
+   "normale_ext": [
+    -1.0,
+    -0.0
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 0.9821333333333332,
+   "debut_m": 138.245,
+   "fin_m": 139.227,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir"
+  },
+  {
+   "id": "U01",
+   "cote": 6,
+   "origine_px": [
+    3072.000094,
+    2361.9993870000003
+   ],
+   "direction": [
+    0.9999965919810255,
+    0.0026107520629555523
+   ],
+   "normale_ext": [
+    -0.0026107520629555523,
+    0.9999965919810255
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 3.243,
+   "debut_m": 10006.753,
+   "fin_m": 10009.996,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir",
+   "adjacence": "non_chauffe",
+   "ligne": "face_interieure",
+   "bande_m": {
+    "interieure": 0.4,
+    "exterieure": 0.9
+   }
+  },
+  {
+   "id": "U02",
+   "cote": 6,
+   "origine_px": [
+    3072.000094,
+    2361.9993870000003
+   ],
+   "direction": [
+    0.9999965919810255,
+    0.0026107520629555523
+   ],
+   "normale_ext": [
+    -0.0026107520629555523,
+    0.9999965919810255
+   ],
+   "local_debut_m": 3.243,
+   "local_fin_m": 6.485,
+   "debut_m": 10009.996,
+   "fin_m": 10013.239,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir",
+   "adjacence": "non_chauffe",
+   "ligne": "face_interieure",
+   "bande_m": {
+    "interieure": 0.4,
+    "exterieure": 0.9
+   }
+  },
+  {
+   "id": "U03",
+   "cote": 7,
+   "origine_px": [
+    3838.0009000000005,
+    2363.999232
+   ],
+   "direction": [
+    -0.00382512086650664,
+    0.9999926841984179
+   ],
+   "normale_ext": [
+    -0.9999926841984179,
+    -0.00382512086650664
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 4.42,
+   "debut_m": 10013.239,
+   "fin_m": 10017.658,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir",
+   "adjacence": "non_chauffe",
+   "ligne": "face_interieure",
+   "bande_m": {
+    "interieure": 0.4,
+    "exterieure": 0.9
+   }
+  },
+  {
+   "id": "U04",
+   "cote": 11,
+   "origine_px": [
+    3755.9957300000005,
+    2884.001034
+   ],
+   "direction": [
+    -0.9999957258158321,
+    0.002923756157260021
+   ],
+   "normale_ext": [
+    -0.002923756157260021,
+    -0.9999957258158321
+   ],
+   "local_debut_m": 0.0,
+   "local_fin_m": 2.896,
+   "debut_m": 10018.43,
+   "fin_m": 10021.326,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir",
+   "adjacence": "gaine_technique",
+   "ligne": "face_interieure",
+   "bande_m": {
+    "interieure": 0.4,
+    "exterieure": 0.9
+   }
+  },
+  {
+   "id": "U05",
+   "cote": 11,
+   "origine_px": [
+    3755.9957300000005,
+    2884.001034
+   ],
+   "direction": [
+    -0.9999957258158321,
+    0.002923756157260021
+   ],
+   "normale_ext": [
+    -0.002923756157260021,
+    -0.9999957258158321
+   ],
+   "local_debut_m": 2.896,
+   "local_fin_m": 5.791,
+   "debut_m": 10021.326,
+   "fin_m": 10024.221,
+   "piece": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir",
+   "adjacence": "gaine_technique",
+   "ligne": "face_interieure",
+   "bande_m": {
+    "interieure": 0.4,
+    "exterieure": 0.9
+   }
+  }
+ ],
+ "batiment_px": [
+  [
+   2469.0,
+   2122.0
+  ],
+  [
+   2465.0,
+   2514.0
+  ],
+  [
+   2505.0,
+   2506.0
+  ],
+  [
+   2501.0,
+   2418.0
+  ],
+  [
+   3085.0,
+   2418.0
+  ],
+  [
+   3089.0,
+   2718.0
+  ],
+  [
+   3069.0,
+   2726.0
+  ],
+  [
+   3069.0,
+   2830.0
+  ],
+  [
+   3049.0,
+   2838.0
+  ],
+  [
+   2573.0,
+   2834.0
+  ],
+  [
+   2573.0,
+   3222.0
+  ],
+  [
+   2457.0,
+   3230.0
+  ],
+  [
+   2461.0,
+   3602.0
+  ],
+  [
+   2565.0,
+   3818.0
+  ],
+  [
+   2553.0,
+   3838.0
+  ],
+  [
+   2457.0,
+   3838.0
+  ],
+  [
+   2469.0,
+   4002.0
+  ],
+  [
+   2565.0,
+   4186.0
+  ],
+  [
+   2557.0,
+   4206.0
+  ],
+  [
+   2457.0,
+   4202.0
+  ],
+  [
+   2465.0,
+   4818.0
+  ],
+  [
+   2865.0,
+   4886.0
+  ],
+  [
+   2965.0,
+   4802.0
+  ],
+  [
+   3005.0,
+   4802.0
+  ],
+  [
+   3085.0,
+   4830.0
+  ],
+  [
+   3085.0,
+   4930.0
+  ],
+  [
+   3229.0,
+   4950.0
+  ],
+  [
+   3357.0,
+   4866.0
+  ],
+  [
+   3445.0,
+   4882.0
+  ],
+  [
+   3553.0,
+   5010.0
+  ],
+  [
+   3681.0,
+   5038.0
+  ],
+  [
+   3705.0,
+   5038.0
+  ],
+  [
+   3713.0,
+   4930.0
+  ],
+  [
+   3813.0,
+   4950.0
+  ],
+  [
+   4025.0,
+   5098.0
+  ],
+  [
+   4585.0,
+   5202.0
+  ],
+  [
+   4617.0,
+   5178.0
+  ],
+  [
+   4593.0,
+   5166.0
+  ],
+  [
+   4605.0,
+   4858.0
+  ],
+  [
+   4973.0,
+   4858.0
+  ],
+  [
+   4993.0,
+   4870.0
+  ],
+  [
+   4985.0,
+   5270.0
+  ],
+  [
+   5805.0,
+   5418.0
+  ],
+  [
+   5801.0,
+   1802.0
+  ],
+  [
+   5817.0,
+   1766.0
+  ],
+  [
+   5825.0,
+   1790.0
+  ],
+  [
+   5853.0,
+   1790.0
+  ],
+  [
+   5857.0,
+   1758.0
+  ],
+  [
+   2465.0,
+   1758.0
+  ],
+  [
+   2465.0,
+   1874.0
+  ],
+  [
+   2373.0,
+   1878.0
+  ],
+  [
+   2373.0,
+   1894.0
+  ],
+  [
+   2469.0,
+   1902.0
+  ],
+  [
+   2565.0,
+   2126.0
+  ],
+  [
+   2469.0,
+   2122.0
+  ]
+ ],
+ "trous_px": [],
+ "guide": "remplissage_exterieur",
+ "planches": [
+  {
+   "chemin": "/home/user/Po2/essais/R2-cloud/sorties/R2/enveloppe/enveloppe-01.png",
+   "complement": false,
+   "troncons": [
+    "T01",
+    "T02",
+    "T03",
+    "T04",
+    "T05",
+    "T06"
+   ]
+  },
+  {
+   "chemin": "/home/user/Po2/essais/R2-cloud/sorties/R2/enveloppe/enveloppe-02.png",
+   "complement": false,
+   "troncons": [
+    "T07",
+    "T08",
+    "T09",
+    "T10",
+    "T11",
+    "T12"
+   ]
+  },
+  {
+   "chemin": "/home/user/Po2/essais/R2-cloud/sorties/R2/enveloppe/enveloppe-03.png",
+   "complement": false,
+   "troncons": [
+    "T13",
+    "T14",
+    "T15",
+    "T16",
+    "T17",
+    "T18"
+   ]
+  },
+  {
+   "chemin": "/home/user/Po2/essais/R2-cloud/sorties/R2/enveloppe/enveloppe-04.png",
+   "complement": false,
+   "troncons": [
+    "T19",
+    "T20",
+    "T21",
+    "T22",
+    "T23",
+    "T24"
+   ]
+  },
+  {
+   "chemin": "/home/user/Po2/essais/R2-cloud/sorties/R2/enveloppe/enveloppe-05.png",
+   "complement": false,
+   "troncons": [
+    "T25",
+    "T26",
+    "T27",
+    "T28",
+    "T29",
+    "T30"
+   ]
+  },
+  {
+   "chemin": "/home/user/Po2/essais/R2-cloud/sorties/R2/enveloppe/enveloppe-06.png",
+   "complement": false,
+   "troncons": [
+    "T31",
+    "T32",
+    "T33",
+    "T34",
+    "T35",
+    "T36"
+   ]
+  },
+  {
+   "chemin": "/home/user/Po2/essais/R2-cloud/sorties/R2/enveloppe/enveloppe-07.png",
+   "complement": false,
+   "troncons": [
+    "T37",
+    "T38",
+    "T39",
+    "T40",
+    "T41",
+    "T42"
+   ]
+  },
+  {
+   "chemin": "/home/user/Po2/essais/R2-cloud/sorties/R2/enveloppe/enveloppe-08.png",
+   "complement": false,
+   "troncons": [
+    "T43",
+    "T44",
+    "T45",
+    "T46",
+    "T47",
+    "T48"
+   ]
+  },
+  {
+   "chemin": "/home/user/Po2/essais/R2-cloud/sorties/R2/enveloppe/enveloppe-09.png",
+   "complement": false,
+   "troncons": [
+    "T49",
+    "T50",
+    "T51",
+    "T52",
+    "T53"
+   ]
+  },
+  {
+   "chemin": "/home/user/Po2/essais/R2-cloud/sorties/R2/enveloppe/enveloppe-10.png",
+   "complement": true,
+   "troncons": [
+    "U01",
+    "U02",
+    "U03",
+    "U04",
+    "U05"
+   ]
+  }
+ ],
+ "plan_guide": "/home/user/Po2/essais/R2-cloud/sorties/R2/enveloppe/enveloppe-guide.jpg"
+}
