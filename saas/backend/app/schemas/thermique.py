@@ -237,8 +237,12 @@ class EtudeOperation(BaseModel):
         "element_reactiver",
         "pont_ajouter",
         "paroi_retracer",
+        "paroi_extremite",
     ]
     id: str | None = None
+    # Extrémité d'un mur déplacée (D249) : laquelle, et la face intérieure à ce bout (avec `abscisse_m`).
+    extremite: Literal["debut", "fin"] | None = None
+    nu_interieur_cm: float | None = None
     # Mur retracé (D240) : début et fin le long de la façade, et la composition copiée.
     debut_m: float | None = None
     fin_m: float | None = None

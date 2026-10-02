@@ -62,6 +62,16 @@ supprimé quitte le plan à l'instant (l'écran retire son dessin, comme le serv
 tout seul, en arrière-plan ; un geste fait pendant l'enregistrement n'est pas perdu. Les autres gestes (valider une
 composition…) gardent encore « Enregistrer ». Les poignées (D249) viennent ensuite.
 
+**D249 fait le 2026-10-02 (dans le modèle actuel, sans attendre D248)** : le repère d'un tronçon (abscisse le long
+de la façade, profondeur perpendiculaire) couvre tout le plan. Une extrémité lâchée n'importe où devient donc
+exactement la borne du mur et sa face intérieure à ce bout. On peut raccourcir, allonger et changer l'angle.
+Nouveau geste serveur `paroi_extremite` (épaisseur gardée au bout déplacé, bornes d'origine conservées dans
+`releve_origine`) ; la ligne de métré prend sa longueur vraie (en biais). À l'écran : mur désigné à l'étape Parois
+→ deux ronds ; glisser = ligne en pointillé et longueur en direct ; **aimant** sur le bout d'un autre mur (rond
+plein), **Maj** pour le couper ; lâcher = visible aussitôt, enregistré en arrière-plan (D252). Limite connue : un
+geste déjà enregistré ne s'annule plus par Ctrl+Z (on revient par l'historique des versions). Restent : ajouter
+un sommet (mur à plusieurs pans), « Créer un mur » (D250), côté extérieur (D251).
+
 ## Ce que cela change ailleurs (à traiter dans le même lot ou noté)
 
 - **Découpage pièce par pièce (D18 à D20) : on le garde.** Il coupe aujourd'hui les intervalles d'un tronçon. Il

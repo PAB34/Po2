@@ -215,7 +215,8 @@ export function TileSheetViewer({
       return;
     }
     let grab = false;
-    if (event.button === 0 && tool !== "pan" && onGrab) {
+    // D249 : on attrape aussi en mode « pan » (poignée d'un mur désigné) ; sinon le glisser déplace le plan.
+    if (event.button === 0 && onGrab) {
       const point = toPdf(event.clientX, event.clientY);
       grab = point !== null && onGrab(point, pixelsPerPt, modifiers(event));
     }

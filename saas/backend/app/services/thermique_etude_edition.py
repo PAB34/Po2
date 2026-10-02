@@ -43,6 +43,8 @@ OPERATIONS = (
     "pont_ajouter",
     # Un pan de mur retracé d'un bout à l'autre avec une composition copiée (D240).
     "paroi_retracer",
+    # Une extrémité de la ligne de métré d'un mur, déplacée librement sur le plan (D249).
+    "paroi_extremite",
 )
 OPERATIONS_ELEMENT = tuple(nom for nom in OPERATIONS if nom.startswith("element_"))
 # Un contour édité est simplifié sous cette tolérance, en unités du repère 0..1000 (~5 cm).
@@ -252,6 +254,8 @@ def appliquer(contenu: dict[str, Any], operations: list[dict[str, Any]]) -> dict
             _ajouter_pont(resultat, operation)
         elif operation["type"] == "paroi_retracer":
             retracer_paroi(resultat["enveloppe"]["releve_brut"], resultat["enveloppe"]["manifeste"], operation)
+        elif operation["type"] == "paroi_extremite":
+            deplacer_extremite(resultat, operation)
         elif operation["type"] == "modifier":
             _modifier(resultat["analyse"], operation)
         elif operation["type"] == "couper":
@@ -454,6 +458,60 @@ def retracer_paroi(releve_brut: dict[str, Any], manifeste: dict[str, Any], opera
         prises.add((nouveau["troncon"], nouveau["debut_m"], nouveau["fin_m"]))
     elements.extend(nouveaux)
     return nouveaux
+
+
+LONGUEUR_MUR_MIN_M = 0.05
+
+
+def deplacer_extremite(contenu: dict[str, Any], operation: dict[str, Any]) -> dict[str, Any]:
+    """Déplace une extrémité de la ligne de métré d'un mur, librement sur le plan (D249).
+
+    Le repère d'un tronçon (abscisse le long de la façade, profondeur perpendiculaire) couvre tout le plan :
+    le point lâché par le thermicien devient la borne (début ou fin) et la face intérieure à ce bout. Le mur
+    garde son épaisseur à ce bout ; changer la face intérieure d'un seul bout change l'angle du mur.
+    """
+    ref = operation.get("element")
+    if not isinstance(ref, dict):
+        raise ThermiqueError("Le mur à modifier n'est pas désigné.")
+    extremite = operation.get("extremite")
+    if extremite not in ("debut", "fin"):
+        raise ThermiqueError("Dites quelle extrémité du mur déplacer : son début ou sa fin.")
+    try:
+        abscisse = round(float(operation["abscisse_m"]), 3)
+        face = round(float(operation["nu_interieur_cm"]), 1)
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ThermiqueError("La nouvelle position de l'extrémité est incomplète.") from exc
+    element = elements_releve.trouver(contenu, ref)
+    if element.get("exclu") or element.get("type") != "paroi":
+        raise ThermiqueError("Seule la ligne d'un mur actif se modifie ainsi.")
+    ext, inte = float(element["nu_exterieur_cm"]), float(element["nu_interieur_cm"])
+    ext_fin = float(element.get("nu_exterieur_fin_cm", ext))
+    inte_fin = float(element.get("nu_interieur_fin_cm", inte))
+    origine = element.setdefault("releve_origine", {})
+    origine.setdefault("bornes", [element["debut_m"], element["fin_m"]])
+    for champ, valeur in (("nu_exterieur_cm", ext), ("nu_interieur_cm", inte),
+                          ("nu_exterieur_fin_cm", ext_fin), ("nu_interieur_fin_cm", inte_fin)):
+        origine.setdefault(champ, valeur)
+    if extremite == "debut":
+        debut, fin = abscisse, float(element["fin_m"])
+        nouveaux = {"nu_interieur_cm": face, "nu_exterieur_cm": round(face + ext - inte, 1)}
+    else:
+        debut, fin = float(element["debut_m"]), abscisse
+        nouveaux = {"nu_interieur_fin_cm": face, "nu_exterieur_fin_cm": round(face + ext_fin - inte_fin, 1)}
+    if fin - debut < LONGUEUR_MUR_MIN_M:
+        raise ThermiqueError("Le mur deviendrait trop court, ou ses deux extrémités se croiseraient.")
+    # Les deux bouts sont écrits explicitement : sans valeur de fin, la fin suivrait le début déplacé.
+    element.update({"nu_exterieur_fin_cm": ext_fin, "nu_interieur_fin_cm": inte_fin, **nouveaux})
+    prises = {(e.get("troncon"), e.get("debut_m"), e.get("fin_m")) for e in _elements_releve(contenu) if e is not element}
+    while (element["troncon"], round(debut, 3), round(fin, 3)) in prises:
+        fin += 0.001
+    element["debut_m"], element["fin_m"] = round(debut, 3), round(fin, 3)
+    element.update({"corrige": True, "a_verifier": False})
+    return element
+
+
+def _elements_releve(contenu: dict[str, Any]) -> list[dict[str, Any]]:
+    return contenu["enveloppe"]["releve_brut"]["elements"]
 
 
 def exposer_menuiseries(releve_brut: dict[str, Any], manifeste: dict[str, Any], nord_deg: float | None) -> None:

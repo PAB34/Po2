@@ -3478,6 +3478,35 @@ circle.th-seg--measure {
   pointer-events: none;
 }
 
+/* D249 : poignées de la ligne de métré du mur désigné. */
+.th-poignees {
+  pointer-events: none;
+}
+.th-poignees__rond {
+  fill: #fff;
+  stroke: #0f766e;
+  stroke-width: 2.5px;
+}
+.th-poignees__rond.is-active {
+  fill: #ccfbf1;
+}
+.th-poignees__rond.is-aimante {
+  fill: #0f766e;
+}
+.th-poignees__ligne {
+  stroke: #0f766e;
+  stroke-width: 3px;
+  stroke-dasharray: 6 4;
+}
+.th-poignees__longueur {
+  fill: #0f766e;
+  font-size: 12px;
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 3px;
+}
+
 /* D243 : la composition d'un mur, couche par couche. */
 .th-composition__couches {
   display: grid;

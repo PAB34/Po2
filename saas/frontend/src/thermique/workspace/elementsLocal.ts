@@ -6,6 +6,7 @@ import type {
   StudyReleveElement,
 } from "../api";
 import { faitPartieDe, memeElement, refDeElement } from "./elements";
+import { appliquerExtremite } from "./murs";
 import { appliquerAjout } from "./pontsAjoutes";
 
 /**
@@ -73,6 +74,10 @@ export function appliquerEnLocal(content: StudyContent, operation: StudyOperatio
   // Un pont posé à la main s'ajoute aussi dans l'écran, dès que sa position est connue (P5, D164).
   if (operation.type === "pont_ajouter") {
     return appliquerAjout(content, operation);
+  }
+  // D249 : une extrémité de mur déplacée, ligne de métré redessinée aussitôt.
+  if (operation.type === "paroi_extremite") {
+    return appliquerExtremite(content, operation).content;
   }
   if (!operation.type.startsWith("element_")) {
     return content;

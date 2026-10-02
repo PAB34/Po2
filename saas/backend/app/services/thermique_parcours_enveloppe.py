@@ -863,7 +863,8 @@ def reprojeter(brut: dict[str, Any], manifeste: dict[str, Any], analyse: dict[st
                 "composant": composant,
                 "epaisseur_cm": round(ext - inte, 1),
                 "epaisseur_fin_cm": round(ext_fin - inte_fin, 1),
-                "longueur_m": round(longueur, 3),
+                # D249 : un mur dont une extrémité a été déplacée peut être en biais : longueur vraie de la ligne.
+                "longueur_m": round(math.hypot(longueur, (inte_fin - inte) / 100), 3),
             })
             fiche = parois.setdefault(libelle, {"composition": element["couches"], "epaisseur_cm": round(ext - inte, 1),
                                                 "lineaire_m": 0.0, "troncons": set(), "pieces": set()})

@@ -12,6 +12,7 @@ import {
 import { appliquerEnLocal, refusDeCorrection } from "./elementsLocal";
 import { annulerOperation, rejouerOperations, retablirOperation } from "./elementsHistory";
 import { memeElement, refDeElement } from "./elements";
+import { appliquerExtremite, type GesteExtremite } from "./murs";
 import { preparerAjout } from "./pontsAjoutes";
 import { studyQueryKey } from "./study";
 
@@ -229,9 +230,29 @@ export function useStudyElements({
     [apply],
   );
 
+  /**
+   * Déplace une extrémité de la ligne de métré du mur désigné (D249) : visible à l'instant, le mur reste
+   * désigné sous sa nouvelle identité (ses bornes ont changé), l'enregistrement part tout seul (D252).
+   */
+  const deplacerExtremite = useCallback(
+    (geste: GesteExtremite) => {
+      const base = localRef.current ?? study?.content;
+      if (!base) return;
+      const { ref } = appliquerExtremite(base, geste);
+      if (!ref || !apply(geste)) {
+        setMessage("Ce mur ne peut plus être modifié ainsi.");
+        return;
+      }
+      setSelected(ref);
+      fileEnregistrement.current = fileEnregistrement.current.then(() => saveRef.current());
+    },
+    [apply, study],
+  );
+
   return {
     selected,
     select: setSelected,
+    deplacerExtremite,
     /** Étude à afficher : celle que les gestes en attente décrivent, sinon celle en base. */
     shown: local && study ? { ...study, content: local } : study,
     pending: operations.length,

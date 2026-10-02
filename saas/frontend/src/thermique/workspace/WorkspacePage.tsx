@@ -4,7 +4,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../../providers/AuthProvider";
 import { thermiqueApi, type CorrectionDeVue, type HautDeVue, type PdfPoint, type StudyElementRef, type ProjectDetail, type Sheet, type Study, type VueCoupe } from "../api";
-import { TileSheetViewer, type ViewerTool, type ViewerView } from "../components/TileSheetViewer";
+import { TileSheetViewer, type PickEvent, type ViewerTool, type ViewerView } from "../components/TileSheetViewer";
 import { STATUS_LABELS } from "../natures";
 import { allSheets, projectQueryKey, projectsQueryKey } from "../projectCache";
 import { DocumentsPanel } from "./DocumentsPanel";
@@ -41,6 +41,8 @@ import { NiveauFantome, PointsDeCalage } from "./NiveauFantome";
 import { appliquer, calageAEnregistrer, correspondance, inverser, niveauxVoisins } from "./superposition";
 import { useStudyEdition } from "./useStudyEdition";
 import { useStudyElements } from "./useStudyElements";
+import { boutLePlusProche, extremitesDuMur, gesteExtremite, longueurEntre, type Extremite } from "./murs";
+import { PoigneesDuMur } from "./PoigneesDuMur";
 import { cibleEditable } from "./elementsHistory";
 import { peutAnnulerEditionAvecEchap } from "./edition";
 import { hauteursQueryKey, NATURE_LABELS, otherLocalNatures, roomAt, sortedStudyRooms, studyQueryKey } from "./study";
@@ -93,6 +95,9 @@ const PRISE_ELEMENT_PX = 6;
 const PRISE_ELEMENT_PAROIS_PX = 10;
 // La pastille d'un pont fait 5 px de rayon : on vise un peu plus large pour l'attraper sans peine.
 const PRISE_PONT_PX = 8;
+// D249 : prise d'une poignée de mur et portée de l'aimant, en pixels écran.
+const PRISE_POIGNEE_PX = 12;
+const AIMANT_POIGNEE_PX = 14;
 // À l'étape des ponts, rien d'autre n'est attrapable : on vise large (D156).
 const PRISE_PONT_ETAPE_PX = 18;
 // Serrage du plan sur le pont en cours, en multiple du cadrage ajusté : de quoi voir le coin et ses
@@ -555,6 +560,49 @@ export function WorkspacePage() {
     window.addEventListener("keydown", supprimer);
     return () => window.removeEventListener("keydown", supprimer);
   }, [murDesigne, editionState.draft, elementsState]);
+  // D249 : le mur désigné à l'étape des parois montre ses deux extrémités ; on les glisse librement.
+  const murAPoignees = murDesigne?.type === "paroi" ? murDesigne : null;
+  const extremites = shownStudy && murAPoignees ? extremitesDuMur(shownStudy.content, murAPoignees) : null;
+  const [glisse, setGlisse] = useState<{
+    extremite: Extremite;
+    point: PdfPoint;
+    longueur_m: number | null;
+    aimante: boolean;
+    pixelsPerPt: number;
+  } | null>(null);
+  const attraperExtremite = (point: PdfPoint, pixelsPerPt: number): boolean => {
+    if (!extremites || editionState.draft) return false;
+    const prise = PRISE_POIGNEE_PX / pixelsPerPt;
+    const extremite = (["debut", "fin"] as const).find(
+      (bout) => Math.hypot(extremites[bout][0] - point[0], extremites[bout][1] - point[1]) <= prise,
+    );
+    if (!extremite) return false;
+    setGlisse({ extremite, point: extremites[extremite], longueur_m: null, aimante: false, pixelsPerPt });
+    return true;
+  };
+  const glisserExtremite = (point: PdfPoint, event: PickEvent) => {
+    if (!glisse || !shownStudy || !murAPoignees || !extremites) return;
+    // Aimant (D249) : l'extrémité s'accroche au bout d'un autre mur, pour fermer les angles ; Maj le coupe.
+    const cible = event.shiftKey
+      ? null
+      : boutLePlusProche(shownStudy.content, murAPoignees, point, AIMANT_POIGNEE_PX / glisse.pixelsPerPt);
+    const pose = cible ?? point;
+    const autre = extremites[glisse.extremite === "debut" ? "fin" : "debut"];
+    setGlisse({ ...glisse, point: pose, aimante: Boolean(cible), longueur_m: longueurEntre(shownStudy.content, murAPoignees, autre, pose) });
+  };
+  const lacherExtremite = () => {
+    const fini = glisse;
+    setGlisse(null);
+    if (!fini || !shownStudy || !murAPoignees || !extremites) return;
+    const depart = extremites[fini.extremite];
+    if (Math.hypot(depart[0] - fini.point[0], depart[1] - fini.point[1]) * fini.pixelsPerPt < 2) return;
+    const geste = gesteExtremite(shownStudy.content, murAPoignees, fini.extremite, fini.point);
+    if (typeof geste === "string") {
+      setModeleMessage(geste);
+      return;
+    }
+    elementsState.deplacerExtremite(geste);
+  };
   const pontCourant =
     etape === "ponts" && shownStudy && elementCourant ? pontDeElement(shownStudy.content, elementCourant) : null;
   // Le côté désigné, s'il est toujours le même côté du local ouvert. Pas à l'étape des ponts, où la
@@ -1199,9 +1247,11 @@ export function WorkspacePage() {
                     })();
                 setMenu(actions.length ? { x: ecran.x, y: ecran.y, actions } : null);
               }}
-              onGrab={editionState.handlers.onGrab}
-              onGrabMove={editionState.handlers.onGrabMove}
-              onGrabEnd={editionState.handlers.onGrabEnd}
+              onGrab={(point, pixelsPerPt, event) =>
+                attraperExtremite(point, pixelsPerPt) || editionState.handlers.onGrab(point, pixelsPerPt, event)
+              }
+              onGrabMove={(point, event) => (glisse ? glisserExtremite(point, event) : editionState.handlers.onGrabMove(point))}
+              onGrabEnd={() => (glisse ? lacherExtremite() : editionState.handlers.onGrabEnd())}
               initialView={views.current.get(viewKey) ?? null}
               onViewChange={(view) => views.current.set(viewKey, view)}
               focus={focusPlan}
@@ -1319,6 +1369,9 @@ export function WorkspacePage() {
                               elementCourant?.type === "menuiserie" ? baieDeLElement(shownStudy.content, elementCourant) : undefined
                             }
                           />
+                      )}
+                      {!editionState.draft && extremites && (
+                        <PoigneesDuMur extremites={extremites} glisse={glisse} toScreen={toScreen} />
                       )}
                       {/* D221 : à l'étape des menuiseries, chacune porte sa cote, héritée du modèle posé. */}
                       {!editionState.draft && (etape === "menuiseries" || modeleAPoser) && (

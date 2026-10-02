@@ -734,3 +734,39 @@ def test_un_mur_que_l_agent_n_a_pas_mis_en_doute_est_tenu_pour_acquis():
 def test_valider_un_local_inconnu_est_refuse():
     with pytest.raises(ThermiqueError, match="introuvable"):
         edition.valider_local(_etude_a_valider(), {}, "L9")
+
+
+def test_une_extremite_de_mur_se_deplace_librement_et_passe_la_porte_du_serveur():
+    """D249 : le point lâché donne la borne et la face intérieure à ce bout ; l'épaisseur est gardée, l'autre
+    bout ne bouge pas. Le geste passe par le même chemin que le site (schéma, puis exclude_none)."""
+    from app.schemas.thermique import EtudeEnregistrement
+
+    corps = {
+        "operations": [
+            {"type": "paroi_extremite", "element": {"troncon": "T01", "debut_m": 0.0, "fin_m": 50.0},
+             "extremite": "fin", "abscisse_m": 42.5, "nu_interieur_cm": -80.0},
+        ],
+        "motif": "elements",
+        "valider": False,
+    }
+    gestes = [op.model_dump(exclude_none=True) for op in EtudeEnregistrement.model_validate(corps).operations]
+    resultat = edition.appliquer(_etude_avec_deux_elements(), gestes)
+    mur = resultat["enveloppe"]["releve_brut"]["elements"][0]
+    assert (mur["debut_m"], mur["fin_m"]) == (0.0, 42.5)
+    # Le bout déplacé : face intérieure à -80 cm, épaisseur de 50 cm gardée ; le début n'a pas bougé.
+    assert (mur["nu_interieur_fin_cm"], mur["nu_exterieur_fin_cm"]) == (-80.0, -30.0)
+    assert (mur["nu_interieur_cm"], mur["nu_exterieur_cm"]) == (-50, 0)
+    assert mur["corrige"] is True and mur["releve_origine"]["bornes"] == [0.0, 50.0]
+    # La ligne de métré suit : 42,5 m le long de la façade, 30 cm plus à l'intérieur au bout, donc en biais.
+    ligne = next(l for l in resultat["enveloppe"]["lignes_metre"] if l["source_parcours"]["fin_m"] == 42.5)
+    assert ligne["epaisseur_cm"] == 50 and ligne["longueur_m"] == pytest.approx(42.501, abs=0.001)
+
+
+def test_une_extremite_ne_peut_pas_croiser_l_autre_ni_viser_autre_chose_qu_un_mur():
+    contenu = _etude_avec_deux_elements()
+    with pytest.raises(ThermiqueError, match="trop court"):
+        edition.appliquer(contenu, [{"type": "paroi_extremite", "element": {"troncon": "T01", "debut_m": 0.0, "fin_m": 50.0},
+                                     "extremite": "debut", "abscisse_m": 60.0, "nu_interieur_cm": -50.0}])
+    with pytest.raises(ThermiqueError, match="mur actif"):
+        edition.appliquer(contenu, [{"type": "paroi_extremite", "element": {"troncon": "T01", "debut_m": 50.0, "fin_m": 100.0},
+                                     "extremite": "fin", "abscisse_m": 90.0, "nu_interieur_cm": -20.0}])

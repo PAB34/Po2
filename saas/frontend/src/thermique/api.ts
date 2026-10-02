@@ -457,7 +457,9 @@ export type StudyOperation =
       abscisse_m?: number;
     }
   /** Un pan de mur retracé d'un bout à l'autre (abscisses globales au parcours) avec une composition copiée (D240). */
-  | { type: "paroi_retracer"; debut_m: number; fin_m: number; modele: CompositionCopiee };
+  | { type: "paroi_retracer"; debut_m: number; fin_m: number; modele: CompositionCopiee }
+  /** Une extrémité de la ligne de métré d'un mur, déplacée librement sur le plan (D249). */
+  | { type: "paroi_extremite"; element: StudyElementRef; extremite: "debut" | "fin"; abscisse_m: number; nu_interieur_cm: number };
 
 /** La composition d'une paroi de référence, copiée au pinceau (D239). */
 export type CompositionCopiee = {
