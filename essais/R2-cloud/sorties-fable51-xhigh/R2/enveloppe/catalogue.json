@@ -68,15 +68,14 @@
    {
     "nature": "mur",
     "epaisseur_cm": 44,
-    "indice": "gris plein à hachure diagonale légère, sans alvéoles"
+    "indice": "gris plein sans alvéoles"
    }
   ],
-  "regle": "Remplissage gris sans rangée d'alvéoles, bordé de traits noirs épais, souvent en biais ; l'isolant de P1/P2 le quitte et part vers l'extérieur ou vers l'intérieur",
+  "regle": "Remplissage gris sans rangée d'alvéoles (parfois fines diagonales), bordé de traits noirs épais, souvent en biais ; l'isolant de P1/P2 le quitte. Sur R2 : bloc en L d'environ 1,1 x 0,9 m à l'angle sud-est de la terrasse de lecture (64.6-65.6 m), bras de 40-45 cm, sans isolant.",
   "premiere_vue": {
-   "troncon": "T16",
-   "debut_m": 62.39,
-   "fin_m": 63.21,
-   "autre_niveau": true
+   "troncon": "T18",
+   "debut_m": 64.6,
+   "fin_m": 65.01
   }
  },
  {
@@ -88,20 +87,19 @@
    {
     "nature": "vitrage",
     "epaisseur_cm": 4,
-    "indice": "double trait fin continu entre 0 et -5"
+    "indice": "double trait fin (autre niveau)"
    },
    {
     "nature": "autre",
     "epaisseur_cm": 25,
-    "indice": "trait fin intérieur à -25/-33 (nez de dalle ou tablette)"
+    "indice": "trait simple parallèle à -25/-33 (autre niveau)"
    }
   ],
-  "regle": "Double trait fin continu près du 0, avec un trait simple parallèle à -25 (nord) ou -33 (est) ; pas de remplissage gris ; interrompu par les cloisons ou les poteaux",
+  "regle": "Double trait fin continu près du 0 avec un trait simple parallèle à -25 (nord) ou -33 (est). Sur ce niveau, côté est (30.7 à 59.2 m), seul un trait fin continu à +30 est visible dans la bande ; le double trait vitrage est probablement hors bande (>+40, le platelage de la terrasse commence vers +65) : à confirmer avec une bande plus large. Paires de traits gris fins espacés de 25 cm tous les 2,1 m vers l'intérieur = poteaux ou meneaux à confirmer.",
   "premiere_vue": {
-   "troncon": "T02",
-   "debut_m": 4.32,
-   "fin_m": 7.31,
-   "autre_niveau": true
+   "troncon": "T10",
+   "debut_m": 35.1,
+   "fin_m": 39.87
   }
  },
  {
@@ -269,22 +267,21 @@
  },
  {
   "id": "X3",
-  "nom": "Potelets / claustra de rive de la petite terrasse",
+  "nom": "Potelets / claustra de rive de terrasse",
   "genre": "element_exterieur",
   "decision": "exclu",
   "couches": [
    {
     "nature": "autre",
     "epaisseur_cm": 25,
-    "indice": "carrés gris cernés de noir, alignés, espacés"
+    "indice": "carré gris cerné de noir"
    }
   ],
-  "regle": "Rangée de carrés gris cernés de noir, d'environ 20-25 cm, alignés sur la ligne guide entre +7 et -28, bordés par les hachures parallèles des lames de terrasse. Ce n'est pas PO1 : les carrés sont petits, en série et sans mur-rideau.",
+  "regle": "Rangée de carrés gris cernés de noir, 20 à 33 cm, alignés sur la ligne guide (entre +7 et -28), reliés par un trait fin ; en rive de la petite terrasse (bordés par les lames) et aussi en rive nord de la terrasse de lecture (R2, 28.4-29.2 m, sans lames adjacentes). Ce n'est pas PO1 : petits, en série, sans mur-rideau.",
   "premiere_vue": {
-   "troncon": "T21",
-   "debut_m": 73.83,
-   "fin_m": 74.68,
-   "autre_niveau": true
+   "troncon": "T06",
+   "debut_m": 28.3,
+   "fin_m": 28.75
   }
  },
  {
@@ -442,6 +439,51 @@
    "debut_m": 150.93,
    "fin_m": 151.13,
    "autre_niveau": true
+  }
+ },
+ {
+  "id": "X6",
+  "nom": "Platelage et lisse de rive de la terrasse de lecture",
+  "genre": "element_exterieur",
+  "decision": "exclu",
+  "couches": [],
+  "regle": "Lames de platelage (traits fins parallèles espacés d'environ 15 cm) bordées par la lisse de rive (double ou triple trait fin avec petits montants) ; la ligne guide passe dessus sur les côtés 5 à 8 (59.8-64.6 m). Ni carrés en série (X3) ni blocs pleins (X4) ; ne pas confondre avec les marches X2 (traits réguliers courts).",
+  "premiere_vue": {
+   "troncon": "T16",
+   "debut_m": 62.81,
+   "fin_m": 63.87
+  }
+ },
+ {
+  "id": "L9",
+  "nom": "Angle rentrant sud-est de la façade est sur la terrasse de lecture",
+  "genre": "liaison",
+  "decision": "a_confirmer",
+  "couches": [],
+  "regle": "Le trait fin de façade M1 (+30) s'épaissit (7 cm) de +40 à -55 au droit du rebord sud de la terrasse, sans retour gris le long du guide ; suivi du panneau vitré en biais M6 et d'un bloc P1 (gris + alvéoles) à -60/-90. Angle rentrant : le volume chauffé 5.3 se poursuit sous le rebord sud de la terrasse.",
+  "premiere_vue": {
+   "troncon": "T15",
+   "debut_m": 58.92,
+   "fin_m": 59.3
+  }
+ },
+ {
+  "id": "M6",
+  "nom": "Panneau vitré en biais à l'angle sud-est de la façade est",
+  "genre": "menuiserie",
+  "decision": "a_confirmer",
+  "couches": [
+   {
+    "nature": "vitrage",
+    "epaisseur_cm": 6,
+    "indice": "triple trait fin incliné"
+   }
+  ],
+  "regle": "Triple trait fin incliné d'environ 17° traversant la bande de +40 à -55 sur 0,5 m, terminé en bas par de petits dormants noirs posés sur un bloc P1. Court et isolé à l'angle sud-est (≠ M5 long derrière X4, ≠ M4 avec dormants répartis).",
+  "premiere_vue": {
+   "troncon": "T15",
+   "debut_m": 59.3,
+   "fin_m": 59.8
   }
  }
 ]
