@@ -13,6 +13,24 @@
    "etat": "en attente",
    "detail": "agent thermicien-plan ; réponse attendue dans passe-globale.reponse.json",
    "date": "2026-10-02 08:10:52"
+  },
+  {
+   "etape": "passe-globale",
+   "etat": "faite",
+   "detail": "55 objets",
+   "date": "2026-10-02 08:37:20"
+  },
+  {
+   "etape": "recalage",
+   "etat": "fait",
+   "detail": "9/14 pièces recalées, 1 espaces libres",
+   "date": "2026-10-02 08:38:59"
+  },
+  {
+   "etape": "locaux",
+   "etat": "en attente",
+   "detail": "agent thermicien-plan ; réponse attendue dans locaux.reponse.json",
+   "date": "2026-10-02 08:38:59"
   }
  ]
 }
