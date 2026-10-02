@@ -1,0 +1,1 @@
+{"etape": "Passe globale", "agent": "thermicien-plan", "models": ["claude-opus-5-5"], "effort": ["xhigh"], "duree_s": 1021, "usage": {"input_tokens": 6, "output_tokens": 765, "cache_read_input_tokens": 21572, "cache_creation_input_tokens": 26803, "cache_5m": 26803, "cache_1h": 0}}
