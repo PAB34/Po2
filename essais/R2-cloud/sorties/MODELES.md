@@ -7,3 +7,4 @@ Relevé dans la trace `subagents/agent-*.jsonl` de chaque appel (champ `"model"`
 | Passe globale | thermicien-plan | claude-opus-5-5 | 152 s |
 | Locaux | thermicien-plan | claude-opus-5-5 | 15 s |
 | Lot 1 | thermicien-enveloppe | claude-opus-5-5 | 136 s |
+| Lot 2 | thermicien-enveloppe | claude-opus-5-5 | 215 s |

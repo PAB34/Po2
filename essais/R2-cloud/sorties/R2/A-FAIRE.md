@@ -1,8 +1,8 @@
-# En attente de l'agent `thermicien-enveloppe` (lot-2)
+# En attente de l'agent `thermicien-enveloppe` (lot-3)
 
-1. Lancer l'agent `thermicien-enveloppe` avec, pour consigne, le contenu de `/home/user/Po2/essais/R2-cloud/sorties/R2/consigne-lot-2.md`.
-2. Sa réponse doit être un JSON conforme à `/home/user/Po2/essais/R2-cloud/sorties/R2/schema-lot-2.json` ; l'enregistrer telle quelle dans
-   `/home/user/Po2/essais/R2-cloud/sorties/R2/enveloppe/reponse-lot-2.json`.
+1. Lancer l'agent `thermicien-enveloppe` avec, pour consigne, le contenu de `/home/user/Po2/essais/R2-cloud/sorties/R2/consigne-lot-3.md`.
+2. Sa réponse doit être un JSON conforme à `/home/user/Po2/essais/R2-cloud/sorties/R2/schema-lot-3.json` ; l'enregistrer telle quelle dans
+   `/home/user/Po2/essais/R2-cloud/sorties/R2/enveloppe/reponse-lot-3.json`.
 3. Relancer (depuis `saas/backend`) :
 
 ```

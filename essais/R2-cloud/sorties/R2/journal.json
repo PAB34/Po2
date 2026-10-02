@@ -61,6 +61,18 @@
    "etat": "en attente",
    "detail": "agent thermicien-enveloppe ; réponse attendue dans reponse-lot-2.json",
    "date": "2026-10-02 07:39:34"
+  },
+  {
+   "etape": "lot-2",
+   "etat": "intégré",
+   "detail": "catalogue : 23 composants",
+   "date": "2026-10-02 07:43:54"
+  },
+  {
+   "etape": "lot-3",
+   "etat": "en attente",
+   "detail": "agent thermicien-enveloppe ; réponse attendue dans reponse-lot-3.json",
+   "date": "2026-10-02 07:43:57"
   }
  ]
 }
