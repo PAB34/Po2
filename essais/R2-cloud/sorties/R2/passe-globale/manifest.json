@@ -1,0 +1,116 @@
+{
+  "version": 1,
+  "method": "claude_code_agent_raster",
+  "uses_pdf_vectors": false,
+  "rotation_deg_ccw": 90,
+  "viewer_rotation_deg": 270,
+  "page_width_px": 4967,
+  "page_height_px": 3509,
+  "crop_box_px": [
+    828,
+    414,
+    3642,
+    3145
+  ],
+  "width_px": 2814,
+  "height_px": 2731,
+  "overview": "/home/user/Po2/essais/R2-cloud/sorties/R2/passe-globale/overview.jpg",
+  "tiles": [
+    {
+      "index": 1,
+      "path": "/home/user/Po2/essais/R2-cloud/sorties/R2/passe-globale/tile-1.jpg",
+      "box_px": [
+        0,
+        0,
+        1014,
+        1475
+      ],
+      "box_norm": [
+        0.0,
+        0.0,
+        360.341,
+        540.095
+      ]
+    },
+    {
+      "index": 2,
+      "path": "/home/user/Po2/essais/R2-cloud/sorties/R2/passe-globale/tile-2.jpg",
+      "box_px": [
+        862,
+        0,
+        1952,
+        1475
+      ],
+      "box_norm": [
+        306.326,
+        0.0,
+        693.674,
+        540.095
+      ]
+    },
+    {
+      "index": 3,
+      "path": "/home/user/Po2/essais/R2-cloud/sorties/R2/passe-globale/tile-3.jpg",
+      "box_px": [
+        1800,
+        0,
+        2814,
+        1475
+      ],
+      "box_norm": [
+        639.659,
+        0.0,
+        1000.0,
+        540.095
+      ]
+    },
+    {
+      "index": 4,
+      "path": "/home/user/Po2/essais/R2-cloud/sorties/R2/passe-globale/tile-4.jpg",
+      "box_px": [
+        0,
+        1256,
+        1014,
+        2731
+      ],
+      "box_norm": [
+        0.0,
+        459.905,
+        360.341,
+        1000.0
+      ]
+    },
+    {
+      "index": 5,
+      "path": "/home/user/Po2/essais/R2-cloud/sorties/R2/passe-globale/tile-5.jpg",
+      "box_px": [
+        862,
+        1256,
+        1952,
+        2731
+      ],
+      "box_norm": [
+        306.326,
+        459.905,
+        693.674,
+        1000.0
+      ]
+    },
+    {
+      "index": 6,
+      "path": "/home/user/Po2/essais/R2-cloud/sorties/R2/passe-globale/tile-6.jpg",
+      "box_px": [
+        1800,
+        1256,
+        2814,
+        2731
+      ],
+      "box_norm": [
+        639.659,
+        459.905,
+        1000.0,
+        1000.0
+      ]
+    }
+  ]
+}
