@@ -9,3 +9,4 @@ Relevé dans la trace `subagents/agent-*.jsonl` de chaque appel.
 | Lot 1 | thermicien-enveloppe | claude-opus-5-5 | xhigh | 598 s |
 | Lot 2 | thermicien-enveloppe | claude-opus-5-5 | xhigh | 708 s |
 | Lot 3 | thermicien-enveloppe | claude-opus-5-5 | xhigh | 1416 s |
+| Lot 4 | thermicien-enveloppe | claude-opus-5-5 | xhigh | 1689 s |
