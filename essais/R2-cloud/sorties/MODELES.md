@@ -9,3 +9,4 @@ Relevé dans la trace `subagents/agent-*.jsonl` de chaque appel (champ `"model"`
 | Lot 1 | thermicien-enveloppe | claude-opus-5-5 | 136 s |
 | Lot 2 | thermicien-enveloppe | claude-opus-5-5 | 215 s |
 | Lot 3 | thermicien-enveloppe | claude-opus-5-5 | 286 s |
+| Lot 4 | thermicien-enveloppe | claude-opus-5-5 | 71 s |

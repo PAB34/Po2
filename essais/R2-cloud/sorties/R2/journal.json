@@ -85,6 +85,30 @@
    "etat": "en attente",
    "detail": "agent thermicien-enveloppe ; réponse attendue dans reponse-lot-4.json",
    "date": "2026-10-02 07:49:30"
+  },
+  {
+   "etape": "lot-4",
+   "etat": "intégré",
+   "detail": "catalogue : 29 composants",
+   "date": "2026-10-02 07:51:29"
+  },
+  {
+   "etape": "restitution",
+   "etat": "faite",
+   "detail": "enveloppe.json",
+   "date": "2026-10-02 07:51:47"
+  },
+  {
+   "etape": "fichier-etude",
+   "etat": "écrit",
+   "detail": "etude-R2.json ; cohérence : attention (11 anomalie(s))",
+   "date": "2026-10-02 07:51:49"
+  },
+  {
+   "etape": "etude",
+   "etat": "terminée",
+   "detail": "/home/user/Po2/essais/R2-cloud/sorties/R2/A-FAIRE.md",
+   "date": "2026-10-02 07:51:49"
   }
  ]
 }

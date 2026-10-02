@@ -456,5 +456,88 @@
    "debut_m": 128.97,
    "fin_m": 129.05
   }
+ },
+ {
+  "id": "P5",
+  "nom": "Voile béton de cage d'escalier non isolé",
+  "genre": "paroi",
+  "decision": "a_confirmer",
+  "couches": [
+   {
+    "nature": "mur",
+    "epaisseur_cm": 22,
+    "indice": "gris plein entre deux traits noirs épais, sans alvéoles"
+   }
+  ],
+  "regle": "Bande grise d'environ 22 cm bordée de traits noirs épais, de 0 à +22, sans alvéoles. Elle borde la cage d'escalier côté pièce. Ce n'est pas P3, qui fait 44 cm et ne longe pas une cage ; ce n'est pas P1, qui a des alvéoles.",
+  "premiere_vue": {
+   "troncon": "U02",
+   "debut_m": 10010.0,
+   "fin_m": 10012.93
+  }
+ },
+ {
+  "id": "P6",
+  "nom": "Cloison mince des gaines techniques (ventilation, CVC, CF)",
+  "genre": "paroi",
+  "decision": "a_confirmer",
+  "couches": [
+   {
+    "nature": "autre",
+    "epaisseur_cm": 5,
+    "indice": "double trait fin de 0 à +5, sans remplissage"
+   }
+  ],
+  "regle": "Double trait fin d'environ 5 cm sur la ligne guide, sans gris, sous les locaux ventilation, CVC et CF. Elle est recoupée par des cloisons de 10 cm. Ce n'est pas un voile béton.",
+  "premiere_vue": {
+   "troncon": "U04",
+   "debut_m": 10019.57,
+   "fin_m": 10021.33
+  }
+ },
+ {
+  "id": "M6",
+  "nom": "Porte de la cage d'escalier",
+  "genre": "menuiserie",
+  "decision": "a_confirmer",
+  "couches": [
+   {
+    "nature": "cadre",
+    "epaisseur_cm": 7,
+    "indice": "dormant rectangulaire fin de 0 à +7"
+   }
+  ],
+  "regle": "Ouverture d'environ 97 cm dans le voile P5. Son arc d'ouverture est côté cage (en haut, avec le texte 1 UP CF1/2H+FP) et elle a un dormant fin sur le 0. Ce n'est pas M2 : la porte est intérieure, sur la cage d'escalier.",
+  "premiere_vue": {
+   "troncon": "U03",
+   "debut_m": 10015.53,
+   "fin_m": 10016.5
+  }
+ },
+ {
+  "id": "L10",
+  "nom": "Angle de la cage d'escalier P5 (rentrant pour la pièce)",
+  "genre": "liaison",
+  "decision": "a_confirmer",
+  "couches": [],
+  "regle": "Retour vertical gris plein, sans alvéoles, du voile P5 à l'angle de la cage : la pièce contourne le noyau. On le trouve aussi à l'about du voile est de la cage, dessiné gris plein sur toute la hauteur de la bande.",
+  "premiere_vue": {
+   "troncon": "U02",
+   "debut_m": 10012.93,
+   "fin_m": 10013.24
+  }
+ },
+ {
+  "id": "L11",
+  "nom": "About de cloison entre gaines techniques sur P6",
+  "genre": "liaison",
+  "decision": "a_confirmer",
+  "couches": [],
+  "regle": "Deux traits verticaux d'environ 10 cm d'écart qui montent depuis la cloison P6 vers l'extérieur et séparent deux gaines. Ce n'est pas L4 : il n'y a pas de mur-rideau.",
+  "premiere_vue": {
+   "troncon": "U04",
+   "debut_m": 10019.45,
+   "fin_m": 10019.57
+  }
  }
 ]
