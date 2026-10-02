@@ -7,6 +7,12 @@
    "etat": "en attente",
    "detail": "agent thermicien-plan ; réponse attendue dans passe-globale.reponse.json",
    "date": "2026-10-02 08:06:14"
+  },
+  {
+   "etape": "passe-globale",
+   "etat": "en attente",
+   "detail": "agent thermicien-plan ; réponse attendue dans passe-globale.reponse.json",
+   "date": "2026-10-02 08:10:52"
   }
  ]
 }
