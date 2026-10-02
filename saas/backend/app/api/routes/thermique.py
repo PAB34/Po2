@@ -507,7 +507,9 @@ def _reunir_les_menuiseries_une_fois(db: Session, sheet: ThermiqueSheet, etude: 
         if "enveloppe" not in contenu:
             return
         # Recalcul unique aussi pour une étude d'avant les lignes de métré (D242, 2026-10-02).
-        if contenu.get(MENUISERIES_REUNIES) and "lignes_metre" in contenu["enveloppe"]:
+        # … et d'avant les parois des locaux (D260, option C, 2026-10-02).
+        parois_presentes = all("parois" in (local.get("fiche") or {}) for local in contenu.get("locaux", []))
+        if contenu.get(MENUISERIES_REUNIES) and "lignes_metre" in contenu["enveloppe"] and parois_presentes:
             return
         transform, largeur, hauteur = _repere_de_la_planche(sheet, contenu)
         recalcule = edition.reconstruire(contenu)

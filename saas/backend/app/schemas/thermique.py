@@ -240,7 +240,11 @@ class EtudeOperation(BaseModel):
         "paroi_extremite",
         "paroi_creer",
         "paroi_couper",
+        "paroi_composer",
     ]
+    # Composition d'une paroi d'un local (D261) : le local et le tracé de la paroi (repère de la feuille).
+    local: str | None = None
+    trace: list[list[float]] | None = None
     id: str | None = None
     # Extrémité d'un mur déplacée (D249) : laquelle, et la face intérieure à ce bout (avec `abscisse_m`).
     extremite: Literal["debut", "fin"] | None = None

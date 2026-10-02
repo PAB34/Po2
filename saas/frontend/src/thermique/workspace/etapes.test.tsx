@@ -59,9 +59,9 @@ describe("chaque étape ne montre que ses objets (D155)", () => {
     expect(html).not.toContain("th-metric-pont");
   });
 
-  it("parois et menuiseries : les murs et les cotes, pas les ponts", () => {
+  it("parois : ni le relevé de l'IA ni les ponts, les parois des locaux se dessinent à part (option C, D262)", () => {
     const html = plan("enveloppe");
-    expect(html).toContain("th-metric-element");
+    expect(html).not.toContain("th-metric-element");
     expect(html).not.toContain("th-metric-pont");
   });
 
@@ -81,7 +81,7 @@ describe("chaque étape ne montre que ses objets (D155)", () => {
 
   it("les gestes suivent : fiche du local aux locaux, parois seules à leur étape, ponts seuls aux ponts", () => {
     expect(vueDeLEtape("locaux")).toMatchObject({ clic: "locaux", ficheLocal: true, listeElements: "aucune" });
-    expect(vueDeLEtape("enveloppe")).toMatchObject({ clic: "elements", ficheLocal: false, listeElements: "parois" });
+    expect(vueDeLEtape("enveloppe")).toMatchObject({ clic: "locaux", ficheLocal: false, listeElements: "aucune" });
     expect(vueDeLEtape("ponts")).toMatchObject({ clic: "ponts", ficheLocal: false, listeElements: "aucune" });
   });
 });

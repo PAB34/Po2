@@ -24,6 +24,7 @@ from app.services import thermique_etude_geometrie as geo
 from app.services import thermique_fiches_locaux as fiches_locaux
 from app.services import thermique_lecture_coupes as lecture_coupes
 from app.services import thermique_parcours_enveloppe as enveloppe
+from app.services import thermique_parois_locaux as parois_locaux
 from app.services.thermique import ThermiqueError
 from app.services.thermique_etudes import LOCAL_NATURES, _noms_locaux
 
@@ -49,6 +50,8 @@ OPERATIONS = (
     "paroi_creer",
     # Un point ajouté sur la ligne d'un mur : deux morceaux qui partagent ce sommet (D247).
     "paroi_couper",
+    # Option C (D255, D261) : la composition validee d'une paroi d'un local.
+    "paroi_composer",
 )
 OPERATIONS_ELEMENT = tuple(nom for nom in OPERATIONS if nom.startswith("element_"))
 # Un contour édité est simplifié sous cette tolérance, en unités du repère 0..1000 (~5 cm).
@@ -264,6 +267,8 @@ def appliquer(contenu: dict[str, Any], operations: list[dict[str, Any]]) -> dict
             creer_paroi(resultat, operation)
         elif operation["type"] == "paroi_couper":
             couper_paroi(resultat, operation)
+        elif operation["type"] == "paroi_composer":
+            parois_locaux.composer(resultat, operation)
         elif operation["type"] == "modifier":
             _modifier(resultat["analyse"], operation)
         elif operation["type"] == "couper":
@@ -648,7 +653,7 @@ def reconstruire(contenu: dict[str, Any]) -> dict[str, Any]:
     locaux = []
     for objet, nom in _noms_locaux(analyse):
         identifiant = str(objet.get("id") or "").strip()
-        fiche = par_nom_fiche.get(nom, {"piece": nom, "cotes": [], "alertes": []})
+        fiche = par_nom_fiche.get(nom, {"piece": nom, "cotes": [], "alertes": [], "parois": []})
         locaux.append(
             {
                 "id": identifiant,
@@ -664,6 +669,8 @@ def reconstruire(contenu: dict[str, Any]) -> dict[str, Any]:
             }
         )
 
+    # D261 : chaque paroi d'un local retrouve la composition validee qui lui correspond.
+    parois_locaux.affecter(locaux, resultat.get("compositions_parois", []), manifeste)
     resultat["locaux"] = locaux
     resultat["enveloppe"]["catalogue"] = copy.deepcopy(bibliotheque.get("composants", []))
     resultat["enveloppe"]["synthese_pieces"] = syntheses

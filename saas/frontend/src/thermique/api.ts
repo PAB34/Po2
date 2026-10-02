@@ -222,12 +222,35 @@ export type StudyBridge = {
   coefficient_angle?: number;
   reference_pont?: string | null;
 };
+/** Composition d'une paroi : couches de l'extérieur vers l'intérieur. */
+export type CompositionParoi = { composant: string | null; couches: StudyCouche[]; epaisseur_cm: number };
+/**
+ * Une paroi d'un local (option C, D260) : une portion droite de son contour, face intérieure. Elle porte la
+ * composition validée par le thermicien, ou la proposition tirée du relevé de l'IA.
+ */
+export type StudyParoiLocal = {
+  rang: number;
+  adjacence: string;
+  voisin?: string | null;
+  deperditif: boolean;
+  longueur_m: number;
+  epaisseur_cm: number;
+  orientation?: string;
+  trace: [number, number][];
+  trace_pdf?: PdfPoint[];
+  proposition: CompositionParoi | null;
+  composition: (CompositionParoi & { id: string }) | null;
+  /** Devant une menuiserie relevée, sans mur : la paroi est vitrée et se traite à l'étape Menuiseries. */
+  vitree?: boolean;
+};
 export type StudyRoomSheet = {
   piece: string;
   local: StudyLocalNature;
   surface_m2: number;
   perimetre_m: number;
   cotes: StudySide[];
+  /** D260 : les parois du local, une par arête du contour et par nature de ce qu'il y a derrière. */
+  parois?: StudyParoiLocal[];
   deperditif_m?: number;
   /** Longueur des côtés contre un espace extérieur à plancher (terrasse, balcon…) : liaison linéique (D161). */
   liaison_exterieur_m?: number;
@@ -474,7 +497,9 @@ export type StudyOperation =
       couches: StudyCouche[];
     }
   /** Un point ajouté sur la ligne d'un mur : deux morceaux qui partagent ce sommet (D247). */
-  | { type: "paroi_couper"; element: StudyElementRef; abscisse_m: number };
+  | { type: "paroi_couper"; element: StudyElementRef; abscisse_m: number }
+  /** La composition validée d'une paroi d'un local (option C, D261). */
+  | { type: "paroi_composer"; local: string; trace: [number, number][]; composant: string | null; couches: StudyCouche[] };
 
 /** La composition d'une paroi de référence, copiée au pinceau (D239). */
 export type CompositionCopiee = {

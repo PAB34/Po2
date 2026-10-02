@@ -92,6 +92,44 @@ grande partie du parcours de façade par l'IA pourrait être remplacée par vos 
   par côté avec reprise du relevé ; (3) menuiseries par côté ; (4) surfaces et premier livrable ; (5) retrait des
   lignes de métré et du découpage par tronçon.
 
+## Réponses du thermicien (2026-10-02)
+
+- **Option C retenue.** Pas de branche ni d'interrupteur : la nouvelle méthode remplace l'ancienne à l'étape
+  Parois, et **la version existante de chaque étude est gardée en base**.
+- Choix par défaut annoncés et non contestés : seuls les côtés déperditifs (extérieur, local non chauffé, vide)
+  reçoivent une composition ; un côté qui change de composition se coupe par des points (lot suivant) ; les gestes
+  sur les murs du relevé sortent de l'écran (code retiré à l'objectif 2b).
+
+## Lot C-1 — fait le 2026-10-02
+
+- **D259 — Sauvegarde.** Migration `0089` : pour chaque étude, une version « sauvegarde avant métré par côtés »
+  avec son **contenu complet** (relevé corrigé compris), restaurable par l'historique des versions.
+- **D260 — La paroi d'un local.** Chaque fiche de local porte ses `parois` : une par arête du contour **et** par
+  nature de ce qu'il y a derrière (une arête qui longe l'extérieur puis un local non chauffé donne deux parois).
+  Chacune a son tracé droit (face intérieure), sa longueur, son orientation, son adjacence, l'épaisseur sondée,
+  et la **proposition** tirée du relevé de l'IA (composition du mur relevé le plus proche, à moins de 90 cm).
+- **D261 — La composition validée** est rangée à part (`compositions_parois`) avec le local et le tracé de la paroi.
+  À chaque recalcul, elle se raccroche à la paroi du même local dont le milieu est à moins de 30 cm et la
+  direction parallèle : retoucher le contour ne la perd pas. Geste serveur `paroi_composer`.
+- **D262 — L'étape Parois** dessine les parois déperditives de tous les locaux : vert = composition validée,
+  orange = proposition à valider, rouge = rien de proposé. Un clic ouvre la fiche de la paroi (local, ce qu'il y a
+  derrière, longueur, orientation, composition éditable) ; « Valider » l'enregistre aussitôt ; « Appliquer aussi
+  aux N parois de même proposition ». Compteur : « N parois à composer sur M ».
+- **D263 — Paroi vitrée.** Sans mur relevé à moins de 90 cm mais devant une menuiserie : la paroi est **vitrée**
+  (bleue), elle se traite à l'étape Menuiseries et ne compte pas parmi les parois à composer. Une paroi vitrée
+  peut quand même recevoir une composition si elle est en partie opaque.
+- Les gestes sur les murs du relevé (supprimer, indéterminés, poignées, créer, ajouter un point) sont **retirés de
+  l'écran** (`GESTES_MURS_DU_RELEVE = false`) ; leur code part au nettoyage (objectif 2b).
+
+**Mesuré sur le R+1 (copie locale de l'étude, avant mise en ligne)** : 24 locaux, 404 parois dont **119
+déperditives** (166,23 m, contre 170,12 m de côtés : l'écart vient des bouts de moins de 15 cm écartés). Parmi
+elles : **75 opaques avec une composition proposée** (P1 ×53, P-L5-1 ×13, P4 ×9), **42 vitrées** (93,88 m),
+**2 à composer sans proposition** (0,71 m). Recalcul du niveau : 3,9 s.
+
+**Reste (lots suivants)** : couper une paroi par des points (composition qui change en cours de côté) ; menuiseries
+posées sur les parois (surfaces déduites) ; surfaces et premier tableau des déperditions ; contour précis
+(aimant entre locaux voisins, cloison commune).
+
 ## Questions
 
 1. **Option** : C vous convient-elle, ou préférez-vous A ou B ?

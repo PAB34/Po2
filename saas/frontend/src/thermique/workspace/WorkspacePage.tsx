@@ -54,6 +54,8 @@ import {
   type GesteExtremite,
 } from "./murs";
 import { PoigneesDuMur, TraceDuMur } from "./PoigneesDuMur";
+import { FicheParoi, ListeParoisDuLocal, ParoisDesLocaux } from "./ParoisDesLocaux";
+import { gesteComposition, paroiVisee, trouverParoi, type ParoiRef } from "./paroisLocaux";
 import { cibleEditable } from "./elementsHistory";
 import { peutAnnulerEditionAvecEchap } from "./edition";
 import { hauteursQueryKey, NATURE_LABELS, otherLocalNatures, roomAt, sortedStudyRooms, studyQueryKey } from "./study";
@@ -111,6 +113,9 @@ const PRISE_POIGNEE_PX = 12;
 const AIMANT_POIGNEE_PX = 14;
 // Deux bouts de murs à moins de ce nombre de pixels forment un sommet partagé, qui se glisse d'un seul geste.
 const SOMMET_PARTAGE_PX = 1.5;
+// Option C (D262) : les gestes sur les murs du relevé (créer, ajouter un point, indéterminés) sont retirés de
+// l'écran ; l'étape Parois compose les parois des locaux. Leur code sera retiré avec le nettoyage (objectif 2b).
+const GESTES_MURS_DU_RELEVE = false;
 // À l'étape des ponts, rien d'autre n'est attrapable : on vise large (D156).
 const PRISE_PONT_ETAPE_PX = 18;
 // Serrage du plan sur le pont en cours, en multiple du cadrage ajusté : de quoi voir le coin et ses
@@ -189,6 +194,8 @@ export function WorkspacePage() {
   // D250 : tracé d'un mur en cours (premier point posé, point sous le curseur pour l'aperçu).
   const [traceMur, setTraceMur] = useState<{ premier: PdfPoint | null; survol: PdfPoint | null } | null>(null);
   const [traceMessage, setTraceMessage] = useState<string | null>(null);
+  // Option C (D262) : la paroi de local ouverte à l'étape Parois.
+  const [paroiChoisie, setParoiChoisie] = useState<ParoiRef | null>(null);
   // Dès que le thermicien touche une case d'affichage, l'étape rend la main : c'est lui qui décide (Q6).
   const [calquesLibres, setCalquesLibres] = useState(false);
   // Niveau qu'on cherche à quitter alors que des corrections attendent (D111) : pas de départ silencieux.
@@ -276,6 +283,7 @@ export function WorkspacePage() {
         setModeleAPoser(null);
         setTraceMur(null);
         setTraceMessage(null);
+        setParoiChoisie(null);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -554,6 +562,7 @@ export function WorkspacePage() {
     const trouvee = etapes.find((item) => item.id === cible);
     setCalquesLibres(false);
     elementsState.select(null);
+    setParoiChoisie(null);
     setParams({ etape: cible, panneau: trouvee?.panneau ?? "fiche" });
   };
 
@@ -1115,6 +1124,16 @@ export function WorkspacePage() {
                   elementsState.creerMur(geste);
                   return;
                 }
+                // Option C (D262) : à l'étape Parois, un clic près d'une paroi d'un local l'ouvre.
+                if (etape === "enveloppe" && shownStudy) {
+                  const paroi = paroiVisee(shownStudy.content, point, PRISE_ELEMENT_PAROIS_PX / pixelsPerPt);
+                  if (paroi) {
+                    setParoiChoisie(paroi);
+                    setParams({ local: paroi.local, panneau: "fiche" });
+                    return;
+                  }
+                  setParoiChoisie(null);
+                }
                 // Hauteur mesurée dans une coupe : chaque local cliqué la reçoit (D211).
                 if (hauteurAPoser) {
                   const local = shownStudy ? roomAt(shownStudy.content.locaux, point) : null;
@@ -1262,7 +1281,7 @@ export function WorkspacePage() {
                       }
                       // D250, D247 : à l'étape des parois, le clic droit crée un mur ou ajoute un point sur un mur.
                       const actionsMurs: PlanAction[] = [];
-                      if (etape === "enveloppe" && shownStudy) {
+                      if (GESTES_MURS_DU_RELEVE && etape === "enveloppe" && shownStudy) {
                         actionsMurs.push({
                           cle: "creer-mur",
                           label: "Créer un mur à partir d'ici",
@@ -1493,6 +1512,9 @@ export function WorkspacePage() {
                           toScreen={toScreen}
                         />
                       )}
+                      {etape === "enveloppe" && !editionState.draft && (
+                        <ParoisDesLocaux content={shownStudy.content} choisie={paroiChoisie} toScreen={toScreen} />
+                      )}
                       {!editionState.draft && extremites && (
                         <PoigneesDuMur extremites={extremites} glisse={glisse} toScreen={toScreen} />
                       )}
@@ -1625,12 +1647,42 @@ export function WorkspacePage() {
                 <>
                   {/* Un élément désigné prend tout le bandeau : voir la fiche du local par-dessus noyait
                       l'information qu'on venait justement de demander. */}
-                  {!vue.ficheLocal && !selectedRoom && !elementsState.selected && (
+                  {!vue.ficheLocal && !selectedRoom && !elementsState.selected && etape !== "enveloppe" && (
                     <p className="th-muted">
                       Cliquez un mur ou une menuiserie sur le plan, ou ouvrez un local, pour vérifier ses parois.
                     </p>
                   )}
-                  {etape === "enveloppe" && shownStudy && !elementsState.selected && !editionState.draft && (
+                  {/* Option C (D262) : la fiche de la paroi choisie, sinon les parois du local ouvert. */}
+                  {etape === "enveloppe" && shownStudy && !editionState.draft &&
+                    (() => {
+                      const choisie = trouverParoi(shownStudy.content, paroiChoisie);
+                      if (choisie) {
+                        return (
+                          <FicheParoi
+                            content={shownStudy.content}
+                            room={choisie.room}
+                            paroi={choisie.paroi}
+                            busy={elementsState.busy}
+                            onRetour={() => setParoiChoisie(null)}
+                            onValider={(couches, composant, aussi) =>
+                              elementsState.gesteImmediat([
+                                gesteComposition(choisie.room, choisie.paroi, couches, composant),
+                                ...aussi.map((autre) => gesteComposition(autre.room, autre.paroi, couches, composant)),
+                              ])
+                            }
+                          />
+                        );
+                      }
+                      if (selectedRoom) return <ListeParoisDuLocal room={selectedRoom} onChoisir={setParoiChoisie} />;
+                      return (
+                        <p className="th-muted">
+                          Cliquez une paroi sur le plan : verte, composée ; orange, proposée par le relevé de l'IA ; rouge, à
+                          composer.
+                        </p>
+                      );
+                    })()}
+                  {etape === "enveloppe" && elementsState.message && <p className="th-alert">{elementsState.message}</p>}
+                  {GESTES_MURS_DU_RELEVE && etape === "enveloppe" && shownStudy && !elementsState.selected && !editionState.draft && (
                     <IndeterminesDuNiveau
                       content={shownStudy.content}
                       busy={elementsState.busy}

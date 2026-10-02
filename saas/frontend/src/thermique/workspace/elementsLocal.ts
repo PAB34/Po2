@@ -7,6 +7,7 @@ import type {
 } from "../api";
 import { faitPartieDe, memeElement, refDeElement } from "./elements";
 import { appliquerCoupe, appliquerCreation, appliquerExtremite } from "./murs";
+import { appliquerComposition } from "./paroisLocaux";
 import { appliquerAjout } from "./pontsAjoutes";
 
 /**
@@ -85,6 +86,10 @@ export function appliquerEnLocal(content: StudyContent, operation: StudyOperatio
   }
   if (operation.type === "paroi_couper") {
     return appliquerCoupe(content, operation);
+  }
+  // Option C (D261) : la composition d'une paroi d'un local, visible avant le recalcul.
+  if (operation.type === "paroi_composer") {
+    return appliquerComposition(content, operation);
   }
   if (!operation.type.startsWith("element_")) {
     return content;

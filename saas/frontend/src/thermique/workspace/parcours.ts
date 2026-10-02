@@ -1,6 +1,7 @@
 import type { HauteursDuPlan, Sheet, Study, StudyContent, StudyReleveElement, StudyRoom, VueCoupe } from "../api";
 import { estPont } from "./elements";
 import { baiesDuNiveau } from "./modeles";
+import { avancementParois } from "./paroisLocaux";
 import type { MetricsShow } from "./StudyMetrics";
 import { validatedRoomCount } from "./study";
 
@@ -203,11 +204,8 @@ export function parcours(
   const locaux = content.locaux.length;
   const valides = study ? validatedRoomCount(study) : 0;
   const sansHauteur = locauxSansHauteur(content, hauteurs).length;
-  // D243 : chaque mur passe devant le thermicien, qui valide sa composition (régime exigeant, comme les ponts).
-  const parois = avancement(
-    paroisDuNiveau(content).filter((element) => element.type === "paroi"),
-    true,
-  );
+  // Option C (D262) : chaque paroi déperditive d'un local passe devant le thermicien, qui valide sa composition.
+  const parois = avancementParois(content);
   const menuiseries = avancementMenuiseries(content);
   // Les ponts se jugent un par un, sans exception : voir `avancement`.
   const ponts = avancement(pontsDuNiveau(content), true);
@@ -228,12 +226,15 @@ export function parcours(
       id: "enveloppe",
       titre: "Parois",
       reste:
-        parois.restants === 0
-          ? `${pluriel(parois.total - parois.ecartes, "mur")} validés${parois.ecartes > 0 ? `, ${pluriel(parois.ecartes, "supprimé")}` : ""}`
-          : `${pluriel(parois.restants, "mur")} à valider sur ${parois.total - parois.ecartes}`,
+        parois.total === 0
+          ? "aucune paroi à composer"
+          : parois.restants === 0
+          ? `${pluriel(parois.total, "paroi")} composées`
+          : `${pluriel(parois.restants, "paroi")} à composer sur ${parois.total}`,
       etat: parois.restants === 0 ? "fait" : "en_cours",
       panneau: "fiche",
-      calques: { metres: true, ponts: false, elements: true, toutesCotes: false },
+      // Les parois des locaux se dessinent à part (D262) : ni cotes ni éléments du relevé.
+      calques: { metres: false, ponts: false, elements: false, toutesCotes: false },
     },
     {
       // D227 : les menuiseries ont leur étape, où rien d'autre ne se dessine ni ne s'attrape.
@@ -294,7 +295,8 @@ export function vueDeLEtape(etape: EtapeId): VueEtape {
     case "locaux":
       return { cotes: true, elements: false, ponts: false, clic: "locaux", ficheLocal: true, listeElements: "aucune", locauxDiscrets: false };
     case "enveloppe":
-      return { cotes: true, elements: true, ponts: false, clic: "elements", ficheLocal: false, listeElements: "parois", locauxDiscrets: true, famille: "parois" };
+      // Option C (D262) : on compose les parois des locaux ; le relevé de l'IA n'est plus dessiné ni attrapé ici.
+      return { cotes: false, elements: false, ponts: false, clic: "locaux", ficheLocal: false, listeElements: "aucune", locauxDiscrets: true, famille: "parois" };
     case "menuiseries":
       return { cotes: false, elements: true, ponts: false, clic: "elements", ficheLocal: false, listeElements: "menuiseries", locauxDiscrets: true, famille: "menuiseries" };
     case "ponts":

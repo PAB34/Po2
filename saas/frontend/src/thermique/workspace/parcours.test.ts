@@ -121,7 +121,8 @@ describe("le parcours du niveau", () => {
     );
     const enveloppe = etapes.find((item) => item.id === "enveloppe");
     const ponts = etapes.find((item) => item.id === "ponts");
-    expect(enveloppe?.reste).toBe("1 mur à valider sur 1");
+    // Option C (D262) : l'étape Parois compte les parois des locaux ; cette étude n'en a aucune.
+    expect(enveloppe?.reste).toBe("aucune paroi à composer");
     // Deux ponts douteux et un déjà confirmé : c'est bien deux qui restent.
     expect(ponts?.reste).toBe("2 ponts à juger sur 3");
     expect(ponts?.etat).toBe("en_cours");
@@ -146,9 +147,9 @@ describe("le parcours du niveau", () => {
       toutesCotes: false,
     });
     expect(etapes.find((item) => item.id === "enveloppe")?.calques).toEqual({
-      metres: true,
+      metres: false,
       ponts: false,
-      elements: true,
+      elements: false,
       toutesCotes: false,
     });
   });

@@ -150,7 +150,7 @@ def fiches(analyse: dict[str, Any], manifeste: dict[str, Any], brut: dict[str, A
         anneau = forme.exterior
         sondages = []
         coords = list(anneau.coords)
-        for a, b in zip(coords, coords[1:]):
+        for arete, (a, b) in enumerate(zip(coords, coords[1:])):
             longueur = math.dist(a, b)
             if longueur < 1:
                 continue
@@ -165,7 +165,9 @@ def fiches(analyse: dict[str, Any], manifeste: dict[str, Any], brut: dict[str, A
                 p = (a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t)
                 adjacence, voisin, epaisseur = _sonder(p, normale, px_par_m, nom, locaux, batiment, exterieurs, vides)
                 sondages.append({"p": p, "longueur": longueur / nombre / px_par_m, "adjacence": adjacence, "voisin": voisin,
-                                 "epaisseur": epaisseur, "normale": normale})
+                                 "epaisseur": epaisseur, "normale": normale,
+                                 # D260 : l'arête du contour et la part qu'en couvre ce sondage, pour les parois.
+                                 "arete": arete, "a": a, "b": b, "t0": k / nombre, "t1": (k + 1) / nombre})
         cotes = _regrouper(sondages)
         lignes_cotes = [LineString([s["p"] for s in c["sondages"]]) if len(c["sondages"]) > 1 else Point(c["sondages"][0]["p"])
                         for c in cotes]
@@ -232,8 +234,64 @@ def fiches(analyse: dict[str, Any], manifeste: dict[str, Any], brut: dict[str, A
             "liaison_plancher_m": synthese_local.get("liaison_plancher_m", 0.0),
             "a_completer": ["plancher bas", "plancher haut", "hauteur sous plafond (coupes)"],
             "alertes": alertes,
+            "parois": _parois(sondages, enveloppe_par_local.get(nom, []), nature, largeur, hauteur, px_par_m, nord_deg),
         })
     return resultat
+
+
+def _parois(sondages: list[dict[str, Any]], releve: list[dict[str, Any]], nature: str, largeur: float, hauteur: float,
+            px_par_m: float, nord_deg: float | None) -> list[dict[str, Any]]:
+    """Les parois d'un local (D260) : une par arête du contour et par nature de ce qu'il y a derrière.
+
+    Le tracé est la portion droite de l'arête (face intérieure, dimensions intérieures). La proposition vient du
+    mur relevé par l'IA le plus proche (moins de 90 cm) : sa composition, à valider par le thermicien.
+    """
+    groupes: list[list[dict[str, Any]]] = []
+    for s in sondages:
+        dernier = groupes[-1][-1] if groupes else None
+        if dernier and dernier["arete"] == s["arete"] and dernier["adjacence"] == s["adjacence"] and dernier["voisin"] == s["voisin"]:
+            groupes[-1].append(s)
+        else:
+            groupes.append([s])
+    murs = [e for e in releve if e.get("type") == "paroi"]
+    parois = []
+    for groupe in groupes:
+        premier, dernier = groupe[0], groupe[-1]
+        a, b = premier["a"], premier["b"]
+        p0 = (a[0] + (b[0] - a[0]) * premier["t0"], a[1] + (b[1] - a[1]) * premier["t0"])
+        p1 = (a[0] + (b[0] - a[0]) * dernier["t1"], a[1] + (b[1] - a[1]) * dernier["t1"])
+        longueur = math.dist(p0, p1) / px_par_m
+        if longueur < COTE_MIN_M:
+            continue
+        milieu = Point((p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2)
+        proches = sorted((m["_face"].distance(milieu), rang) for rang, m in enumerate(murs))
+        proposition = None
+        # Sans mur relevé à moins de 90 cm mais devant une menuiserie : la paroi est vitrée, elle se traite à
+        # l'étape Menuiseries (R+1 : 33 parois, 75 m de murs-rideaux et baies).
+        vitres = sorted(e["_face"].distance(milieu) for e in releve if e.get("type") == "menuiserie")
+        vitree = (not proches or proches[0][0] > RATTACHEMENT_M * px_par_m) and bool(vitres) and vitres[0] <= RATTACHEMENT_M * px_par_m
+        if proches and proches[0][0] <= RATTACHEMENT_M * px_par_m:
+            mur = murs[proches[0][1]]
+            proposition = {
+                "composant": mur.get("composant") or None,
+                "couches": [{"nature": c.get("nature"), "epaisseur_cm": c.get("epaisseur_cm")} for c in (mur.get("couches") or [])
+                            if c.get("nature") and c.get("epaisseur_cm")],
+                "epaisseur_cm": round(float(mur["nu_exterieur_cm"]) - float(mur["nu_interieur_cm"]), 1),
+            }
+        epaisseurs = sorted(s["epaisseur"] for s in groupe)
+        parois.append({
+            "rang": len(parois),
+            "adjacence": premier["adjacence"],
+            "voisin": premier["voisin"],
+            "deperditif": premier["adjacence"] in DEPERDITIFS and nature not in LOCAUX_HORS_VOLUME,
+            "longueur_m": round(longueur, 2),
+            "epaisseur_cm": round(epaisseurs[len(epaisseurs) // 2]),
+            "orientation": orientation(groupe[len(groupe) // 2]["normale"], nord_deg),
+            "trace": [[round(x * 1000 / largeur, 3), round(y * 1000 / hauteur, 3)] for x, y in (p0, p1)],
+            "proposition": proposition,
+            "vitree": vitree,
+        })
+    return parois
 
 
 def _regrouper(sondages: list[dict[str, Any]]) -> list[dict[str, Any]]:

@@ -3543,3 +3543,62 @@ circle.th-seg--measure {
   gap: 0.5rem;
   margin-top: 0.4rem;
 }
+/* Option C (D262) : parois des locaux à l'étape Parois — verte composée, orange proposée, rouge à composer. */
+.th-paroi-local__trait {
+  stroke-width: 4px;
+  stroke-linecap: round;
+}
+.th-paroi-local.is-validee .th-paroi-local__trait {
+  stroke: #15803d;
+}
+.th-paroi-local.is-proposee .th-paroi-local__trait {
+  stroke: #d97706;
+  stroke-dasharray: 8 5;
+}
+.th-paroi-local.is-vide .th-paroi-local__trait {
+  stroke: #dc2626;
+  stroke-dasharray: 3 4;
+}
+.th-paroi-local.is-vitree .th-paroi-local__trait {
+  stroke: #2563eb;
+  stroke-opacity: 0.6;
+}
+.th-paroi-local__halo {
+  stroke: #0ea5e9;
+  stroke-opacity: 0.35;
+  stroke-width: 12px;
+  stroke-linecap: round;
+}
+.th-paroi-local__etiquette {
+  fill: #1f2937;
+  font-size: 10px;
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 3px;
+  pointer-events: none;
+}
+.th-paroi-badge.is-validee {
+  background: #dcfce7;
+  color: #166534;
+}
+.th-paroi-badge.is-proposee {
+  background: #fef3c7;
+  color: #92400e;
+}
+.th-paroi-badge.is-vitree {
+  background: #dbeafe;
+  color: #1e40af;
+}
+.th-paroi-badge.is-vide {
+  background: #fee2e2;
+  color: #991b1b;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .th-paroi-badge.is-validee { background: #14532d; color: #bbf7d0; }
+  :root:not([data-theme="light"]) .th-paroi-badge.is-proposee { background: #78350f; color: #fde68a; }
+  :root:not([data-theme="light"]) .th-paroi-badge.is-vide { background: #7f1d1d; color: #fecaca; }
+}
+:root[data-theme="dark"] .th-paroi-badge.is-validee { background: #14532d; color: #bbf7d0; }
+:root[data-theme="dark"] .th-paroi-badge.is-proposee { background: #78350f; color: #fde68a; }
+:root[data-theme="dark"] .th-paroi-badge.is-vide { background: #7f1d1d; color: #fecaca; }

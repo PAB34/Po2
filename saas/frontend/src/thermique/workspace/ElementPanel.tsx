@@ -461,7 +461,8 @@ export function EditeurComposition({
   autres: number;
   busy: boolean;
   onValider: (couches: StudyCouche[], partout: boolean) => void;
-  onSupprimer: () => void;
+  /** Absent pour une paroi de local (option C) : elle ne se supprime pas, elle suit le contour. */
+  onSupprimer?: () => void;
 }) {
   const [couches, setCouches] = useState<StudyCouche[]>(() =>
     (element.couches ?? []).length ? (element.couches ?? []).map((couche) => ({ ...couche })) : [{ nature: "mur", epaisseur_cm: 20 }],
@@ -539,9 +540,11 @@ export function EditeurComposition({
         >
           Valider la composition
         </button>
-        <button type="button" className="po2-button po2-button--danger" disabled={busy} onClick={onSupprimer}>
-          Supprimer ce mur
-        </button>
+        {onSupprimer && (
+          <button type="button" className="po2-button po2-button--danger" disabled={busy} onClick={onSupprimer}>
+            Supprimer ce mur
+          </button>
+        )}
       </div>
     </div>
   );

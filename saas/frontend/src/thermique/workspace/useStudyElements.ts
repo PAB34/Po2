@@ -274,9 +274,19 @@ export function useStudyElements({
     [apply],
   );
 
+  /** Des gestes visibles à l'instant et enregistrés aussitôt, en arrière-plan (D252, D262). */
+  const gesteImmediat = useCallback(
+    (gestes: StudyOperation[]) => {
+      if (gestes.filter((geste) => apply(geste)).length === 0) return;
+      fileEnregistrement.current = fileEnregistrement.current.then(() => saveRef.current());
+    },
+    [apply],
+  );
+
   return {
     selected,
     select: setSelected,
+    gesteImmediat,
     deplacerExtremite,
     creerMur,
     couperMur,
