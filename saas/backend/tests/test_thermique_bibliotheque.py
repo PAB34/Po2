@@ -1,5 +1,5 @@
 """Bibliothèque des menuiseries (lot B1) : extraction, contrôles automatiques, interpolation,
-et autonomie du moteur. Voir docs/thermique/bibliotheque-composants-decisions.md."""
+et autonomie du moteur. Voir docs/thermique/en-service/bibliotheque-composants-decisions.md."""
 from __future__ import annotations
 
 import copy

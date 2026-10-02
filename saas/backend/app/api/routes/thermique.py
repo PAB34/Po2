@@ -205,7 +205,7 @@ def _sheet_or_404(db: Session, user: User, sheet_id: int) -> ThermiqueSheet:
     return sheet
 
 
-# --- Bibliothèque de projet et modèles (docs/thermique/bibliotheque-projet-decisions.md) ---------
+# --- Bibliothèque de projet et modèles (docs/thermique/en-service/bibliotheque-projet-decisions.md) ---------
 
 
 def _component_or_404(db: Session, user: User, component_id: int):

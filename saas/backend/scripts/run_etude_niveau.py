@@ -1,6 +1,6 @@
 """Étude thermique d'un niveau à partir de son plan raster : une seule commande, reprise là où elle s'est arrêtée.
 
-Enchaîne (docs/thermique/chaine-analyse-plan-raster.md) : passe globale (agent thermicien-plan) → guide et
+Enchaîne (docs/thermique/en-service/chaine-analyse-plan-raster.md) : passe globale (agent thermicien-plan) → guide et
 bandes de l'enveloppe → parcours par lots avec catalogue appris (agent thermicien-enveloppe) → résolution,
 découpage par pièce, raccords d'angles, contrôle par l'image, restitution.
 

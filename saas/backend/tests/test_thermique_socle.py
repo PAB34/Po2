@@ -3,7 +3,7 @@
 Couvre : verrou des comptes bureaux d'études (outil thermique seulement), suggestion de la
 nature et du niveau à partir des noms de fichiers réels du projet d'essai, import PDF en
 planches, isolement des projets, échelle et contrôle par une cote.
-Voir `docs/thermique/metre-thermique-decisions.md`.
+Voir `docs/Archives/thermique/metre-thermique-decisions.md`.
 """
 from __future__ import annotations
 

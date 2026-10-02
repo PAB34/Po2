@@ -57,7 +57,7 @@ sont jamais transmis au SaaS. L'adaptateur d'API directe déjà développé est 
 
 ## Liens
 
-- Décisions détaillées : `docs/thermique/analyse-ia-visuelle-r1-decisions.md`
+- Décisions détaillées : `docs/Archives/thermique/analyse-ia-visuelle-r1-decisions.md`
 - Service : `saas/backend/app/services/thermique_vision.py`
 - Pont Claude Code local : `saas/backend/app/services/thermique_claude_agent.py`
 - Agent : `.claude/agents/thermicien-plan.md`

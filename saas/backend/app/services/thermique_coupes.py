@@ -1,6 +1,6 @@
 """Coupes : rattacher les pièces d'une coupe aux locaux d'un plan, et en tirer la hauteur de chaque local.
 
-Lot S5c + S5d (`docs/thermique/coupes-elevations-S5-decisions.md`, D178 à D185). Aucun agent ici : la lecture
+Lot S5c + S5d (`docs/thermique/en-service/coupes-elevations-S5-decisions.md`, D178 à D185). Aucun agent ici : la lecture
 d'une coupe (ses pièces, leurs bornes, leur sol et leur plafond) arrive déjà faite ; ce module ne fait que
 de la géométrie.
 

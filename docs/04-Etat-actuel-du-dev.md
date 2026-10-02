@@ -22,157 +22,38 @@ do_not_auto_read:
 > Mise à jour : **2026-10-01, fin de journée Claude**. Tout est **poussé et en production** (`main` =
 > `feat/thermique-socle-raster`). Dépôt : `C:\Users\pa.borja\Documents\Po2-thermique`.
 
-### ▶️ REPRENDRE ICI
+### ▶️ REPRENDRE ICI (outil thermique, dépôt `Po2-thermique`, `main` = production)
 
-**🧭 GUIDE DE RÉFÉRENCE (2026-10-02, À GARDER PRÉCIEUSEMENT) : `docs/thermique/guide-etude-thermique-14-etapes.md`**
-— voulu par le thermicien comme guide pour **reprendre toute la plateforme** : objectif **assistant IA à la
-réalisation d'études thermiques, en local avec Claude** (14 étapes, une étape + un plan par mission, conventions
-écrites, « hypothèses et doutes », validation à chaque étape). Correspondance avec l'existant et ordre de reprise :
-`docs/thermique/refondation-assistant-ia-local-decisions.md` (D275–D280, 5 questions). Méthode d'analyse :
-`docs/thermique/analyse-par-missions-decisions.md` (D271–D274).
+**Entrée unique : `docs/thermique/README.md`.** Rangement du 2026-10-02 : référence de la nouvelle version dans
+`docs/thermique/reference/`, fonctions en service dans `docs/thermique/en-service/`, le reste dans
+`docs/Archives/thermique/` (dont l'ancienne version de cette section).
 
-Ancienne boussole, remplacée par le guide : `docs/thermique/bilan-et-plan-2026-10-02.md` — bilan forces/faiblesses et plan
-d'objectifs dans l'ordre : (1) R+1 parfait [lot B murs : 3 questions ouvertes dans
-`mur-ligne-de-metre-decisions.md` ; coupes et élévations ; recette souris], (2) interface allégée étape par
-étape + nettoyage des fonctions retirées, (3) bibliothèques fiables, (4) autres niveaux par report sans IA,
-(5) livrable déperditions. Tout lot doit servir un de ces objectifs.
-
-**AUDIT DU WORKFLOW (2026-10-02, fin)** : `docs/thermique/audit-workflow-2026-10-02.md` — 3 failles (relais et
-mode automatique sur Opus 4.7 par l'alias `opus` ; coordonnées de l'IA ; pas de livrable), faiblesses par étape,
-10 priorités. Murs en prod le même jour : suppression instantanée, indéterminés, poignées, créer un mur, ajouter un
-point (D247, D249, D250, D252, D254). Essai R+2 en session cloud en cours (branche publique `essai/r2-cloud`).
-
-**2026-10-02 (suite) — EN ATTENTE DE RÉPONSES** : `docs/thermique/murs-traces-decisions.md` (D248–D253 : mur =
-ligne libre tracée, poignées, clic droit « Créer un mur », gestes enregistrés aussitôt, « Repartir de zéro » du
-R+1 avec sauvegarde ; 5 questions ; remplace le lot B). Bilan de la détection :
-`docs/thermique/detection-composants-bilan-2026-10-02.md` (l'IA reconnaît, ne mesure pas).
-
-**CAP DÉCIDÉ LE 2026-10-01 : consolider le R+1 jusqu'à ce qu'il soit parfait, AVANT tout autre niveau.**
-- La passe globale automatique (`run_etude_niveau.py --mode cli`) est **insuffisante** : essai A/B sur le R+2,
-  23 / 25 / 36 objets contre 130 au R+1 (le R+1 avait été fait en session interactive, mode « attente »). La
-  façon de passer les consignes à l'agent n'est pas en cause. **Ne relancer aucun niveau avec elle.**
-- Ensuite : **reporter le relevé du R+1 sur les autres niveaux** par le calage, sans IA
-  (`docs/thermique/report-entre-niveaux-decisions.md`, D233–D237, principe validé, 4 questions à confirmer
-  au moment de coder) ; puis détection « par l'exemple » des menuiseries répétées ; l'IA seulement pour des
-  lectures ciblées.
-- Étude R+2 automatique produite (`Etudes-thermique/projet1/R2/etude-R2.json`, 21 incohérences) : à ne pas
-  prendre pour base ; elle servira au mieux pour son contour de façade (99 tronçons, 154,6 m).
-
-**Chiffres de référence du R+1** (`banc.db` du bloc-notes, instantané antérieur à la prod) : 227 éléments,
-**229 côtés** (et non plus 222 : les côtés contre les 2 terrasses sont distingués depuis F), **170,12 m
-déperditifs**, 289 formes, 77 liaisons. Tout lot qui ne touche pas au calcul doit les laisser intacts.
-
-**2026-10-01 (nuit, suite) — coupes et élévations sans IA ✅ EN PROD** (D230–D232,
-`docs/thermique/vues-sans-ia-decisions.md`). « Analyser » ne met plus en file que les niveaux ; les vues se
-créent à la main (« Ajouter une vue ») ; les menuiseries mesurées sont dessinées sur leur vue. Catalogue repris
-d'un autre niveau : vignettes non dessinées (arrêt du R+2 corrigé). **R+2 du projet 1 en cours d'analyse sur le
-poste** (`Etudes-thermique/projet1/R2`), à importer par l'utilisateur.
-
-**2026-10-01 (nuit) — étapes Parois et Menuiseries séparées ✅ EN PROD** (D227–D229,
-`docs/thermique/etapes-parois-menuiseries-decisions.md`). Six étapes ; chaque étape n'épaissit et ne laisse
-attraper que sa famille ; étape Menuiseries : compteur « sans modèle », cotes, bibliothèque, fenêtre prête à
-mesurer ; fiche d'une menuiserie allégée (relevé replié), « Affecter aussi à » retiré de l'écran.
-
-**2026-10-01 (soir) — menuiseries réunies et exposition ✅ EN PROD** (D223–D225,
-`docs/thermique/menuiseries-reunies-exposition-decisions.md`). Morceaux d'une menuiserie réunis **dans le
-relevé** à chaque recalcul (même tronçon, même composant et modèle, ≤ 6 cm, indéterminé absorbé) ; une étude
-plus ancienne est recalculée une fois à sa lecture (`menuiseries_reunies`). Jonction de tronçons : une baie à
-l'écran (une cote, un clic). Exposition (8 secteurs + azimut) écrite à chaque recalcul, donc à chaque pose du nord.
-
-**2026-10-01 (fin) — modèles de menuiserie ✅ EN PROD** (D218–D222, `docs/thermique/modeles-menuiseries-decisions.md`).
-Mesure en coupe/élévation → modèle nommé + capture PNG → posé en cliquant les menuiseries du plan (ou « même
-largeur ± 2 cm ») ; la baie hérite largeur, hauteur et surface du modèle ; cote affichée sur le plan à l'étape 4 ;
-bibliothèque des modèles du projet. Hauteur : « Appliquer à tous les locaux du niveau ». Reporté : couper une baie
-réunie à tort ; relevé cadre/vitrage par un agent sur les captures.
-
-**2026-10-01 (suite) — parcours à 5 étapes et fenêtre « Coupes et élévations » ✅ EN PROD** (D213–D217,
-`docs/thermique/coupes-elevations-fenetre-decisions.md`). Étape 3 « Locaux et hauteur » (hauteur obligatoire
-pour valider) ; plus de traits de coupe sur le plan ; la fenêtre choisit la vue et mesure hauteur ou
-menuiserie ; hauteur posée sur le local ouvert, les locaux cliqués ou tous ceux sans hauteur ; menuiserie
-« Affecter aussi à » d'autres pièces (parts égales). **À éprouver par le thermicien sur le R+1.**
-
-**2026-10-01 — coupes et façades : le thermicien d'abord, l'IA ensuite ✅ EN PROD** (D206–D212,
-`docs/thermique/vues-manuelles-decisions.md`). Vue renommable et reclassable ; haut choisi tel que vu à
-l'écran ; fenêtre de vue ouverte à l'endroit ; « Placer les coupes » trace un trait à la main sur le plan ;
-mesures dessinées en direct, hauteur vérifiée puis posée sur les locaux cliqués ; mode sombre lisible ;
-« Faire lire par l'IA » vue par vue (plus de relecture automatique). **À éprouver par le thermicien sur
-PC10/PC11 et le R+1.** Niveaux SS1, RDC, R2, R3, toiture du projet 1 : analyse toujours à relancer (sur accord).
-
-**2026-09-30 — calage des niveaux refait « comme Aligner d'AutoCAD » ✅ EN PROD (`a601cfe0`), validé par
-l'utilisateur** (`thermique/calage-autocad-decisions.md`, D201–D202) : point de base → rotation (aimant 1°,
-« La rotation est déjà bonne ») → longueur avec ses propres points ; écart à l'échelle déclarée affiché. Les
-cases de superposition nomment le voisin. Découverte : l'échelle d'une planche est **arrondie à l'échelle
-usuelle si l'écart < 1 %** (`standard_scale_near`) → le calage le révèle, et les métrés en héritent (question
-ouverte). **Règle utilisateur depuis ce jour : pousser sur `main` dès chaque modification testée.**
-
-**Fichiers de décisions en cours (lire celui du lot repris) :**
-- `thermique/superposition-niveaux-decisions.md` — 🔥 chantier prioritaire. D168–D173. **S2 calage et S3
-  calque fantôme FAITS et en prod** (cases « Voir niveau inférieur / supérieur », calage 4 clics).
-  Reste **S4** (règle des quatre quarts, `metre-plans-decisions.md` §3 : liaisons plancher / mur déduites,
-  créées d'office, jugées dans la passe) et **S5** (D170, D171 : un agent repère sur le plan les traits
-  de coupe et repères de façade, cliquables pour ouvrir la vue ; pièces de la coupe rattachées aux locaux
-  du plan ; **hauteur sous plafond lue par local** ; hauteur des menuiseries lue en élévation).
-  ⚠️ S4 ne se vérifie qu'avec **deux niveaux étudiés et calés** : seul le R+1 l'est.
-  **✅ EN PRODUCTION `a82c3af0` (2026-09-29, migration 0088, bundle `thermique-DSkqJM3Q.js`, route `/vues` 401)** :
-  tout S5 ci-dessous. Jamais recetté à la souris : la recette par l'utilisateur est la prochaine étape.
-  **S5 (2026-09-29)** : `thermique/coupes-elevations-S5-decisions.md`
-  (Q34–Q41 répondues → D178–D185 ; règles de rattachement D186–D189). Vérité terrain des deux projets :
-  `thermique/verite-terrain-coupes.md` + `.json`. Le R+1 étudié est celui du **projet 1** (Frontignan, PC04,
-  1/100). **Fait** : rattachement coupe → locaux (`thermique_coupes.py`, coupe A réelle 8/8), rangement des
-  lectures + route `GET /sheets/{id}/hauteurs` + hauteur saisie par `modifier` (`thermique_lecture_coupes.py`,
-  **migration 0088**), hauteur dans la fiche du local (écran), agent `thermicien-coupe` + script
-  `run_lecture_coupes.py` (images quadrillées en points PDF, `--reponses` pour rejouer) + relais par type de
-  travail (un ancien relais ne reçoit que des niveaux). **Essai réel de l'agent : 0/13** (positions fines et
-  plafond fini ratés ; vues et numéros de pièces bien lus) → Q42 tranchée en conversation : **D190** le trait se
-  déduit de la coupe (balayage du plan, numéros de pièces ; coupe A 8/8, C 3/3 sur vérité terrain), **D191**
-  la hauteur se confirme par deux clics dans la coupe (corrige tout l'étage). Faits : déduction + cache du
-  trait (préparé en tâche de fond à la lecture des coupes), routes `POST/DELETE /vues/{id}/hauteur`,
-  `GET /projects/{id}/vues`, fenêtre flottante de la coupe (`FenetreCoupe.tsx`, bouton « Voir la coupe » dans
-  la fiche). **Tout est en commits locaux, rien poussé, jamais éprouvé à la souris.** Reste : traits
-  cliquables sur le plan (S5a/S5b), traits à décrochés ou en biais, élévations (S5e).
-  **Suite (même jour)** : D171 traits cliquables (case « Voir les coupes ») et D192 repli par les noms faits ;
-  **S5e fait** (`thermique/elevations-S5e-decisions.md`, D193–D200) : baies (58 → 49 au R+1, 8 morceaux à
-  vérifier), hauteur par composant mesurée par deux coins sur la façade, « Voir la façade » depuis la fiche
-  d'une menuiserie. Reste : trait de façade sur le plan (attend le nord, D198), surfaces (murs, baies) dans le
-  calcul.
-- `thermique/retours-menuiseries-2026-09-28-decisions.md` — M1, M2 (morceaux → élément entier), M3 **faits**.
-  Réponses Q30–Q33 → **D174** fusion d'office de 2 menuiseries contiguës de même composant ; **D175**
-  menuiserie dessinée = composant le plus employé ; **D176** identiques = même composant, largeur ± 1 cm ;
-  **D177** hauteur lue en élévation (S5). **À faire : M4** (clic droit menuiserie : « Supprimer » = écarter ;
-  « Dessiner une menuiserie ici » = 2 clics projetés sur le tronçon, mur coupé de part et d'autre) et
-  **M5** (repère composant · largeur, hauteur à lire en élévation).
-- `thermique/retours-ponts-2026-09-28-decisions.md` — P5 (ajout de pont instantané, D164) **fait**.
-  Réponses Q19–Q23 enregistrées. **À faire** : **P2** (à l'étape des ponts, clic dans un local → seuls
-  ses ponts, partagés marqués ½ ; la passe reste sur tout le niveau, Q21 b), **P3** (D163 : 50/50 des
-  angles à la jonction de deux pièces + « partagé avec… » manuel, Q22 a), **P6/D165** (liaisons linéiques
-  dessinées le long du côté et jugées dans la passe = F seconde partie), **P4** (clic droit : les 5 ponts
-  types les plus employés du niveau puis « Autre… », Q23 a), **P1** (croquis de la norme découpés dans le
-  PDF, Q19 a, + vignette zoomée du plan, Q20 a).
-- `thermique/retours-usage-2026-09-28-decisions.md` — A, B, C, D, E, F (1re partie), G1 faits (D155–D162).
-  Reste **G2** (dessiner l'emprise des angles), **G3** (déplacer les bornes d'un élément, voisin qui suit,
-  Q17 a), **G4** (agent de liaison, sur demande pour le niveau, Q18 b).
-
-**Ordre convenu par l'utilisateur (D172, Q29 a)** : superposition d'abord (S2, S3 faits) ; les autres
-lots ensuite. Proposé à l'utilisateur en fin de session, sans réponse : (1) petits lots décidés (M2 fusion
-d'office, M4, P2+P3, P4, P1), (2) S4, (3) S5. **Lui demander par quoi reprendre.**
-
-**Normes** : `C:\Users\pa.borja\Documents\Po2\Thermique\NORMES` (9 PDF, texte extractible par
-`pdfplumber` ; tableaux en image → rendre les pages par `pypdfium2` et les lire). Catalogue ISO 14683
-C.2 transcrit : `saas/backend/app/data/thermique_ponts_iso14683.json`. ⚠️ PDF sous **licence CSTB
-nominative** : à vérifier avant ouverture de l'outil à d'autres bureaux d'études. Demander à l'utilisateur
-l'annexe nationale française de la NF EN 12831-1 s'il l'a.
-
-**Pièges de cette session** : un `python -c` lancé depuis la racine du dépôt avec `banc.db` en chemin
-relatif **crée un `banc.db` vide dans le dépôt** — toujours passer par un script du bloc-notes ;
-`[IO.File]` en PowerShell résout les chemins relatifs depuis le dossier du processus, pas `cd` ;
-`Set-Content -Encoding utf8` ajoute un BOM (utiliser `UTF8Encoding $false`). Vérifier un déploiement sur le
-bundle **servi** (`/assets/thermique-*.js`) et une route par son code HTTP sans session (401 = existe,
-404 = inconnue, 502 = serveur en redémarrage).
-
-**Règles permanentes** : rien sur GitHub sans « pousse » explicite ; français ; « ce que j'ai fait, en
-clair » ; fichier de décisions avant de coder ; ne jamais saisir d'identifiant (donc pas de recette à la
-souris) ; ne pas modifier `.claude/agents/thermicien-plan.md` ; tests ciblés seulement ; `git commit --
-<chemins>` explicites.
+- **Cap** : reprendre toute la plateforme selon le **guide du thermicien en 14 étapes**
+  (`docs/thermique/reference/guide-etude-thermique-14-etapes.md`) pour en faire un **assistant IA d'étude
+  thermique, en local avec Claude**. Parcours d'une étude : dépôt par le client → tri et nommage par l'IA → lecture
+  de tout le dossier → **registre des informations** (source, valeur, statut) → manques classés par impact →
+  étapes 2 à 14 (`reference/refondation-assistant-ia-local-decisions.md`, D275–D290).
+- **Méthode d'analyse** : missions courtes où l'agent **exécute du code d'image** et choisit ses zooms ; mesuré sur le
+  R+1 (contour de Claude navigateur à 2,1 cm de médiane, 97 % d'accord opaque/vitré) :
+  `reference/analyse-par-missions-decisions.md`.
+- **Liaison Claude ↔ plateforme** : serveur MCP de la plateforme (connecteur claude.ai), d'abord local puis publié :
+  `reference/interaction-claude-plateforme-recherche.md`.
+- **En production (2026-10-02)** : option C — un mur = la composition d'une paroi de local ; coupures ;
+  menuiseries posées sur les parois ; surfaces brute / baies / opaque ; sauvegarde complète de chaque étude
+  (migration 0089) : `reference/cotes-et-murs-une-geometrie-decisions.md`.
+- **Faille active** : le relais du poste et le mode automatique appellent `--model opus`, traduit en **Opus 4.7** par
+  la commande `claude` du poste → corriger avant toute analyse lancée depuis le site.
+- **Questions en attente** (à reprendre avec le thermicien, dans cet ordre) : liaison Claude ↔ plateforme (5),
+  refondation (5), convention de nommage (5), missions (4). Les réponses conditionnent le premier lot.
+- **Premier lot de la nouvelle version, une fois l'architecture décidée** : retrait du code des fonctions sorties de
+  l'écran (pinceau, retracé, lecture IA des coupes, traits de coupe, « Affecter aussi à », gestes sur les murs du
+  relevé, lignes de métré).
+- **Règles métier validées** : `reference/regles-metier-validees.md`. Règles de travail : français ; « ce que j'ai fait,
+  en clair » ; fichier de décisions avant de coder ; tests ciblés ; pousser sur `main` dès chaque modification
+  testée puis vérifier le bundle servi ; `git commit -- <chemins>` ; jamais d'identifiant saisi ni de jeton manipulé ;
+  ne pas modifier `.claude/agents/*` ; pixels seuls, jamais les vecteurs du PDF ; pas de modèle remplacé en silence.
+- **Dépôt GitHub public** : le plan client du R+2 est sur la branche `essai/r2-cloud` (accord du thermicien) ;
+  supprimer la branche après l'essai.
 
 ### Historique récent (du plus récent au plus ancien)
 
@@ -189,7 +70,7 @@ souris) ; ne pas modifier `.claude/agents/thermicien-plan.md` ; tests ciblés se
   Cliquer un côté dans « Côtés et adjacences » le surligne sur le plan et l'y amène ; cliquer à
   l'intérieur d'un local près d'un côté le désigne dans la fiche. Sur le R+1, 207 côtés sur 222 se
   désignent au clic sur le plan, les 15 autres (courts, dans des redents) depuis la fiche. Aucun calcul
-  touché. 108 tests front thermiques, typecheck et build. Décisions : `thermique/cote-vers-plan-decisions.md`.
+  touché. 108 tests front thermiques, typecheck et build. Décisions : `thermique/en-service/cote-vers-plan-decisions.md`.
 - **✅ EN PRODUCTION (`15e07ccc`, 2026-09-28) — lots Codex.** Annuler / Rétablir des corrections
   d'éléments (`Ctrl+Z`, `Ctrl+Maj+Z`, `Ctrl+Y`, D116–D124) ; créer un local au clic droit dans le vide et
   le supprimer définitivement au clic droit (`creation-suppression-locaux-decisions.md`) ; `Échap` et
@@ -197,7 +78,7 @@ souris) ; ne pas modifier `.claude/agents/thermicien-plan.md` ; tests ciblés se
   recadrages et suppressions groupés en un lot local, un seul recalcul à « Enregistrer les
   modifications » (D139–D144, `edition-locale-par-lot-decisions.md`). **Jamais recettés à la souris.**
 - **Suite proposée** : sujet 3 (50/50 sur les 64 angles, touche le métré → décisions d'abord), puis
-  sujet 5 (terrasses). Liste complète : `thermique/reprise-sujets-ouverts.md`.
+  sujet 5 (terrasses). Liste complète : `Archives/thermique/reprise-sujets-ouverts.md`.
 - **✅ EN PRODUCTION — nature des locaux accessible et gaines techniques (D115 à D122).** La nature
   se change maintenant directement dans la fiche ou par clic droit, sans ouvrir l'édition du contour et
   sans valider implicitement le local. La quatrième nature `gaine_technique` se comporte partout comme
@@ -205,7 +86,7 @@ souris) ; ne pas modifier `.claude/agents/thermicien-plan.md` ; tests ciblés se
   oubliés dans la passation (`thermique_locaux.py`, `thermique_lecture_locaux.py`). Le vrai R+1 reste à
   **227 éléments, 222 côtés, 170,12 m déperditifs, 289 formes et 77 liaisons**. Vérifications : 43 tests
   backend ciblés, 86 tests frontend thermiques, typecheck et build. Aucune recette authentifiée à la
-  souris. Décisions : `thermique/nature-locaux-gaine-decisions.md`. **Prochain : Ctrl+Z / Rétablir,
+  souris. Décisions : `thermique/en-service/nature-locaux-gaine-decisions.md`. **Prochain : Ctrl+Z / Rétablir,
   après confirmation du sens des deux boutons précédent/suivant.**
 - **▶️ REPRENDRE ICI — éprouver F2 sur le R+1, puis décider de la suite.** Le parcours en six étapes est
   écrit et testé (82 tests front, 23 tests d'édition), mais **jamais exercé à la souris** : je n'ai pas
@@ -214,7 +95,7 @@ souris) ; ne pas modifier `.claude/agents/thermicien-plan.md` ; tests ciblés se
   Deux gestes restent volontairement reportés (D104) : **ajouter** un élément ou un pont absent, et
   déplacer les bornes d'un élément sur son tronçon. **Rappel permanent : rien n'est poussé sans accord
   explicite.**
-- **✅ F2 — le parcours pilote le niveau** (`docs/thermique/parcours-F2-decisions.md`, D106 à D114). Six
+- **✅ F2 — le parcours pilote le niveau** (`docs/Archives/thermique/parcours-F2-decisions.md`, D106 à D114). Six
   étapes : planche, analyse, locaux, parois et menuiseries, **ponts thermiques**, hauteurs. Chaque étape
   annonce son reste à faire, ouvre son panneau et règle les calques du plan ; toucher une case rend la
   main (Q6). L'étape des ponts est une **passe continue sur tout le niveau** (Q1) avec deux gestes
@@ -233,14 +114,14 @@ souris) ; ne pas modifier `.claude/agents/thermicien-plan.md` ; tests ciblés se
   conservée à côté de la correction (**Q7**), et corriger un composant partagé annonce le nombre d'éléments
   touchés avant de proposer la portée (**D103**, `L1` en porte 34). Un **pont thermique est un élément du
   relevé** : les 77 liaisons correspondent aux 77 angles et abouts, leur pastille ouvre le même panneau.
-  Décisions : `thermique/elements-F4-decisions.md`.
+  Décisions : `thermique/en-service/elements-F4-decisions.md`.
 - **✅ F0 EN PRODUCTION — « Analyser avec Claude Code »** (`ca7abb47`, `b4762ffb`, `29d8f77f`, migration
   **0086**). File `thermique_travaux` côté serveur, relais `scripts/relais_thermique.py` côté poste, et une
   règle qui **refuse d'écraser un niveau déjà travaillé**, en disant pourquoi. Les niveaux partent du plus
   bas au plus haut pour que le catalogue monte (**D95**). Une session Claude expirée remet le niveau à faire
   au lieu de l'échouer (**D98**). ⚠️ **Le relais n'a jamais tourné de bout en bout** : ses fonctions sont
   testées, l'enchaînement complet reste à éprouver sur un vrai plan.
-  Décisions : `thermique/relais-local-F0-decisions.md`.
+  Décisions : `thermique/en-service/relais-local-F0-decisions.md`.
 - **⚠️ CORRECTIF D'USAGE — le local ouvert montre toutes ses cotes** (`283995f8`). D83 le disait déjà, mais
   la case « Côtés intérieurs » filtrait aussi le local sélectionné : un local décollé de la façade
   n'affichait plus une seule cote, sans rien dire. La fiche annonce désormais le linéaire déperditif et
@@ -252,7 +133,7 @@ souris) ; ne pas modifier `.claude/agents/thermicien-plan.md` ; tests ciblés se
   d'une poignée, redressement d'un côté (« 2 points de moins »), menu hors édition, fermeture au clic
   extérieur, déplacement du plan intact. **Un défaut trouvé et corrigé (D91)** : Échap ne fermait pas le
   menu, l'écouteur clavier posé en bouillonnement ne voyait jamais la touche ; il est passé en capture.
-  Détail du banc : `thermique/nord-et-edition-plan-decisions.md` §5.
+  Détail du banc : `thermique/en-service/nord-et-edition-plan-decisions.md` §5.
 
 > Mise à jour précédente : **2026-09-23** (reprise Codex — métrés, nord et gestes de correction terminés localement).
 - **✅ MÉTRÉS, PONTS ET ÉLÉMENTS SUR LE PLAN — F3** (`50005292`) : un clic sur un local dessine ses cotes,
@@ -263,7 +144,7 @@ souris) ; ne pas modifier `.claude/agents/thermicien-plan.md` ; tests ciblés se
   validation. Le contour se simplifie au lasso libre (`Alt + glisser`) et le clic droit propose ajouter,
   supprimer ou redresser un côté. Sur le vrai R+1, les **222 côtés** passent de « nord à caler » à une
   orientation calculée, sans perdre les 24 locaux. Vérifications : 73 tests backend, 32 frontend et build.
-  Décisions : `thermique/nord-et-edition-plan-decisions.md`.
+  Décisions : `thermique/en-service/nord-et-edition-plan-decisions.md`.
 - **✅ LOT F1 TERMINÉ LOCALEMENT — contours calés et chaîne qui se relit elle-même.** Le fichier d'étude passe
   en `format_version: 3` : contours calés sur le nu intérieur mesuré à l'assemblage (D66), liaisons localisées
   (D74), tracé reprojeté des éléments (D75), et **contrôle de cohérence en six points (D77)** écrit dans
@@ -282,7 +163,7 @@ souris) ; ne pas modifier `.claude/agents/thermicien-plan.md` ; tests ciblés se
   très confiant ; un prompt renforcé corrige les débordements mais omet le plateau ouvert 4.2/4.3/4.4.
   **Décision : ne pas importer automatiquement**. Prochain lot : séparer couverture physique complète et
   frontières fonctionnelles proposées, puis ajouter les contrôles raster de couverture/débordement avant de
-  tester l'agent enveloppe. Détail : `thermique/comparatif-agents-claude-openai.md`.
+  tester l'agent enveloppe. Détail : `Archives/thermique/comparatif-agents-claude-openai.md`.
 
 - **✅ LOT E2 TERMINÉ LOCALEMENT — Import d'une étude de niveau dans l'espace thermicien**
   (branche `feat/thermique-socle-raster`, migration **0083**, pas encore poussé) : fichier unique
@@ -291,7 +172,7 @@ souris) ; ne pas modifier `.claude/agents/thermicien-plan.md` ; tests ciblés se
   au plan, liste chauffés/circulations/non chauffés et fiche détaillée en lecture seule. Vérification réelle :
   17 + 5 + 2 locaux, 230 éléments rattachés, 32 composants, erreur de reprojection maximale 0,0003/1000.
   Tests : 123 backend thermiques, 11 frontend thermiques, typecheck et build Vite. Décisions et preuves :
-  `thermique/etude-niveau-E2-decisions.md`. **Prochain lot : E3**, édition/recalage des contours et rattachements,
+  `thermique/en-service/etude-niveau-E2-decisions.md`. **Prochain lot : E3**, édition/recalage des contours et rattachements,
   validation pièce par pièce et versions d'enregistrement.
 
 - **✅ EN PROD — Outil de métré thermique, étape 1 (socle)** (PR #178, migration **0076**
@@ -299,7 +180,7 @@ souris) ; ne pas modifier `.claude/agents/thermicien-plan.md` ; tests ciblés se
   comptes **bureaux d'études** (rôle `THERMIQUE_EXTERNE`, refusés partout ailleurs dans Po2),
   projets, import PDF → planches (type et niveau suggérés), **visionneuse en tuiles pdfium**
   (coupe lourde affichée en 0,49 s au lieu de 47 s avec pdf.js), échelle + contrôle par une cote.
-  Docs : `thermique/metre-thermique-decisions.md`, `thermique/00-audit-existant-faisabilite.md`,
+  Docs : `Archives/thermique/metre-thermique-decisions.md`, `Archives/thermique/00-audit-existant-faisabilite.md`,
   ADR [[Decisions/013-outil-thermique-comptes-externes-et-tuiles]].
 - **✅ DNS fait, certificat obtenu** : `https://thermique.patrimoineaucarre.com` en ligne.
   **Une seule connexion** (Q6) : fenêtre d'identification du navigateur retirée sur ce
@@ -313,7 +194,7 @@ souris) ; ne pas modifier `.claude/agents/thermicien-plan.md` ; tests ciblés se
   cote ramenée à l'échelle usuelle si l'écart < 1 % (branche `feat/thermique-echelle-ux`).
 - **Bibliothèque de composants** (décision utilisateur du 2026-09-11, avant la détection de
   géométrie) : une seule bibliothèque pour l'étude thermique **et** le calcul des déperditions
-  CVC, sourcée depuis les PDF Th-Bât. Cadrage et décisions : `thermique/bibliotheque-composants-decisions.md`.
+  CVC, sourcée depuis les PDF Th-Bât. Cadrage et décisions : `thermique/en-service/bibliotheque-composants-decisions.md`.
   - **Lot B1 menuiseries fait** (branche `feat/thermique-bibliotheque-b1`) : moteur autonome
     `saas/backend/thermique_moteur/` (aucune dépendance à Po2, test à l'appui), édition JSON
     datée par le suivi officiel (2021-12-16), 168 lignes fenêtres + correctifs + portes +
@@ -331,7 +212,7 @@ souris) ; ne pas modifier `.claude/agents/thermicien-plan.md` ; tests ciblés se
     Reconstruire : `python -m thermique_moteur.bibliotheque.build "<REGLES TH BAT>" --lot elements`.
   - **Recadrage utilisateur (2026-09-11)** : la bibliothèque doit être celle **du projet** (composants
     par catégorie, réutilisables comme modèles), pas seulement un référentiel consultable. Cadrage :
-    `thermique/bibliotheque-projet-decisions.md` (Q33-Q38 répondues).
+    `thermique/en-service/bibliotheque-projet-decisions.md` (Q33-Q38 répondues).
   - **Lots L1 + L2 faits** (branche `docs/thermique-bibliotheque-projet`, migration **0077**) :
     table `thermique_components` (composant de projet ou modèle du compte), moteur
     `thermique_moteur/composants.py`, API (créer, modifier, dupliquer, importer un modèle, enregistrer
@@ -341,7 +222,7 @@ souris) ; ne pas modifier `.claude/agents/thermicien-plan.md` ; tests ciblés se
     (bibliothèque par défaut, export des préconisations), puis référentiel B2b-2, B2b-3, B2c.
     Fascicules « méthodes » dans `Thermique/REGLES TH BAT/methodes_th-bat/` (non versionné).
 - **Métré sur les plans : pas commencé** (seul le prototype de lecture des traits existe). Méthode
-  cadrée le 2026-09-14 dans `thermique/metre-plans-decisions.md` : contour de référence au nu
+  cadrée le 2026-09-14 dans `Archives/thermique/metre-plans-decisions.md` : contour de référence au nu
   intérieur par niveau, superposition N−1 / N / N+1, règle des « quatre quarts » pour les liaisons,
   détection = proposition, composants colorés sur le plan ; lots M1 à M5 ; Q39-Q42 répondues (contour d'abord, hauteurs saisies, 60/40, couleur par
   composant). **Lot M1 fait** (branche `feat/thermique-metre-m1`, migration **0078**) : onglet
@@ -351,11 +232,11 @@ souris) ; ne pas modifier `.claude/agents/thermicien-plan.md` ; tests ciblés se
   `feat/thermique-detection-m3`, migration **0079**, `scipy`) : contour au nu intérieur détecté
   automatiquement, hauteurs lues sur les coupes, hauteur sous plafond. **Retour utilisateur** : il veut
   une **couche IA** de vérification étape par étape, planche par planche → cadrage
-  `thermique/agent-verification-decisions.md` (réponses : vérification par **Claude Code**, pas d'API ;
+  `Archives/thermique/agent-verification-decisions.md` (réponses : vérification par **Claude Code**, pas d'API ;
   l'IA propose, le thermicien valide). **Lot M4a (types de murs) fait** (branche
   `feat/thermique-parois-menuiseries`) : épaisseur et isolant lus côté par côté, types proposés et
   rattachés à la bibliothèque, recalage du contour sur la face intérieure des murs ; cadrage
-  `thermique/parois-menuiseries-pt-decisions.md` (Q51 : hauteurs des menuiseries lues sur les façades).
+  `Archives/thermique/parois-menuiseries-pt-decisions.md` (Q51 : hauteurs des menuiseries lues sur les façades).
   **▶️ Prochain : M4b menuiseries + façades**, puis M4c ponts thermiques, puis M2.
   **Contours de pièces repris le 2026-09-18** (branche `fix/thermique-clic-piece`, commit `af9dc199`) :
   recalage manuel des sommets vérifié ; simplification adaptative des quadrilatères et des grands espaces
@@ -374,8 +255,8 @@ souris) ; ne pas modifier `.claude/agents/thermicien-plan.md` ; tests ciblés se
   localement avec le compte du thermicien, vue globale + six tuiles et JSON strict ; l'adaptateur API serveur
   reste un repli. Le paquet R+1 est prêt et l'écran importe le JSON de l'agent avec contrôle de rotation puis
   rend ses points éditables. La session Claude Code locale doit encore être authentifiée avant la recette
-  réelle (`thermique/analyse-ia-visuelle-r1-decisions.md`).
-  Remplace le découpage de `thermique/etape2-geometrie-decisions.md`. Questions générales : Q15-Q18, Q20.
+  réelle (`Archives/thermique/analyse-ia-visuelle-r1-decisions.md`).
+  Remplace le découpage de `Archives/thermique/etape2-geometrie-decisions.md`. Questions générales : Q15-Q18, Q20.
 - Côté Po2, le **réexport ASTECH** (incrément 3) reste le prochain chantier, sans lien avec
   l'outil thermique.
 

@@ -4,7 +4,7 @@ read_policy: lire avant de toucher à l'identification des pièces (passe global
 
 # Tous les locaux, contours recalés — décisions (étape 1 de la passe pièce par pièce)
 
-Date : 2026-09-22. Stratégie : [carences-agents-strategie.md](carences-agents-strategie.md) (S5, § 5 bis).
+Date : 2026-09-22. Stratégie : [carences-agents-strategie.md](../../Archives/thermique/carences-agents-strategie.md) (S5, § 5 bis).
 
 ## 1. Existant vérifié
 

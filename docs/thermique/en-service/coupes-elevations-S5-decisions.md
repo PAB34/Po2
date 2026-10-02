@@ -149,7 +149,7 @@ lot**, mais **montrés** seulement au second.
 
 **D185 — Vérité terrain sur les deux projets (Q41 a).** Traits de coupe et vues des deux projets, et
 hauteur de chaque local traversé du R+1 du projet 1, relevés à l'œil avant l'agent, dans
-`docs/thermique/verite-terrain-coupes.md`.
+`docs/thermique/en-service/verite-terrain-coupes.md`.
 
 ## 3 ter. Règles de rattachement, tirées de la vérité terrain (2026-09-28)
 

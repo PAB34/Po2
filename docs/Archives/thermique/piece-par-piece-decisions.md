@@ -4,7 +4,7 @@ read_policy: lire avant de coder la page « Pièce par pièce » de l'applicatio
 
 # Page « Pièce par pièce » — décisions
 
-Date : 2026-09-22. Demande de l'utilisateur (D28, [locaux-decisions.md](locaux-decisions.md)) : dans l'application,
+Date : 2026-09-22. Demande de l'utilisateur (D28, [locaux-decisions.md](../../thermique/en-service/locaux-decisions.md)) : dans l'application,
 le thermicien modifie un local, clique **« Remodéliser »**, revérifie, **enregistre** et passe au local suivant.
 Rien n'est codé tant que les questions du § 4 ne sont pas tranchées.
 

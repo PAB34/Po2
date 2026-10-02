@@ -1,7 +1,7 @@
 # 2026-09-22 — Espace thermicien, lot E2
 
 > IA : Codex
-> Précédente session : passation `docs/thermique/passation-codex-E2.md`
+> Précédente session : passation `docs/Archives/thermique/passation-codex-E2.md`
 
 ## Objectif de la session
 
@@ -38,14 +38,14 @@ avec les locaux chauffés en premier et ouvrir une fiche détaillée en lecture 
 ## Notes et décisions
 
 - Q1 à Q4 ont été validées le 2026-09-22 ; la source de vérité est
-  `docs/thermique/etude-niveau-E2-decisions.md` (D53 à D58).
+  `docs/thermique/en-service/etude-niveau-E2-decisions.md` (D53 à D58).
 - Le fichier d'étude est la seule pièce importée ; les artefacts de contrôle restent sur le poste.
 - Aucun push ni déploiement n'a été effectué pendant cette session.
 
 ## Pour la prochaine IA — entrée en matière
 
 ```text
-Lis d'abord docs/thermique/etude-niveau-E2-decisions.md puis
+Lis d'abord docs/thermique/en-service/etude-niveau-E2-decisions.md puis
 docs/Sessions/2026-09-22 - Espace thermicien lot E2.md. E2 est implémenté et testé sur le vrai R+1.
 Ne pousse rien sans accord explicite. La suite fonctionnelle est E3 : édition et validation pièce par pièce.
 ```

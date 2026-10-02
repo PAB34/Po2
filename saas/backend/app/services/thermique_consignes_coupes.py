@@ -1,6 +1,6 @@
 """Lecture des coupes par l'agent `thermicien-coupe` : images quadrillées, consignes, schémas, conversions.
 
-S5 (`docs/thermique/coupes-elevations-S5-decisions.md`, D181, D185). L'agent lit des **images** ; pour qu'il
+S5 (`docs/thermique/en-service/coupes-elevations-S5-decisions.md`, D181, D185). L'agent lit des **images** ; pour qu'il
 rende des positions exploitables sans conversion de pixels, chaque image est **quadrillée en points PDF
 de la page** (origine en bas à gauche, y vers le haut), graduations écrites sur la grille. C'est ainsi que la
 vérité terrain a été relevée à la main (`verite-terrain-coupes.md`).

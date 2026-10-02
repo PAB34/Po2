@@ -2,7 +2,7 @@
 
 Un composant (mur, plancher, menuiserie, pont thermique...) appartient soit a un projet,
 soit aux modeles reutilisables d'un compte (project_id vide). Importer un modele dans un
-projet en fait une copie. Voir docs/thermique/bibliotheque-projet-decisions.md.
+projet en fait une copie. Voir docs/thermique/en-service/bibliotheque-projet-decisions.md.
 
 Revision ID: 0077
 Revises: 0076

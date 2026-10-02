@@ -3,7 +3,7 @@
 Lot M3 : les hauteurs d'un niveau peuvent etre lues sur une coupe (planchers detectes) ou
 saisies ; la hauteur sous plafond saisie prime sur hauteur d'etage - epaisseur de plancher.
 Les traces gardent leur source (automatique, corrige, manuel) : colonne deja presente.
-Voir docs/thermique/agent-verification-decisions.md.
+Voir docs/Archives/thermique/agent-verification-decisions.md.
 
 Revision ID: 0079
 Revises: 0078

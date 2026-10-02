@@ -5,7 +5,7 @@ read_policy: lire avant de toucher aux fiches par local (étape 2 de la passe pi
 # Fiche par local — décisions (étape 2)
 
 Date : 2026-09-22. Suite de [locaux-decisions.md](locaux-decisions.md) ; stratégie :
-[carences-agents-strategie.md](carences-agents-strategie.md) § 5 bis.
+[carences-agents-strategie.md](../../Archives/thermique/carences-agents-strategie.md) § 5 bis.
 
 ## 1. Existant vérifié
 

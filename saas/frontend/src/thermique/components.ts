@@ -1,4 +1,4 @@
-// Bibliothèque de projet et modèles réutilisables (docs/thermique/bibliotheque-projet-decisions.md).
+// Bibliothèque de projet et modèles réutilisables (docs/thermique/en-service/bibliotheque-projet-decisions.md).
 import { request } from "./api";
 import type { WallFacing, WallResult, WallType } from "./library";
 

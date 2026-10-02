@@ -3,7 +3,7 @@
 Un composant appartient à un projet ou aux modèles d'un compte (`project_id` vide). Importer un
 modèle dans un projet, dupliquer ou « enregistrer comme modèle » crée une copie indépendante
 (décision BP-D2). Le résultat est recalculé à chaque enregistrement avec les éditions du
-référentiel Th-Bât (BP-D3). Voir docs/thermique/bibliotheque-projet-decisions.md.
+référentiel Th-Bât (BP-D3). Voir docs/thermique/en-service/bibliotheque-projet-decisions.md.
 """
 from __future__ import annotations
 

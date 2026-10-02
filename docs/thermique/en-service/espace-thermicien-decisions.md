@@ -7,7 +7,7 @@ read_policy: lire avant de coder l'espace de travail du thermicien (interface de
 Date : 2026-09-22. Demande de l'utilisateur : « une page pour sélectionner le projet, puis la page s'ouvre avec le
 plan de référence (par défaut RDC), dans cette même page naviguer de plan en plan, accéder à la bibliothèque et aux
 informations du projet sans sortir de la page, tout dynamique, tout centralisé dans l'environnement de travail pur
-thermicien ». Décisions métier déjà prises : [piece-par-piece-decisions.md](piece-par-piece-decisions.md) (§ 5 à 8).
+thermicien ». Décisions métier déjà prises : [piece-par-piece-decisions.md](../../Archives/thermique/piece-par-piece-decisions.md) (§ 5 à 8).
 Rien n'est codé tant que les questions du § 5 ne sont pas tranchées.
 
 ## 1. Existant vérifié (branche `feat/thermique-socle-raster`)

@@ -24,7 +24,7 @@ PDF, afin de proposer tous les composants du bâtiment avant la détection des p
 - Taxonomie complétée avec poteaux et garde-corps.
 - Tests ciblés : 17 tests backend réussis (dont démarrage API) ; build frontend réussi.
 - Fichiers principaux : `saas/backend/app/services/thermique_vision.py`,
-  `saas/frontend/src/thermique/pages/AutoZoningPage.tsx`, `docs/thermique/analyse-ia-visuelle-r1-decisions.md`.
+  `saas/frontend/src/thermique/pages/AutoZoningPage.tsx`, `docs/Archives/thermique/analyse-ia-visuelle-r1-decisions.md`.
 - Changement demandé après le premier socle : exécuter l'analyse avec un agent spécialisé depuis le compte
   Claude Code du thermicien, sans exposer ni réutiliser ses identifiants dans le SaaS.
 - Ajout de `.claude/agents/thermicien-plan.md`, du pont local

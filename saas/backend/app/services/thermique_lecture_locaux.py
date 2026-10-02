@@ -1,4 +1,4 @@
-"""Lecture de l'enveloppe local par local (essai D42 à D45, docs/thermique/piece-par-piece-decisions.md § 8).
+"""Lecture de l'enveloppe local par local (essai D42 à D45, docs/Archives/thermique/piece-par-piece-decisions.md § 8).
 
 Au lieu de longer la face extérieure du bâtiment, l'agent lit les côtés de chaque local chauffé qui donnent sur
 l'extérieur, un local non chauffé, un vide, ou derrière lesquels le sondage n'a rien trouvé. La ligne 0 de chaque

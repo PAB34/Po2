@@ -3,7 +3,7 @@
 Etape E1 de la refondation : les calques de l'architecte, aplatis dans le PDF, se reconnaissent a leur
 signature (plume, couleur, tirets, remplissage). Le thermicien valide le role de chaque signature une fois
 par projet ; les roles sont gardes ici en JSON (cle de signature -> role).
-Voir docs/thermique/refondation-parcours-decisions.md.
+Voir docs/Archives/thermique/refondation-parcours-decisions.md.
 
 Revision ID: 0080
 Revises: 0079

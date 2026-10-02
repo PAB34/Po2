@@ -15,11 +15,11 @@ médiathèque de Frontignan (`Thermique/PLAN EXEMPLE PROJET/`, non versionné).
 
 ### Audit et faisabilité (avant code)
 
-- Aucun module plan/métré existant dans Po2. Rapport : `docs/thermique/00-audit-existant-faisabilite.md`.
-- PDF 100 % vectoriels, sans texte ni calques. Prototype `docs/thermique/proto_detection_murs.py` :
+- Aucun module plan/métré existant dans Po2. Rapport : `docs/Archives/thermique/00-audit-existant-faisabilite.md`.
+- PDF 100 % vectoriels, sans texte ni calques. Prototype `docs/Archives/thermique/proto_detection_murs.py` :
   un filtre d'épaisseur de trait isole les murs du niveau 0 (550 traits sur 225 000), emprise
-  **31,82 × 33,13 m = cotes imprimées**. Preuve : `docs/thermique/preuve_detection_murs_niveau0.png`.
-- Réponses utilisateur (Q1, Q2, Q3, Q14) : voir `docs/thermique/metre-thermique-decisions.md` §4.
+  **31,82 × 33,13 m = cotes imprimées**. Preuve : `docs/Archives/thermique/preuve_detection_murs_niveau0.png`.
+- Réponses utilisateur (Q1, Q2, Q3, Q14) : voir `docs/Archives/thermique/metre-thermique-decisions.md` §4.
 
 ### Étape 1 — PR #178, mergée et déployée en prod
 
@@ -65,7 +65,7 @@ médiathèque de Frontignan (`Thermique/PLAN EXEMPLE PROJET/`, non versionné).
 ## 🔁 Pour la prochaine IA — entrée en matière
 
 ```
-Lire docs/thermique/metre-thermique-decisions.md (décisions + questions) puis
-docs/thermique/00-audit-existant-faisabilite.md §4-5 (preuve et chaîne technique).
-Tâche : étape 2 (murs). Point de départ : docs/thermique/proto_detection_murs.py.
+Lire docs/Archives/thermique/metre-thermique-decisions.md (décisions + questions) puis
+docs/Archives/thermique/00-audit-existant-faisabilite.md §4-5 (preuve et chaîne technique).
+Tâche : étape 2 (murs). Point de départ : docs/Archives/thermique/proto_detection_murs.py.
 ```

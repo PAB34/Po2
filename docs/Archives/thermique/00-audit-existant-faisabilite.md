@@ -76,9 +76,9 @@ Caractéristiques techniques, identiques sur les 11 fichiers :
 
 ## 4. Preuve de faisabilité : détection des murs (plan niveau 0)
 
-Prototype : `docs/thermique/proto_detection_murs.py` (lecture directe du flux PDF avec les
+Prototype : `docs/Archives/thermique/proto_detection_murs.py` (lecture directe du flux PDF avec les
 transformations de coordonnées, sans bibliothèque lourde). Résultat :
-`docs/thermique/preuve_detection_murs_niveau0.png` (murs détectés en rouge sur le plan en gris).
+`docs/Archives/thermique/preuve_detection_murs_niveau0.png` (murs détectés en rouge sur le plan en gris).
 
 | Mesure | Valeur |
 |---|---|

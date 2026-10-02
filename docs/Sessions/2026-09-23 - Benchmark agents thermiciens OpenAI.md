@@ -40,7 +40,7 @@ puis comparer objectivement leurs sorties raster sur le R+1 de la médiathèque.
 - **Solution proposée** : produire d'abord une partition physique complète contrôlée par le raster, puis superposer des
   frontières fonctionnelles IA marquées `à_recaler` quand aucune paroi ne les matérialise.
 - **Fichiers cibles** : `saas/backend/app/services/thermique_claude_agent.py`, contrat d'étude E2/E3 et
-  `docs/thermique/comparatif-agents-claude-openai.md` décision A6.
+  `docs/Archives/thermique/comparatif-agents-claude-openai.md` décision A6.
 - **Piège connu** : le contrat actuel accepte seulement des polygones simples et ne distingue pas pièce physique,
   sous-zone fonctionnelle et vide intérieur.
 

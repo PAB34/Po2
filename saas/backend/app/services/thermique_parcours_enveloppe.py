@@ -1,4 +1,4 @@
-"""Parcours de l'enveloppe extérieure (docs/thermique/parcours-enveloppe-decisions.md).
+"""Parcours de l'enveloppe extérieure (docs/thermique/en-service/parcours-enveloppe-decisions.md).
 
 Une fois les pièces identifiées, elles délimitent le volume ; le remplissage de l'extérieur sur l'image donne
 alors la face extérieure réelle de l'enveloppe, zigzags compris. Ce contour sert de guide :

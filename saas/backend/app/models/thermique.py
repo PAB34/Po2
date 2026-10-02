@@ -2,7 +2,7 @@
 
 Une planche = une page d'un fichier importé. Sa nature (plan, coupe, façade, plan masse)
 est suggérée à l'import puis validée par l'utilisateur ; son échelle est déclarée puis
-contrôlée par une cote. Voir `docs/thermique/metre-thermique-decisions.md`.
+contrôlée par une cote. Voir `docs/Archives/thermique/metre-thermique-decisions.md`.
 """
 from datetime import datetime
 
@@ -105,7 +105,7 @@ class ThermiqueComponent(Base):
 
     La composition est stockée au format d'entrée du moteur ; le résultat est recalculé par le
     serveur à chaque enregistrement, avec les éditions du référentiel utilisées
-    (voir `docs/thermique/bibliotheque-projet-decisions.md`).
+    (voir `docs/thermique/en-service/bibliotheque-projet-decisions.md`).
     """
 
     __tablename__ = "thermique_components"

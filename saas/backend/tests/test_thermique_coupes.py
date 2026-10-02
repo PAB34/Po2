@@ -1,7 +1,7 @@
 """Coupes : rattachement des pièces aux locaux du plan et hauteur par local (S5c, S5d, D178 à D185).
 
 Données réelles du projet 1 (Frontignan, R+1, 1/100) : contours des locaux de l'étude, traits de coupe et
-bornes des pièces relevés à l'œil (`docs/thermique/verite-terrain-coupes.md`).
+bornes des pièces relevés à l'œil (`docs/thermique/en-service/verite-terrain-coupes.md`).
 """
 import pytest
 

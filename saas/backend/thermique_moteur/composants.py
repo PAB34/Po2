@@ -2,7 +2,7 @@
 
 Un composant = une catégorie, une composition et un résultat recalculé. Le même format sert la
 bibliothèque d'un projet et les modèles réutilisables d'un compte ; ce module ne dépend que du
-moteur (aucun import `app.`). Voir docs/thermique/bibliotheque-projet-decisions.md.
+moteur (aucun import `app.`). Voir docs/thermique/en-service/bibliotheque-projet-decisions.md.
 - Parois opaques (murs, planchers, toitures) : calcul en couches de `parois.calculer_paroi`.
 - Menuiseries et ponts thermiques : valeurs saisies en attendant le lot L3 (composition détaillée).
 Une composition incomplète s'enregistre (brouillon) : son résultat est alors vide.

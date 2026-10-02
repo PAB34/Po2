@@ -19,11 +19,11 @@ read_policy: lire en premier pour reprendre l'outil thermique (passation Claude 
 
 ## 2. À lire, dans cet ordre
 
-1. [espace-thermicien-decisions.md](espace-thermicien-decisions.md) — l'écran, D47 à D52, lots E1 à E5, réponses de
+1. [espace-thermicien-decisions.md](../../thermique/en-service/espace-thermicien-decisions.md) — l'écran, D47 à D52, lots E1 à E5, réponses de
    l'utilisateur, E1 réalisé (§ 6).
 2. [piece-par-piece-decisions.md](piece-par-piece-decisions.md) — D34 à D46 : stockage de l'étude, import,
    Remodéliser, versions, bibliothèque générale puis pièce par pièce, essai de lecture par local et ses résultats.
-3. [chaine-analyse-plan-raster.md](chaine-analyse-plan-raster.md) — la chaîne d'étude d'un niveau.
+3. [chaine-analyse-plan-raster.md](../../thermique/en-service/chaine-analyse-plan-raster.md) — la chaîne d'étude d'un niveau.
 4. Si besoin : `fiches-locaux-decisions.md` (D29 à D33), `locaux-decisions.md` (D24 à D28),
    `parcours-enveloppe-decisions.md`.
 
@@ -55,7 +55,7 @@ lister (chauffés d'abord), ouvrir la fiche d'un local (lecture seule).
    - Étapes de la colonne de gauche allumées selon l'étude.
    - Le plan de référence choisi passe du navigateur (`localStorage`) au serveur.
 
-Commencer par un fichier de décisions `docs/thermique/etude-niveau-E2-decisions.md` (existant vérifié, décisions,
+Commencer par un fichier de décisions `docs/thermique/en-service/etude-niveau-E2-decisions.md` (existant vérifié, décisions,
 questions numérotées) et le faire valider par l'utilisateur **avant de coder**.
 
 ## 4. Règles de l'utilisateur (impératives)

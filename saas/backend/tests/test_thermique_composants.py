@@ -1,6 +1,6 @@
 """Bibliothèque de projet et modèles réutilisables (lot L1) : catégories, codes, calcul d'un
 composant, copies modèle ↔ projet, isolement entre comptes.
-Voir docs/thermique/bibliotheque-projet-decisions.md."""
+Voir docs/thermique/en-service/bibliotheque-projet-decisions.md."""
 from __future__ import annotations
 
 import pytest

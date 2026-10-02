@@ -20,7 +20,7 @@ l'impossibilité constatée de déplacer les sommets d'une pièce existante.
   le plan, avec couleurs, identifiants, surfaces, catégories et légende inspirée de la projection R+1.
 - L'écran ne présente ni calques, ni menuiseries à désigner, ni calcul thermique.
 - Une zone est sélectionnable sur le plan ou dans la liste ; ses sommets sont directement corrigeables.
-- Contrat et audit : `thermique/mvp-zonage-auto-decisions.md`.
+- Contrat et audit : `Archives/thermique/mvp-zonage-auto-decisions.md`.
 - Validation : 7 tests frontend, 7 tests backend et build de production réussis.
 
 ### Parcours pièce d'abord
@@ -55,7 +55,7 @@ l'impossibilité constatée de déplacer les sommets d'une pièce existante.
 
 ## 📝 Notes & décisions
 
-- Décisions durables consignées dans `thermique/contours-pieces-decisions.md`, section du 2026-09-21.
+- Décisions durables consignées dans `Archives/thermique/contours-pieces-decisions.md`, section du 2026-09-21.
 - Le moteur suit désormais explicitement l'ordre : géométrie de la pièce → composants bordants →
   qualification réutilisable par signature.
 

@@ -42,7 +42,7 @@ supprimer les zigzags, notamment dans le plus grand espace, sans déformer les f
 ## Notes & décisions
 
 - ADR `[[Decisions/014-contours-pieces-simplification-adaptative]]`.
-- Détail de l'audit : `thermique/contours-pieces-decisions.md`.
+- Détail de l'audit : `Archives/thermique/contours-pieces-decisions.md`.
 
 ## Pour la prochaine IA — entrée en matière
 

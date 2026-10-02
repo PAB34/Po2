@@ -2,7 +2,7 @@
 
 Lot M1 du metre sur les plans : chaque niveau porte sa planche, ses hauteurs et son calage
 (deux points communs) ; les traces sont stockes en points PDF de la planche du niveau.
-Voir docs/thermique/metre-plans-decisions.md.
+Voir docs/Archives/thermique/metre-plans-decisions.md.
 
 Revision ID: 0078
 Revises: 0077

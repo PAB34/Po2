@@ -6,7 +6,7 @@ read_policy: lire en entier avant toute nouvelle étude sur plans raster ; sourc
 
 Mise à jour : 2026-09-22. Cas de référence : R+1 de la médiathèque de Frontignan
 (`Thermique/PLAN EXEMPLE PROJET 1/PC04-FRONT-NIVEAU1.pdf`, 1/100, 300 dpi, rotation antihoraire 90°).
-Décisions détaillées : [analyse-ia-visuelle-r1-decisions.md](analyse-ia-visuelle-r1-decisions.md) et
+Décisions détaillées : [analyse-ia-visuelle-r1-decisions.md](../../Archives/thermique/analyse-ia-visuelle-r1-decisions.md) et
 [parcours-enveloppe-decisions.md](parcours-enveloppe-decisions.md) (D1 à D23).
 
 ## 1. Principe

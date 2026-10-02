@@ -43,6 +43,6 @@ sommets est signalé et peut être remplacé par un retracé complet en quelques
 
 ## Liens
 
-- Décisions détaillées : `docs/thermique/contours-pieces-decisions.md`
+- Décisions détaillées : `docs/Archives/thermique/contours-pieces-decisions.md`
 - Moteur : `saas/backend/thermique_moteur/quadrilatere.py`
 - Commits : `af9dc199`, `edef539e`

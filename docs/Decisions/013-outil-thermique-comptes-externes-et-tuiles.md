@@ -1,7 +1,7 @@
 # ADR 013 — Outil thermique : comptes externes sur la base Po2 et planches rendues en tuiles
 
 - **Statut** : acceptée (2026-09-11)
-- **Contexte de décision** : `docs/thermique/metre-thermique-decisions.md`
+- **Contexte de décision** : `docs/Archives/thermique/metre-thermique-decisions.md`
 
 ## Contexte
 
@@ -51,5 +51,5 @@ lourds (jusqu'à 650 000 traits par planche).
 
 ## Liens
 
-- `docs/thermique/00-audit-existant-faisabilite.md` · `docs/thermique/metre-thermique-decisions.md`
+- `docs/Archives/thermique/00-audit-existant-faisabilite.md` · `docs/Archives/thermique/metre-thermique-decisions.md`
 - Code : `saas/backend/app/core/roles.py`, `app/api/deps.py`, `app/services/thermique_raster.py`

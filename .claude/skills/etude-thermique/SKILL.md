@@ -5,7 +5,7 @@ description: Mène l'étude thermique d'un niveau à partir de son plan raster (
 
 # Étude thermique d'un niveau (mode session)
 
-Mode d'emploi complet : `docs/thermique/chaine-analyse-plan-raster.md`. Règles permanentes : pixels seuls (jamais
+Mode d'emploi complet : `docs/thermique/en-service/chaine-analyse-plan-raster.md`. Règles permanentes : pixels seuls (jamais
 les vecteurs du PDF), ne jamais remplacer silencieusement l'agent Claude par un autre modèle, répondre en
 français, ne rien pousser sur GitHub sans autorisation.
 

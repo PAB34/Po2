@@ -19,7 +19,7 @@ ponts dessinés sur le plan), F4 (éléments isolables et modifiables).
 
 ## 2. Ce que l'utilisateur a demandé, et qui est décidé
 
-Tout est dans [parcours-par-niveau-E3bis-decisions.md](parcours-par-niveau-E3bis-decisions.md), décisions
+Tout est dans [parcours-par-niveau-E3bis-decisions.md](../../thermique/en-service/parcours-par-niveau-E3bis-decisions.md), décisions
 **D66 à D77, toutes validées**. En résumé, le travail se réorganise en étapes par niveau :
 
 | Étape | Contenu |

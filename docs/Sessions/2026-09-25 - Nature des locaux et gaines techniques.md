@@ -2,7 +2,7 @@
 
 > IA : Codex
 > Durée approximative : 1 h
-> Point de départ : `docs/thermique/passation-codex-F2.md`
+> Point de départ : `docs/Archives/thermique/passation-codex-F2.md`
 
 ## 🎯 Objectif de la session
 
@@ -52,7 +52,7 @@ nature `gaine_technique` décidée en D115, sans modifier le métré du R+1 de r
 
 ## 📝 Notes & décisions
 
-- D115 à D122 et Q1 sont consignées dans `docs/thermique/nature-locaux-gaine-decisions.md`.
+- D115 à D122 et Q1 sont consignées dans `docs/thermique/en-service/nature-locaux-gaine-decisions.md`.
 - La simulation de reclassement du local technique `piece-015` confirme l'équivalence thermique avec
   `non_chauffe` : 0 m propre, côtés chauffés voisins déperditifs, `sur_non_chauffe_m` et façade stables.
 - `.claude/agents/thermicien-plan.md` n'a pas été modifié.
@@ -61,8 +61,8 @@ nature `gaine_technique` décidée en D115, sans modifier le métré du R+1 de r
 
 ```
 J'ai lu :
-- docs/thermique/passation-codex-F2.md
-- docs/thermique/nature-locaux-gaine-decisions.md
+- docs/Archives/thermique/passation-codex-F2.md
+- docs/thermique/en-service/nature-locaux-gaine-decisions.md
 - docs/Sessions/2026-09-25 - Nature des locaux et gaines techniques.md
 
 Je sais que le poste utilisateur est verrouillé et qu'aucun push n'est autorisé sans accord explicite.

@@ -37,8 +37,8 @@ do_not_auto_read:
 - [[49-Spec-execution-refonte-Factures-Decisions-V1]] — **spec active** Factures & décisions (état d'implém. §0). Glossaire métier : `refonte-v1/factures-glossaire-controles.md`
 - `refonte-v1/suivi-financier-budget-atterrissage-cadrage.md` — **cadrage prochaine tranche** : budget par marché + suivi financier / atterrissage
 - `refonte-v1/os-avenant-cpe-dalkia-spec.md` - **cadrage actif** workflow OS/avenants CPE DALKIA : impact financier, statuts, documents.
-- **`thermique/guide-etude-thermique-14-etapes.md` — GUIDE DE RÉFÉRENCE de l'outil thermique (14 étapes) ; refondation : `thermique/refondation-assistant-ia-local-decisions.md`**
-- `thermique/metre-thermique-decisions.md` — **outil de métré thermique** (`thermique.patrimoineaucarre.com`) : décisions et questions ouvertes ; audit et faisabilité `thermique/00-audit-existant-faisabilite.md` ; contours éditables et simplification des zigzags `thermique/contours-pieces-decisions.md` ; ADR [[Decisions/013-outil-thermique-comptes-externes-et-tuiles]]
+- **Outil thermique : entrée unique `thermique/README.md`** (référence, en service, archives). Guide de référence : `thermique/reference/guide-etude-thermique-14-etapes.md` ; refondation : `thermique/reference/refondation-assistant-ia-local-decisions.md`
+- `Archives/thermique/metre-thermique-decisions.md` — **outil de métré thermique** (`thermique.patrimoineaucarre.com`) : décisions et questions ouvertes ; audit et faisabilité `Archives/thermique/00-audit-existant-faisabilite.md` ; contours éditables et simplification des zigzags `Archives/thermique/contours-pieces-decisions.md` ; ADR [[Decisions/013-outil-thermique-comptes-externes-et-tuiles]]
 - [[35-Contrat-ecran-Factures-Decisions-V1]] · [[34-Contrat-ecran-Fluides-V1]] · [[36-Contrat-ecran-Cockpit-Sites-V1]] — contrats d'écran
 - [[37-Plan-migration-React-refonte-V1]] · [[38-Modele-backend-matrices-comptables-versionnees]] · [[40-Analyse-factures-reelles-pour-matrice-comptable]] · [[13-Matrice-routes-fonctionnalites-refonte-api]]
 

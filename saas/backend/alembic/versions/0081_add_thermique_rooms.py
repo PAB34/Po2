@@ -1,7 +1,7 @@
 """outil de metre thermique : pieces des plans (etape E3)
 
 Espaces fermes par les calques designes, nom lu (reconnaissance de caracteres) ou saisi, classement
-chauffe / non chauffe / exterieur. Voir docs/thermique/refondation-parcours-decisions.md §13.
+chauffe / non chauffe / exterieur. Voir docs/Archives/thermique/refondation-parcours-decisions.md §13.
 
 Revision ID: 0081
 Revises: 0080

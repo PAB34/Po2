@@ -6,7 +6,7 @@ nom de fichier, échelle déclarée puis contrôlée par une cote.
 Unités : les coordonnées d'une planche sont en points PDF (1 pt = 25,4/72 mm sur le papier).
 À l'échelle 1/N, 1 pt vaut donc 0,3528 × N mm réels. Vérifié sur le plan niveau 0 du projet
 d'essai : l'emprise des murs mesure 31,82 m à 1/100, soit la cote imprimée.
-Voir `docs/thermique/00-audit-existant-faisabilite.md`.
+Voir `docs/Archives/thermique/00-audit-existant-faisabilite.md`.
 """
 from __future__ import annotations
 
@@ -190,7 +190,7 @@ def delete_project(db: Session, project: ThermiqueProject) -> None:
 
 def delete_all_projects(db: Session, user: User) -> int:
     """Efface tous les projets du compte : documents, planches, images, niveaux, tracés, composants de projet et
-    fichiers. La bibliothèque de modèles réutilisables est gardée (docs/thermique/refondation-parcours-decisions.md, D9)."""
+    fichiers. La bibliothèque de modèles réutilisables est gardée (docs/Archives/thermique/refondation-parcours-decisions.md, D9)."""
     projects = list_projects(db, user)
     for project in projects:
         delete_project(db, project)

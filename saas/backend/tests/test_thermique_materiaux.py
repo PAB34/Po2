@@ -1,5 +1,5 @@
 """Bibliothèque des matériaux (lot B2a) : lecture des tableaux, édition publiée, calcul d'une
-paroi avec des matériaux de la bibliothèque. Voir docs/thermique/bibliotheque-composants-decisions.md."""
+paroi avec des matériaux de la bibliothèque. Voir docs/thermique/en-service/bibliotheque-composants-decisions.md."""
 from __future__ import annotations
 
 import pytest

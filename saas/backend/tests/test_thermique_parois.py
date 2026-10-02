@@ -1,5 +1,5 @@
 """Calcul d'une paroi opaque en couches (lot B2) : cas calculés à la main.
-Voir thermique_moteur/parois.py et docs/thermique/bibliotheque-composants-decisions.md."""
+Voir thermique_moteur/parois.py et docs/thermique/en-service/bibliotheque-composants-decisions.md."""
 from __future__ import annotations
 
 import pytest

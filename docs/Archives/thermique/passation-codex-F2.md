@@ -68,7 +68,7 @@ Le thermicien valide **pièce par pièce**, et c'est lui qui a le dernier mot su
 
 ## 4. Ce que F2 a livré (commit `7ca754c2`)
 
-Décisions : **`docs/thermique/parcours-F2-decisions.md`** (D106 à D114, huit questions tranchées).
+Décisions : **`docs/Archives/thermique/parcours-F2-decisions.md`** (D106 à D114, huit questions tranchées).
 
 **Six étapes** qui pilotent : planche → analyse → locaux → parois et menuiseries → **ponts thermiques** →
 hauteurs. Chaque étape annonce son reste à faire, ouvre son panneau et règle les calques du plan.
@@ -158,7 +158,7 @@ rétablissement ; annuler sur une pile vide ne casse rien.
 
 ## 5bis. ⚠️ Sept sujets ouverts relevés par l'utilisateur le 2026-09-25
 
-**`docs/thermique/reprise-sujets-ouverts.md`** — à lire aussi. Supprimer et ajouter des pièces ; cliquer
+**`docs/Archives/thermique/reprise-sujets-ouverts.md`** — à lire aussi. Supprimer et ajouter des pièces ; cliquer
 un côté dans la fiche pour le voir sur le plan ; la règle des 50 % sur les 64 angles (elle n'existe que
 pour les 13 abouts de refend) ; comment une étape est déclarée terminée (répondu) ; les terrasses comme
 pièces extérieures ; les contours parasites de portes et d'aires PMR ; le tracé trop découpé.

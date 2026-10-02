@@ -1,6 +1,6 @@
 """outil de metre thermique : suppression des anciennes methodes (niveaux, traces, pieces, calques)
 
-Refondation de l'application (docs/thermique/refondation-application-audit.md) : le metre sur contours, les
+Refondation de l'application (docs/Archives/thermique/refondation-application-audit.md) : le metre sur contours, les
 calques designes par l'exemple et les pieces de l'etape E3 sont remplaces par la chaine sur l'image seule.
 Leurs tables et leurs donnees sont supprimees (decision de l'utilisateur du 2026-09-22). Le retour arriere
 recree les tables vides (definitions des migrations 0078 a 0081) ; la colonne north_deg est conservee.

@@ -13,7 +13,7 @@ Rien n'est supprimé tant que les questions du § 5 ne sont pas tranchées.
 L'application a empilé des approches successives, abandonnées depuis : détection par les vecteurs du PDF, calques,
 superposition, zonage automatique, métré sur contours vectoriels, première version des pièces et de l'enveloppe. La
 méthode retenue est désormais : **image seule + agents + algorithmes de mesure, pièce par pièce**
-([chaine-analyse-plan-raster.md](chaine-analyse-plan-raster.md)). Garder l'ancien code brouille l'application et
+([chaine-analyse-plan-raster.md](../../thermique/en-service/chaine-analyse-plan-raster.md)). Garder l'ancien code brouille l'application et
 chaque évolution.
 
 ## 2. Inventaire (branche `feat/thermique-inventaire-objets-r1`)

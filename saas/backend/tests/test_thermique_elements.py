@@ -1,5 +1,5 @@
 """Éléments à résistance tabulée (lot B2b-1) : lecture des cellules, édition publiée, contrôles,
-couche « élément » du calcul de paroi. Voir docs/thermique/bibliotheque-composants-decisions.md §10."""
+couche « élément » du calcul de paroi. Voir docs/thermique/en-service/bibliotheque-composants-decisions.md §10."""
 from __future__ import annotations
 
 import pytest
