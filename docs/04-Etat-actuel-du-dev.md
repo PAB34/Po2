@@ -24,6 +24,12 @@ do_not_auto_read:
 
 ### ▶️ REPRENDRE ICI
 
+**BOUSSOLE (2026-10-02) : `docs/thermique/bilan-et-plan-2026-10-02.md`** — bilan forces/faiblesses et plan
+d'objectifs dans l'ordre : (1) R+1 parfait [lot B murs : 3 questions ouvertes dans
+`mur-ligne-de-metre-decisions.md` ; coupes et élévations ; recette souris], (2) interface allégée étape par
+étape + nettoyage des fonctions retirées, (3) bibliothèques fiables, (4) autres niveaux par report sans IA,
+(5) livrable déperditions. Tout lot doit servir un de ces objectifs.
+
 **CAP DÉCIDÉ LE 2026-10-01 : consolider le R+1 jusqu'à ce qu'il soit parfait, AVANT tout autre niveau.**
 - La passe globale automatique (`run_etude_niveau.py --mode cli`) est **insuffisante** : essai A/B sur le R+2,
   23 / 25 / 36 objets contre 130 au R+1 (le R+1 avait été fait en session interactive, mode « attente »). La
