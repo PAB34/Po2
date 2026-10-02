@@ -12,7 +12,7 @@ import {
 import { appliquerEnLocal, refusDeCorrection } from "./elementsLocal";
 import { annulerOperation, rejouerOperations, retablirOperation } from "./elementsHistory";
 import { memeElement, refDeElement } from "./elements";
-import { appliquerExtremite, type GesteExtremite } from "./murs";
+import { appliquerCreation, appliquerExtremite, type GesteCoupe, type GesteCreation, type GesteExtremite } from "./murs";
 import { preparerAjout } from "./pontsAjoutes";
 import { studyQueryKey } from "./study";
 
@@ -235,7 +235,7 @@ export function useStudyElements({
    * désigné sous sa nouvelle identité (ses bornes ont changé), l'enregistrement part tout seul (D252).
    */
   const deplacerExtremite = useCallback(
-    (geste: GesteExtremite) => {
+    (geste: GesteExtremite, entraines: GesteExtremite[] = []) => {
       const base = localRef.current ?? study?.content;
       if (!base) return;
       const { ref } = appliquerExtremite(base, geste);
@@ -243,16 +243,43 @@ export function useStudyElements({
         setMessage("Ce mur ne peut plus être modifié ainsi.");
         return;
       }
+      // Le sommet partagé entraîne l'extrémité des murs qui y aboutissent (D247).
+      entraines.forEach((autre) => apply(autre));
       setSelected(ref);
       fileEnregistrement.current = fileEnregistrement.current.then(() => saveRef.current());
     },
     [apply, study],
   );
 
+  /** Un mur tracé à la main (D250) : créé, désigné pour valider sa composition, enregistré aussitôt. */
+  const creerMur = useCallback(
+    (geste: GesteCreation) => {
+      const base = localRef.current ?? study?.content;
+      if (!base || !apply(geste)) return;
+      setSelected(appliquerCreation(base, geste).ref);
+      setMessage("Mur créé. Vérifiez et validez sa composition.");
+      fileEnregistrement.current = fileEnregistrement.current.then(() => saveRef.current());
+    },
+    [apply, study],
+  );
+
+  /** Un point ajouté sur un mur (D247) : deux morceaux, le sommet commun se glisse ensuite. */
+  const couperMur = useCallback(
+    (geste: GesteCoupe) => {
+      if (!apply(geste)) return;
+      setSelected({ ...geste.element, fin_m: geste.abscisse_m });
+      setMessage("Point ajouté : glissez le rond du sommet pour plier le mur.");
+      fileEnregistrement.current = fileEnregistrement.current.then(() => saveRef.current());
+    },
+    [apply],
+  );
+
   return {
     selected,
     select: setSelected,
     deplacerExtremite,
+    creerMur,
+    couperMur,
     /** Étude à afficher : celle que les gestes en attente décrivent, sinon celle en base. */
     shown: local && study ? { ...study, content: local } : study,
     pending: operations.length,

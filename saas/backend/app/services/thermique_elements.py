@@ -323,6 +323,8 @@ def reunir_menuiseries(releve_brut: dict[str, Any]) -> int:
                     continue
                 if (
                     b.get("type") == a.get("type")
+                    # D249, D250 : un mur dessiné ou retouché à la main garde la géométrie voulue (sommet, angle).
+                    and not (a.get("geometrie_manuelle") or b.get("geometrie_manuelle"))
                     and (b.get("composant") or "") == (a.get("composant") or "")
                     and (b.get("modele") or None) == (a.get("modele") or None)
                 ):

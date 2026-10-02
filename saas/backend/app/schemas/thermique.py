@@ -238,11 +238,17 @@ class EtudeOperation(BaseModel):
         "pont_ajouter",
         "paroi_retracer",
         "paroi_extremite",
+        "paroi_creer",
+        "paroi_couper",
     ]
     id: str | None = None
     # Extrémité d'un mur déplacée (D249) : laquelle, et la face intérieure à ce bout (avec `abscisse_m`).
     extremite: Literal["debut", "fin"] | None = None
     nu_interieur_cm: float | None = None
+    # Mur créé (D250) : `troncon`, `debut_m`, `fin_m`, faces intérieures aux deux bouts, composition.
+    nu_interieur_fin_cm: float | None = None
+    composant: str | None = None
+    couches: list[dict[str, Any]] | None = None
     # Mur retracé (D240) : début et fin le long de la façade, et la composition copiée.
     debut_m: float | None = None
     fin_m: float | None = None

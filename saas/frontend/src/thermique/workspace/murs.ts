@@ -1,6 +1,6 @@
-import type { LigneMetre, PdfPoint, StudyContent, StudyElementRef, StudyReleveElement } from "../api";
+import type { LigneMetre, PdfPoint, StudyContent, StudyCouche, StudyElementRef, StudyReleveElement } from "../api";
 import { faitPartieDe, memeElement, refDeElement } from "./elements";
-import { repereFeuille, versFeuille } from "./pontsAjoutes";
+import { projeterSurTroncon, repereFeuille, versFeuille } from "./pontsAjoutes";
 
 // D249 : la ligne de métré d'un mur se modifie à la main, extrémité par extrémité, librement sur le plan.
 // Le repère d'un tronçon (abscisse le long de la façade, profondeur perpendiculaire) couvre tout le plan : un
@@ -69,10 +69,10 @@ export function extremitesDuMur(content: StudyContent, element: StudyReleveEleme
   return debut && fin ? { debut, fin } : null;
 }
 
-/** Un point PDF lu dans le repère du tronçon du mur : abscisse (m) et profondeur (cm). */
+/** Un point PDF lu dans le repère du tronçon du mur (ou d'un tronçon donné) : abscisse (m) et profondeur (cm). */
 export function positionSurLeTroncon(
   content: StudyContent,
-  element: StudyReleveElement,
+  element: { troncon: string },
   point: PdfPoint,
 ): { abscisse_m: number; profondeur_cm: number } | null {
   const manifeste = manifesteDe(content);
@@ -203,9 +203,215 @@ export function boutLePlusProche(
 }
 
 /** Longueur réelle d'une ligne de métré qui irait de `a` à `b` (points PDF), via le repère de l'enveloppe. */
-export function longueurEntre(content: StudyContent, element: StudyReleveElement, a: PdfPoint, b: PdfPoint): number | null {
+export function longueurEntre(content: StudyContent, element: { troncon: string }, a: PdfPoint, b: PdfPoint): number | null {
   const pa = positionSurLeTroncon(content, element, a);
   const pb = positionSurLeTroncon(content, element, b);
   if (!pa || !pb) return null;
   return Math.hypot(pb.abscisse_m - pa.abscisse_m, (pb.profondeur_cm - pa.profondeur_cm) / 100);
+}
+
+/** Longueur réelle entre deux points du plan, dans le repère du tronçon le plus proche du premier. */
+export function longueurSurLePlan(content: StudyContent, a: PdfPoint, b: PdfPoint): number | null {
+  const repere = repereFeuille(content);
+  const situe = repere ? projeterSurTroncon(content, versFeuille(repere, a)) : null;
+  return situe ? longueurEntre(content, { troncon: situe.troncon }, a, b) : null;
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// D250 : créer un mur ; D247 : ajouter un point sur un mur (deux morceaux qui partagent ce sommet).
+
+export type GesteCreation = {
+  type: "paroi_creer";
+  troncon: string;
+  debut_m: number;
+  fin_m: number;
+  nu_interieur_cm: number;
+  nu_interieur_fin_cm: number;
+  composant: string | null;
+  couches: StudyCouche[];
+};
+export type GesteCoupe = { type: "paroi_couper"; element: StudyElementRef; abscisse_m: number };
+
+/** La ligne de métré d'un élément, telle que l'écran la dessine avant le recalcul. */
+function ligneDe(content: StudyContent, element: StudyReleveElement): LigneMetre | null {
+  const bouts = extremitesDuMur(content, element);
+  if (!bouts) return null;
+  const finInt = element.nu_interieur_fin_cm ?? element.nu_interieur_cm;
+  const finExt = element.nu_exterieur_fin_cm ?? element.nu_exterieur_cm;
+  return {
+    points_pdf: [bouts.debut, bouts.fin],
+    source_parcours: { ...refDeElement(element), composant: element.composant ?? null },
+    composant: element.composant ?? "",
+    epaisseur_cm: arrondi(element.nu_exterieur_cm - element.nu_interieur_cm, 0.1),
+    epaisseur_fin_cm: arrondi(finExt - finInt, 0.1),
+    longueur_m: arrondi(Math.hypot(element.fin_m - element.debut_m, (finInt - element.nu_interieur_cm) / 100), 0.001),
+  };
+}
+
+/**
+ * La composition proposée à un mur neuf : celle du mur actif le plus proche sur le même tronçon, sinon celle du
+ * dernier mur validé, sinon un voile de 20 cm. Elle se change dans la fiche, comme pour tout mur.
+ */
+export function compositionParDefaut(
+  content: StudyContent,
+  troncon: string,
+  abscisse: number,
+): { composant: string | null; couches: StudyCouche[] } {
+  const murs = content.enveloppe.releve_brut.elements.filter((e) => e.type === "paroi" && !e.exclu && (e.couches?.length ?? 0) > 0);
+  const distance = (e: StudyReleveElement) => Math.max(0, e.debut_m - abscisse, abscisse - e.fin_m);
+  const voisin = murs.filter((e) => e.troncon === troncon).sort((a, b) => distance(a) - distance(b))[0];
+  const valide = [...murs].reverse().find((e) => e.corrige || e.confirme);
+  const modele = voisin ?? valide;
+  return modele
+    ? { composant: modele.composant ?? null, couches: (modele.couches ?? []).map(({ nature, epaisseur_cm }) => ({ nature, epaisseur_cm })) }
+    : { composant: null, couches: [{ nature: "mur", epaisseur_cm: 20 }] };
+}
+
+/** Le mur tracé de `a` à `b`, situé sur le tronçon le plus proche de `a`, ou la raison de le refuser. */
+export function gesteCreation(content: StudyContent, a: PdfPoint, b: PdfPoint): GesteCreation | string {
+  const repere = repereFeuille(content);
+  const situe = repere ? projeterSurTroncon(content, versFeuille(repere, a)) : null;
+  let pa = situe ? positionSurLeTroncon(content, { troncon: situe.troncon }, a) : null;
+  let pb = situe ? positionSurLeTroncon(content, { troncon: situe.troncon }, b) : null;
+  if (!situe || !pa || !pb) return "Ce niveau n'a pas de repère d'enveloppe : le mur ne peut pas être situé.";
+  if (pa.abscisse_m > pb.abscisse_m) [pa, pb] = [pb, pa];
+  if (pb.abscisse_m - pa.abscisse_m < LONGUEUR_MUR_MIN_M) {
+    return "Le mur est trop court, ou tracé droit à travers la façade : tracez-le le long du mur.";
+  }
+  return {
+    type: "paroi_creer",
+    troncon: situe.troncon,
+    debut_m: pa.abscisse_m,
+    fin_m: pb.abscisse_m,
+    nu_interieur_cm: pa.profondeur_cm,
+    nu_interieur_fin_cm: pb.profondeur_cm,
+    ...compositionParDefaut(content, situe.troncon, pa.abscisse_m),
+  };
+}
+
+/** Le mur créé, dans le relevé et sur le plan, comme le serveur le fera (`creer_paroi`). */
+export function appliquerCreation(content: StudyContent, geste: GesteCreation): { content: StudyContent; ref: StudyElementRef } {
+  const elements = content.enveloppe.releve_brut.elements;
+  const prises = new Set(elements.map((e) => `${e.troncon}|${e.debut_m}|${e.fin_m}`));
+  const debut = arrondi(geste.debut_m, 0.001);
+  let fin = arrondi(geste.fin_m, 0.001);
+  while (prises.has(`${geste.troncon}|${debut}|${fin}`)) fin = arrondi(fin + 0.001, 0.001);
+  const epaisseur = arrondi(geste.couches.reduce((total, couche) => total + couche.epaisseur_cm, 0), 0.1);
+  const mur = {
+    troncon: geste.troncon,
+    debut_m: debut,
+    fin_m: fin,
+    type: "paroi",
+    composant: geste.composant,
+    couches: geste.couches,
+    nu_interieur_cm: arrondi(geste.nu_interieur_cm, 0.1),
+    nu_exterieur_cm: arrondi(geste.nu_interieur_cm + epaisseur, 0.1),
+    nu_interieur_fin_cm: arrondi(geste.nu_interieur_fin_cm, 0.1),
+    nu_exterieur_fin_cm: arrondi(geste.nu_interieur_fin_cm + epaisseur, 0.1),
+    confiance: 1,
+    indice: "mur tracé par le thermicien",
+    a_verifier: false,
+    ajoute: true,
+    geometrie_manuelle: true,
+  } as StudyReleveElement;
+  const ligne = ligneDe(content, mur);
+  return {
+    ref: refDeElement(mur),
+    content: {
+      ...content,
+      enveloppe: {
+        ...content.enveloppe,
+        lignes_metre: [...(content.enveloppe.lignes_metre ?? []), ...(ligne ? [ligne] : [])],
+        releve_brut: { ...content.enveloppe.releve_brut, elements: [...elements, mur] },
+      },
+    },
+  };
+}
+
+/** « Ajouter un point ici » sur le mur : l'abscisse du point, ou la raison de refuser. */
+export function gesteCoupe(content: StudyContent, element: StudyReleveElement, point: PdfPoint): GesteCoupe | string {
+  const position = positionSurLeTroncon(content, element, point);
+  if (!position) return "Ce niveau n'a pas de repère d'enveloppe.";
+  if (position.abscisse_m < element.debut_m + LONGUEUR_MUR_MIN_M || position.abscisse_m > element.fin_m - LONGUEUR_MUR_MIN_M) {
+    return "Le point est trop près d'une extrémité du mur.";
+  }
+  return { type: "paroi_couper", element: refDeElement(element), abscisse_m: position.abscisse_m };
+}
+
+/** Le mur coupé en deux morceaux qui partagent le sommet, comme le serveur le fera (`couper_paroi`). */
+export function appliquerCoupe(content: StudyContent, geste: GesteCoupe): StudyContent {
+  const elements = content.enveloppe.releve_brut.elements;
+  const vise = elements.find((element) => memeElement(refDeElement(element), geste.element));
+  if (!vise || vise.exclu || vise.type !== "paroi") return content;
+  const ext = vise.nu_exterieur_cm;
+  const inte = vise.nu_interieur_cm;
+  const extFin = vise.nu_exterieur_fin_cm ?? ext;
+  const inteFin = vise.nu_interieur_fin_cm ?? inte;
+  const coupe = arrondi(geste.abscisse_m, 0.001);
+  const part = (coupe - vise.debut_m) / (vise.fin_m - vise.debut_m);
+  const extC = arrondi(ext + (extFin - ext) * part, 0.1);
+  const inteC = arrondi(inte + (inteFin - inte) * part, 0.1);
+  const origine = { bornes: [vise.debut_m, vise.fin_m], ...(vise.releve_origine ?? {}) };
+  const premier: StudyReleveElement = {
+    ...vise,
+    fin_m: coupe,
+    nu_exterieur_fin_cm: extC,
+    nu_interieur_fin_cm: inteC,
+    releve_origine: origine,
+    geometrie_manuelle: true,
+  };
+  const second: StudyReleveElement = {
+    ...vise,
+    debut_m: coupe,
+    nu_exterieur_cm: extC,
+    nu_interieur_cm: inteC,
+    nu_exterieur_fin_cm: extFin,
+    nu_interieur_fin_cm: inteFin,
+    releve_origine: origine,
+    geometrie_manuelle: true,
+  };
+  const avant = refDeElement(vise);
+  const hors = <T extends { source_parcours?: { troncon?: string; debut_m?: number; fin_m?: number } }>(liste: T[] | undefined) =>
+    (liste ?? []).filter((forme) => {
+      const s = forme.source_parcours;
+      return !(s?.troncon && s.debut_m != null && s.fin_m != null && faitPartieDe(avant, { troncon: s.troncon, debut_m: s.debut_m, fin_m: s.fin_m }));
+    });
+  const lignes = [premier, second].map((morceau) => ligneDe(content, morceau)).filter((ligne): ligne is LigneMetre => ligne !== null);
+  return {
+    ...content,
+    enveloppe: {
+      ...content.enveloppe,
+      objets: hors(content.enveloppe.objets),
+      lignes_metre: [...hors(content.enveloppe.lignes_metre), ...lignes],
+      releve_brut: {
+        ...content.enveloppe.releve_brut,
+        elements: elements.flatMap((element) => (element === vise ? [premier, second] : [element])),
+      },
+    },
+  };
+}
+
+/**
+ * Les autres murs dont une extrémité est à ce point (sommet partagé après « Ajouter un point ») : glisser le
+ * sommet les entraîne avec lui.
+ */
+export function extremitesPartagees(
+  content: StudyContent,
+  element: StudyReleveElement,
+  point: PdfPoint,
+  tolerance: number,
+): { element: StudyReleveElement; extremite: Extremite }[] {
+  const lui = refDeElement(element);
+  const trouves: { element: StudyReleveElement; extremite: Extremite }[] = [];
+  for (const autre of content.enveloppe.releve_brut.elements) {
+    if (autre.type !== "paroi" || autre.exclu || memeElement(refDeElement(autre), lui)) continue;
+    const bouts = extremitesDuMur(content, autre);
+    if (!bouts) continue;
+    for (const extremite of ["debut", "fin"] as const) {
+      if (Math.hypot(bouts[extremite][0] - point[0], bouts[extremite][1] - point[1]) <= tolerance) {
+        trouves.push({ element: autre, extremite });
+      }
+    }
+  }
+  return trouves;
 }

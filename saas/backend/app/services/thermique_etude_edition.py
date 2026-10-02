@@ -45,6 +45,10 @@ OPERATIONS = (
     "paroi_retracer",
     # Une extrémité de la ligne de métré d'un mur, déplacée librement sur le plan (D249).
     "paroi_extremite",
+    # Un mur tracé par le thermicien d'un point à un autre (D250).
+    "paroi_creer",
+    # Un point ajouté sur la ligne d'un mur : deux morceaux qui partagent ce sommet (D247).
+    "paroi_couper",
 )
 OPERATIONS_ELEMENT = tuple(nom for nom in OPERATIONS if nom.startswith("element_"))
 # Un contour édité est simplifié sous cette tolérance, en unités du repère 0..1000 (~5 cm).
@@ -256,6 +260,10 @@ def appliquer(contenu: dict[str, Any], operations: list[dict[str, Any]]) -> dict
             retracer_paroi(resultat["enveloppe"]["releve_brut"], resultat["enveloppe"]["manifeste"], operation)
         elif operation["type"] == "paroi_extremite":
             deplacer_extremite(resultat, operation)
+        elif operation["type"] == "paroi_creer":
+            creer_paroi(resultat, operation)
+        elif operation["type"] == "paroi_couper":
+            couper_paroi(resultat, operation)
         elif operation["type"] == "modifier":
             _modifier(resultat["analyse"], operation)
         elif operation["type"] == "couper":
@@ -506,8 +514,80 @@ def deplacer_extremite(contenu: dict[str, Any], operation: dict[str, Any]) -> di
     while (element["troncon"], round(debut, 3), round(fin, 3)) in prises:
         fin += 0.001
     element["debut_m"], element["fin_m"] = round(debut, 3), round(fin, 3)
-    element.update({"corrige": True, "a_verifier": False})
+    element.update({"corrige": True, "a_verifier": False, "geometrie_manuelle": True})
     return element
+
+
+def creer_paroi(contenu: dict[str, Any], operation: dict[str, Any]) -> dict[str, Any]:
+    """Un mur tracé par le thermicien d'un point à un autre (D250).
+
+    L'écran situe les deux points dans le repère du tronçon le plus proche (abscisses et face intérieure à
+    chaque bout) : le mur est un élément du relevé comme les autres, ses couches posées vers l'extérieur du
+    tronçon. Sa composition est à valider dans sa fiche.
+    """
+    manifeste = contenu["enveloppe"]["manifeste"]
+    troncon = next((t for t in manifeste.get("troncons", []) if t["id"] == operation.get("troncon")), None)
+    if troncon is None:
+        raise ThermiqueError("Le mur à créer n'est rattaché à aucun tronçon de ce niveau.")
+    try:
+        debut, fin = round(float(operation["debut_m"]), 3), round(float(operation["fin_m"]), 3)
+        face, face_fin = round(float(operation["nu_interieur_cm"]), 1), round(float(operation["nu_interieur_fin_cm"]), 1)
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ThermiqueError("Le mur à créer se donne par ses deux extrémités.") from exc
+    if fin - debut < LONGUEUR_MUR_MIN_M:
+        raise ThermiqueError("Le mur à créer est trop court : cliquez son début puis sa fin.")
+    couches = elements_releve._couches(operation.get("couches") or [{"nature": "mur", "epaisseur_cm": 20}])
+    epaisseur = round(sum(float(couche["epaisseur_cm"]) for couche in couches), 1)
+    elements = _elements_releve(contenu)
+    prises = {(e.get("troncon"), e.get("debut_m"), e.get("fin_m")) for e in elements}
+    while (troncon["id"], debut, fin) in prises:
+        fin = round(fin + 0.001, 3)
+    mur = {
+        "troncon": troncon["id"], "debut_m": debut, "fin_m": fin, "type": "paroi",
+        "composant": (operation.get("composant") or None), "couches": couches,
+        "nu_interieur_cm": face, "nu_exterieur_cm": round(face + epaisseur, 1),
+        "nu_interieur_fin_cm": face_fin, "nu_exterieur_fin_cm": round(face_fin + epaisseur, 1),
+        "menuiserie_type": "", "cadre_cm": 0, "confiance": 1.0, "indice": "mur tracé par le thermicien",
+        "a_verifier": False, "ajoute": True, "geometrie_manuelle": True,
+    }
+    elements.append(mur)
+    return mur
+
+
+def couper_paroi(contenu: dict[str, Any], operation: dict[str, Any]) -> list[dict[str, Any]]:
+    """Ajoute un point sur la ligne d'un mur : le mur devient deux morceaux qui partagent ce sommet (D247).
+
+    Chaque morceau garde la composition et l'état du mur ; les faces au point de coupe sont interpolées. Glisser
+    ensuite le sommet commun donne un mur à plusieurs pans.
+    """
+    ref = operation.get("element")
+    if not isinstance(ref, dict):
+        raise ThermiqueError("Le mur à couper n'est pas désigné.")
+    element = elements_releve.trouver(contenu, ref)
+    if element.get("exclu") or element.get("type") != "paroi":
+        raise ThermiqueError("Seul un mur actif se coupe ainsi.")
+    try:
+        coupe = round(float(operation["abscisse_m"]), 3)
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ThermiqueError("Le point où couper le mur est absent.") from exc
+    debut, fin = float(element["debut_m"]), float(element["fin_m"])
+    if not debut + LONGUEUR_MUR_MIN_M <= coupe <= fin - LONGUEUR_MUR_MIN_M:
+        raise ThermiqueError("Le point est trop près d'une extrémité du mur.")
+    ext, inte = float(element["nu_exterieur_cm"]), float(element["nu_interieur_cm"])
+    ext_fin = float(element.get("nu_exterieur_fin_cm", ext))
+    inte_fin = float(element.get("nu_interieur_fin_cm", inte))
+    part = (coupe - debut) / (fin - debut)
+    ext_c, inte_c = round(ext + (ext_fin - ext) * part, 1), round(inte + (inte_fin - inte) * part, 1)
+    premier = {**copy.deepcopy(element), "fin_m": coupe, "nu_exterieur_fin_cm": ext_c, "nu_interieur_fin_cm": inte_c}
+    second = {**copy.deepcopy(element), "debut_m": coupe, "nu_exterieur_cm": ext_c, "nu_interieur_cm": inte_c,
+              "nu_exterieur_fin_cm": ext_fin, "nu_interieur_fin_cm": inte_fin}
+    for morceau in (premier, second):
+        morceau.setdefault("releve_origine", {}).setdefault("bornes", [debut, fin])
+        morceau["geometrie_manuelle"] = True
+    elements = _elements_releve(contenu)
+    rang = elements.index(element)
+    elements[rang:rang + 1] = [premier, second]
+    return [premier, second]
 
 
 def _elements_releve(contenu: dict[str, Any]) -> list[dict[str, Any]]:

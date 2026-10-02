@@ -23,7 +23,7 @@ import { PontsPanel } from "./PontsPanel";
 import { coteAt, empreinteCote, milieuCote, rangVise, type CoteVisee } from "./cotes";
 import { elementDuPont, paroisATrancher, pontAt, pontDeElement, refDeElement, trouverElement, viserSurLePlan } from "./elements";
 import { baieDeLElement, cleDeRef, cotesDesMenuiseries, menuiseriesDeMemeLargeur } from "./modeles";
-import { formesEtapeParois } from "./parois";
+import { formesDesLignes, formesEtapeParois } from "./parois";
 import { BibliothequeModeles, CotesMenuiseries } from "./ModelesMenuiseries";
 import { demandeUneHauteur, etapeCourante, hauteurConnue, locauxSansHauteur, parcours, vueDeLEtape, type EtapeId } from "./parcours";
 import { TYPES_PONT_REATTRIBUABLES } from "./pontsTypes";
@@ -41,8 +41,19 @@ import { NiveauFantome, PointsDeCalage } from "./NiveauFantome";
 import { appliquer, calageAEnregistrer, correspondance, inverser, niveauxVoisins } from "./superposition";
 import { useStudyEdition } from "./useStudyEdition";
 import { useStudyElements } from "./useStudyElements";
-import { boutLePlusProche, extremitesDuMur, gesteExtremite, longueurEntre, type Extremite } from "./murs";
-import { PoigneesDuMur } from "./PoigneesDuMur";
+import {
+  boutLePlusProche,
+  extremitesDuMur,
+  extremitesPartagees,
+  gesteCoupe,
+  gesteCreation,
+  gesteExtremite,
+  longueurEntre,
+  longueurSurLePlan,
+  type Extremite,
+  type GesteExtremite,
+} from "./murs";
+import { PoigneesDuMur, TraceDuMur } from "./PoigneesDuMur";
 import { cibleEditable } from "./elementsHistory";
 import { peutAnnulerEditionAvecEchap } from "./edition";
 import { hauteursQueryKey, NATURE_LABELS, otherLocalNatures, roomAt, sortedStudyRooms, studyQueryKey } from "./study";
@@ -98,6 +109,8 @@ const PRISE_PONT_PX = 8;
 // D249 : prise d'une poignée de mur et portée de l'aimant, en pixels écran.
 const PRISE_POIGNEE_PX = 12;
 const AIMANT_POIGNEE_PX = 14;
+// Deux bouts de murs à moins de ce nombre de pixels forment un sommet partagé, qui se glisse d'un seul geste.
+const SOMMET_PARTAGE_PX = 1.5;
 // À l'étape des ponts, rien d'autre n'est attrapable : on vise large (D156).
 const PRISE_PONT_ETAPE_PX = 18;
 // Serrage du plan sur le pont en cours, en multiple du cadrage ajusté : de quoi voir le coin et ses
@@ -173,6 +186,9 @@ export function WorkspacePage() {
   const referenceMigration = useRef<number | null>(null);
   const [metrics, setMetrics] = useState<MetricsShow>(METRICS_DEFAUT);
   const [menu, setMenu] = useState<{ x: number; y: number; actions: PlanAction[] } | null>(null);
+  // D250 : tracé d'un mur en cours (premier point posé, point sous le curseur pour l'aperçu).
+  const [traceMur, setTraceMur] = useState<{ premier: PdfPoint | null; survol: PdfPoint | null } | null>(null);
+  const [traceMessage, setTraceMessage] = useState<string | null>(null);
   // Dès que le thermicien touche une case d'affichage, l'étape rend la main : c'est lui qui décide (Q6).
   const [calquesLibres, setCalquesLibres] = useState(false);
   // Niveau qu'on cherche à quitter alors que des corrections attendent (D111) : pas de départ silencieux.
@@ -258,6 +274,8 @@ export function WorkspacePage() {
         setCadreVue(null);
         setHauteurAPoser(null);
         setModeleAPoser(null);
+        setTraceMur(null);
+        setTraceMessage(null);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -583,9 +601,12 @@ export function WorkspacePage() {
   const glisserExtremite = (point: PdfPoint, event: PickEvent) => {
     if (!glisse || !shownStudy || !murAPoignees || !extremites) return;
     // Aimant (D249) : l'extrémité s'accroche au bout d'un autre mur, pour fermer les angles ; Maj le coupe.
-    const cible = event.shiftKey
+    const depart = extremites[glisse.extremite];
+    const trouve = event.shiftKey
       ? null
       : boutLePlusProche(shownStudy.content, murAPoignees, point, AIMANT_POIGNEE_PX / glisse.pixelsPerPt);
+    // Le bout d'un mur qui partage ce sommet n'est pas une cible : il suit le glisser (D247).
+    const cible = trouve && Math.hypot(trouve[0] - depart[0], trouve[1] - depart[1]) > 1e-6 ? trouve : null;
     const pose = cible ?? point;
     const autre = extremites[glisse.extremite === "debut" ? "fin" : "debut"];
     setGlisse({ ...glisse, point: pose, aimante: Boolean(cible), longueur_m: longueurEntre(shownStudy.content, murAPoignees, autre, pose) });
@@ -601,7 +622,16 @@ export function WorkspacePage() {
       setModeleMessage(geste);
       return;
     }
-    elementsState.deplacerExtremite(geste);
+    const entraines = extremitesPartagees(shownStudy.content, murAPoignees, depart, SOMMET_PARTAGE_PX / fini.pixelsPerPt)
+      .map((autre) => gesteExtremite(shownStudy.content, autre.element, autre.extremite, fini.point))
+      .filter((autre): autre is GesteExtremite => typeof autre !== "string");
+    elementsState.deplacerExtremite(geste, entraines);
+  };
+  // D250 : le point posé s'accroche au bout d'un mur existant (Maj pour le poser librement).
+  const pointDuTrace = (point: PdfPoint, pixelsPerPt: number, libre: boolean): PdfPoint => {
+    if (libre || !shownStudy) return point;
+    const aucun = { troncon: "", debut_m: 0, fin_m: 0 } as unknown as Parameters<typeof boutLePlusProche>[1];
+    return boutLePlusProche(shownStudy.content, aucun, point, AIMANT_POIGNEE_PX / pixelsPerPt) ?? point;
   };
   const pontCourant =
     etape === "ponts" && shownStudy && elementCourant ? pontDeElement(shownStudy.content, elementCourant) : null;
@@ -976,6 +1006,33 @@ export function WorkspacePage() {
               </button>
             </div>
           )}
+          {traceMur && (
+            <div className="th-poser-hauteur" role="status">
+              <span>
+                Nouveau mur : {traceMur.premier ? "cliquez sa fin" : "cliquez son début"} sur la face intérieure. Les points
+                s'accrochent au bout des murs voisins (Maj : point libre). Échap pour annuler.
+                {traceMessage && <small className="th-poser-hauteur__message"> {traceMessage}</small>}
+              </span>
+              <button
+                type="button"
+                className="po2-button po2-button--ghost"
+                onClick={() => {
+                  setTraceMur(null);
+                  setTraceMessage(null);
+                }}
+              >
+                Annuler
+              </button>
+            </div>
+          )}
+          {!traceMur && traceMessage && etape === "enveloppe" && (
+            <div className="th-poser-hauteur" role="status">
+              <span>{traceMessage}</span>
+              <button type="button" className="po2-button po2-button--ghost" onClick={() => setTraceMessage(null)}>
+                OK
+              </button>
+            </div>
+          )}
           {modeleAPoser && (
             <div className="th-poser-hauteur" role="status">
               <span>
@@ -1016,7 +1073,7 @@ export function WorkspacePage() {
                   ? "edition"
                   : calage || cadreVue
                     ? "calage"
-                    : hauteurAPoser || modeleAPoser
+                    : hauteurAPoser || modeleAPoser || traceMur
                       ? "pan"
                       : tool
               }
@@ -1034,7 +1091,30 @@ export function WorkspacePage() {
                 }
                 setPoints((current) => (current.length >= 2 ? [point] : [...current, point]));
               }}
-              onPick={(point, pixelsPerPt) => {
+              onHover={
+                traceMur?.premier
+                  ? (point) => point && setTraceMur((courant) => (courant ? { ...courant, survol: point } : courant))
+                  : undefined
+              }
+              onPick={(point, pixelsPerPt, event) => {
+                // D250 : tracé d'un mur, premier puis second point.
+                if (traceMur && shownStudy) {
+                  const pose = pointDuTrace(point, pixelsPerPt, event.shiftKey);
+                  if (!traceMur.premier) {
+                    setTraceMur({ premier: pose, survol: pose });
+                    return;
+                  }
+                  const geste = gesteCreation(shownStudy.content, traceMur.premier, pose);
+                  if (typeof geste === "string") {
+                    setTraceMessage(geste);
+                    return;
+                  }
+                  setTraceMur(null);
+                  setTraceMessage(null);
+                  setParams({ panneau: "fiche" });
+                  elementsState.creerMur(geste);
+                  return;
+                }
                 // Hauteur mesurée dans une coupe : chaque local cliqué la reçoit (D211).
                 if (hauteurAPoser) {
                   const local = shownStudy ? roomAt(shownStudy.content.locaux, point) : null;
@@ -1180,7 +1260,42 @@ export function WorkspacePage() {
                           },
                         }));
                       }
+                      // D250, D247 : à l'étape des parois, le clic droit crée un mur ou ajoute un point sur un mur.
+                      const actionsMurs: PlanAction[] = [];
+                      if (etape === "enveloppe" && shownStudy) {
+                        actionsMurs.push({
+                          cle: "creer-mur",
+                          label: "Créer un mur à partir d'ici",
+                          faire: () => {
+                            elementsState.select(null);
+                            setTraceMessage(null);
+                            setTraceMur({ premier: pointDuTrace(point, pixelsPerPt, false), survol: null });
+                          },
+                        });
+                        const surMur = viserSurLePlan(
+                          { ...shownStudy.content, enveloppe: { ...shownStudy.content.enveloppe, liaisons: [], objets: formesDesLignes(shownStudy.content) } },
+                          shownStudy.content.locaux,
+                          point,
+                          { element: PRISE_ELEMENT_PAROIS_PX / pixelsPerPt, pont: 0 },
+                        );
+                        const mur = surMur ? trouverElement(shownStudy.content, surMur.ref) : null;
+                        if (mur && mur.type === "paroi" && !mur.exclu) {
+                          actionsMurs.push({
+                            cle: "point-mur",
+                            label: "Ajouter un point ici sur ce mur",
+                            faire: () => {
+                              const geste = gesteCoupe(shownStudy.content, mur, point);
+                              if (typeof geste === "string") {
+                                setTraceMessage(geste);
+                                return;
+                              }
+                              elementsState.couperMur(geste);
+                            },
+                          });
+                        }
+                      }
                       const room = shownStudy ? roomAt(shownStudy.content.locaux, point) : null;
+                      if (actionsMurs.length) return actionsMurs;
                       if (!room) {
                         if (!shownStudy) return [];
                         return [
@@ -1369,6 +1484,14 @@ export function WorkspacePage() {
                               elementCourant?.type === "menuiserie" ? baieDeLElement(shownStudy.content, elementCourant) : undefined
                             }
                           />
+                      )}
+                      {traceMur?.premier && (
+                        <TraceDuMur
+                          premier={traceMur.premier}
+                          survol={traceMur.survol}
+                          longueur_m={traceMur.survol ? longueurSurLePlan(shownStudy.content, traceMur.premier, traceMur.survol) : null}
+                          toScreen={toScreen}
+                        />
                       )}
                       {!editionState.draft && extremites && (
                         <PoigneesDuMur extremites={extremites} glisse={glisse} toScreen={toScreen} />

@@ -6,7 +6,7 @@ import type {
   StudyReleveElement,
 } from "../api";
 import { faitPartieDe, memeElement, refDeElement } from "./elements";
-import { appliquerExtremite } from "./murs";
+import { appliquerCoupe, appliquerCreation, appliquerExtremite } from "./murs";
 import { appliquerAjout } from "./pontsAjoutes";
 
 /**
@@ -78,6 +78,13 @@ export function appliquerEnLocal(content: StudyContent, operation: StudyOperatio
   // D249 : une extrémité de mur déplacée, ligne de métré redessinée aussitôt.
   if (operation.type === "paroi_extremite") {
     return appliquerExtremite(content, operation).content;
+  }
+  // D250, D247 : un mur créé, un point ajouté sur un mur.
+  if (operation.type === "paroi_creer") {
+    return appliquerCreation(content, operation).content;
+  }
+  if (operation.type === "paroi_couper") {
+    return appliquerCoupe(content, operation);
   }
   if (!operation.type.startsWith("element_")) {
     return content;

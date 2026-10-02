@@ -157,8 +157,10 @@ export type StudyReleveElement = {
   releve_origine?: Record<string, unknown>;
   /** Pont type NF EN ISO 14683 retenu par le thermicien, ou `a_modeliser` (D158). */
   reference_pont?: string;
-  /** Pont posé par le thermicien, et non lu par l'agent (D157). */
+  /** Pont ou mur posé par le thermicien, et non lu par l'agent (D157, D250). */
   ajoute?: boolean;
+  /** Mur dessiné ou retouché à la main (D249, D250) : jamais réuni d'office avec un voisin. */
+  geometrie_manuelle?: boolean;
   /** Angle saisi par le thermicien ; sans lui, c'est la mesure du tracé qui vaut (D160). */
   angle_deg?: number;
   /** Autres pièces qui partagent cette menuiserie, à parts égales (D217). */
@@ -459,7 +461,20 @@ export type StudyOperation =
   /** Un pan de mur retracé d'un bout à l'autre (abscisses globales au parcours) avec une composition copiée (D240). */
   | { type: "paroi_retracer"; debut_m: number; fin_m: number; modele: CompositionCopiee }
   /** Une extrémité de la ligne de métré d'un mur, déplacée librement sur le plan (D249). */
-  | { type: "paroi_extremite"; element: StudyElementRef; extremite: "debut" | "fin"; abscisse_m: number; nu_interieur_cm: number };
+  | { type: "paroi_extremite"; element: StudyElementRef; extremite: "debut" | "fin"; abscisse_m: number; nu_interieur_cm: number }
+  /** Un mur tracé à la main, situé par l'écran sur le tronçon le plus proche (D250). */
+  | {
+      type: "paroi_creer";
+      troncon: string;
+      debut_m: number;
+      fin_m: number;
+      nu_interieur_cm: number;
+      nu_interieur_fin_cm: number;
+      composant: string | null;
+      couches: StudyCouche[];
+    }
+  /** Un point ajouté sur la ligne d'un mur : deux morceaux qui partagent ce sommet (D247). */
+  | { type: "paroi_couper"; element: StudyElementRef; abscisse_m: number };
 
 /** La composition d'une paroi de référence, copiée au pinceau (D239). */
 export type CompositionCopiee = {

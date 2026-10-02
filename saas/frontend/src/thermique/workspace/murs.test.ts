@@ -2,7 +2,17 @@ import { describe, expect, it } from "vitest";
 
 import type { StudyContent, StudyReleveElement } from "../api";
 import { appliquerEnLocal } from "./elementsLocal";
-import { appliquerExtremite, boutLePlusProche, extremitesDuMur, gesteExtremite } from "./murs";
+import {
+  appliquerCoupe,
+  appliquerCreation,
+  appliquerExtremite,
+  boutLePlusProche,
+  extremitesDuMur,
+  extremitesPartagees,
+  gesteCoupe,
+  gesteCreation,
+  gesteExtremite,
+} from "./murs";
 
 // Même repère que le test serveur : page de 1000 px, 10 px par mètre, tronçon T01 le long du haut de la page,
 // extérieur vers le haut ; points PDF = points de la feuille (le local donne un repère identité).
@@ -87,5 +97,49 @@ describe("poignées de la ligne de métré d'un mur (D249)", () => {
     );
     expect(boutLePlusProche(content, mur(), [597, 6], 5)).toEqual([600, 5]);
     expect(boutLePlusProche(content, mur(), [502, 5], 5)).toBeNull();
+  });
+});
+
+describe("créer un mur et ajouter un point sur un mur (D250, D247)", () => {
+  const couches = [
+    { nature: "mur", epaisseur_cm: 20 },
+    { nature: "isolant", epaisseur_cm: 12 },
+  ];
+
+  it("un mur tracé de droite à gauche est remis dans le sens de la façade, avec la composition du voisin", () => {
+    const content = etude([mur({ couches })]);
+    const geste = gesteCreation(content, [700, 6], [600, 4]);
+    expect(geste).toEqual({
+      type: "paroi_creer",
+      troncon: "T01",
+      debut_m: 60,
+      fin_m: 70,
+      nu_interieur_cm: -40,
+      nu_interieur_fin_cm: -60,
+      composant: "P1",
+      couches,
+    });
+    if (typeof geste === "string") throw new Error(geste);
+    const { content: apres, ref } = appliquerCreation(content, geste);
+    expect(ref).toEqual({ troncon: "T01", debut_m: 60, fin_m: 70 });
+    const cree = apres.enveloppe.releve_brut.elements[1];
+    expect([cree.nu_exterieur_cm, cree.nu_exterieur_fin_cm]).toEqual([-8, -28]);
+    expect(cree.geometrie_manuelle).toBe(true);
+    expect(apres.enveloppe.lignes_metre).toHaveLength(1);
+    expect(gesteCreation(content, [600, 4], [600.2, 4])).toMatch("trop court");
+  });
+
+  it("ajouter un point coupe le mur en deux morceaux dont le sommet commun se glisse d'un seul geste", () => {
+    const content = etude([mur()]);
+    const geste = gesteCoupe(content, mur(), [200, 5]);
+    expect(geste).toEqual({ type: "paroi_couper", element: { troncon: "T01", debut_m: 0, fin_m: 50 }, abscisse_m: 20 });
+    if (typeof geste === "string") throw new Error(geste);
+    const apres = appliquerCoupe(content, geste);
+    const [premier, second] = apres.enveloppe.releve_brut.elements;
+    expect([premier.debut_m, premier.fin_m, second.debut_m, second.fin_m]).toEqual([0, 20, 20, 50]);
+    // Le sommet du premier morceau est partagé avec le second : glisser l'un entraîne l'autre.
+    const sommet = extremitesDuMur(apres, premier)!.fin;
+    expect(extremitesPartagees(apres, premier, sommet, 0.5)).toEqual([{ element: second, extremite: "debut" }]);
+    expect(gesteCoupe(content, mur(), [0.3, 5])).toMatch("trop près");
   });
 });

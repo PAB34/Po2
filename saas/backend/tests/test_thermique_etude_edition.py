@@ -770,3 +770,42 @@ def test_une_extremite_ne_peut_pas_croiser_l_autre_ni_viser_autre_chose_qu_un_mu
     with pytest.raises(ThermiqueError, match="mur actif"):
         edition.appliquer(contenu, [{"type": "paroi_extremite", "element": {"troncon": "T01", "debut_m": 50.0, "fin_m": 100.0},
                                      "extremite": "fin", "abscisse_m": 90.0, "nu_interieur_cm": -20.0}])
+
+
+def _par_le_schema(*operations: dict) -> list[dict]:
+    from app.schemas.thermique import EtudeEnregistrement
+
+    corps = {"operations": list(operations), "motif": "elements", "valider": False}
+    return [op.model_dump(exclude_none=True) for op in EtudeEnregistrement.model_validate(corps).operations]
+
+
+def test_un_mur_cree_a_la_main_a_sa_composition_et_reste_a_valider():
+    """D250 : deux points situés par l'écran sur le tronçon le plus proche ; couches posées vers l'extérieur."""
+    gestes = _par_le_schema({
+        "type": "paroi_creer", "troncon": "T01", "debut_m": 60.0, "fin_m": 70.0,
+        "nu_interieur_cm": -40.0, "nu_interieur_fin_cm": -60.0, "composant": "P1",
+        "couches": [{"nature": "mur", "epaisseur_cm": 20}, {"nature": "isolant", "epaisseur_cm": 10}],
+    })
+    resultat = edition.appliquer(_etude_avec_deux_elements(), gestes)
+    mur = next(e for e in resultat["enveloppe"]["releve_brut"]["elements"] if e.get("ajoute"))
+    assert (mur["debut_m"], mur["fin_m"], mur["composant"]) == (60.0, 70.0, "P1")
+    assert (mur["nu_interieur_cm"], mur["nu_exterieur_cm"], mur["nu_interieur_fin_cm"], mur["nu_exterieur_fin_cm"]) == (-40, -10, -60, -30)
+    assert not mur.get("corrige") and not mur.get("confirme")  # sa composition reste à valider
+    assert any(l["source_parcours"]["debut_m"] == 60.0 for l in resultat["enveloppe"]["lignes_metre"])
+    with pytest.raises(ThermiqueError, match="trop court"):
+        edition.appliquer(_etude_avec_deux_elements(), _par_le_schema({
+            "type": "paroi_creer", "troncon": "T01", "debut_m": 60.0, "fin_m": 60.01,
+            "nu_interieur_cm": -40.0, "nu_interieur_fin_cm": -40.0}))
+
+
+def test_ajouter_un_point_coupe_le_mur_en_deux_morceaux_qui_ne_se_recollent_pas():
+    """D247 : le sommet ajouté partage les faces interpolées ; la réunion des morceaux (D238) ne les recolle pas."""
+    gestes = _par_le_schema({"type": "paroi_couper", "element": {"troncon": "T01", "debut_m": 0.0, "fin_m": 50.0}, "abscisse_m": 20.0})
+    resultat = edition.appliquer(_etude_avec_deux_elements(), gestes)
+    murs = [e for e in resultat["enveloppe"]["releve_brut"]["elements"] if e["type"] == "paroi"]
+    assert [(m["debut_m"], m["fin_m"]) for m in murs] == [(0.0, 20.0), (20.0, 50.0)]
+    assert murs[0]["nu_interieur_fin_cm"] == murs[1]["nu_interieur_cm"] == -50
+    assert all(m["geometrie_manuelle"] for m in murs)
+    with pytest.raises(ThermiqueError, match="trop près"):
+        edition.appliquer(_etude_avec_deux_elements(), _par_le_schema(
+            {"type": "paroi_couper", "element": {"troncon": "T01", "debut_m": 0.0, "fin_m": 50.0}, "abscisse_m": 49.99}))

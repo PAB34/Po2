@@ -72,6 +72,20 @@ plein), **Maj** pour le couper ; lâcher = visible aussitôt, enregistré en arr
 geste déjà enregistré ne s'annule plus par Ctrl+Z (on revient par l'historique des versions). Restent : ajouter
 un sommet (mur à plusieurs pans), « Créer un mur » (D250), côté extérieur (D251).
 
+**D250 et D247 faits le 2026-10-02 (même modèle)** :
+- **Créer un mur** : à l'étape Parois, clic droit, puis « Créer un mur à partir d'ici », puis un clic pour la fin.
+  Le trait se dessine en direct avec sa longueur. Les points s'accrochent au bout des murs voisins (Maj : point
+  libre) ; Échap annule. Le mur est situé sur le tronçon le plus proche du premier point (tracé à l'envers :
+  remis dans le sens de la façade). Il reçoit la composition du mur voisin sur ce tronçon (sinon du dernier mur
+  validé, sinon un voile de 20 cm). Il est désigné aussitôt, « à valider », pour que sa composition soit vérifiée.
+  Geste serveur `paroi_creer`.
+- **Ajouter un point sur un mur** (clic droit sur sa ligne) : deux morceaux qui partagent le sommet. Glisser ce
+  sommet entraîne les deux bouts : c'est le mur à plusieurs pans. Geste serveur `paroi_couper`.
+- Tout mur créé, coupé ou retouché porte `geometrie_manuelle` : la réunion automatique des morceaux voisins (D238,
+  6 cm) ne le recolle plus.
+- **Reste D251** : les couches se posent du côté extérieur du tronçon de façade. Un mur tracé loin de la façade
+  (refend, mur sur local non chauffé) aura besoin de « Inverser le côté ».
+
 ## Ce que cela change ailleurs (à traiter dans le même lot ou noté)
 
 - **Découpage pièce par pièce (D18 à D20) : on le garde.** Il coupe aujourd'hui les intervalles d'un tronçon. Il
