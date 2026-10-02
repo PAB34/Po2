@@ -30,6 +30,11 @@ d'objectifs dans l'ordre : (1) R+1 parfait [lot B murs : 3 questions ouvertes da
 étape + nettoyage des fonctions retirées, (3) bibliothèques fiables, (4) autres niveaux par report sans IA,
 (5) livrable déperditions. Tout lot doit servir un de ces objectifs.
 
+**AUDIT DU WORKFLOW (2026-10-02, fin)** : `docs/thermique/audit-workflow-2026-10-02.md` — 3 failles (relais et
+mode automatique sur Opus 4.7 par l'alias `opus` ; coordonnées de l'IA ; pas de livrable), faiblesses par étape,
+10 priorités. Murs en prod le même jour : suppression instantanée, indéterminés, poignées, créer un mur, ajouter un
+point (D247, D249, D250, D252, D254). Essai R+2 en session cloud en cours (branche publique `essai/r2-cloud`).
+
 **2026-10-02 (suite) — EN ATTENTE DE RÉPONSES** : `docs/thermique/murs-traces-decisions.md` (D248–D253 : mur =
 ligne libre tracée, poignées, clic droit « Créer un mur », gestes enregistrés aussitôt, « Repartir de zéro » du
 R+1 avec sauvegarde ; 5 questions ; remplace le lot B). Bilan de la détection :
