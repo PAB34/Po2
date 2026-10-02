@@ -188,11 +188,11 @@
   "genre": "liaison",
   "decision": "integre",
   "couches": [],
-  "regle": "Correction de la règle. Le mur qui borde la baie M3 est soit biseauté (le trait intérieur remonte en biais jusqu'au nu extérieur et au dormant), soit à bout droit avec un petit talon sur lequel la baie arrive au nu extérieur. La baie part vers le haut (extérieur) ou en arrive, sous un angle aigu de 40° à 120° dans les dents de scie. Il diffère de L10, où la baie part vers l'intérieur.",
+  "regle": "Correction de la règle. Le mur qui borde la baie est soit biseauté (le trait intérieur remonte en biais jusqu'au nu extérieur et au dormant), soit à bout droit, avec un petit talon sur lequel la baie arrive. Dans les dents de scie, la baie M3 part vers le haut (extérieur) ou en arrive, sous un angle aigu de 40° à 120°. C'est aussi la même liaison quand une baie M4 bute à angle droit sur l'about d'un mur P1 ou sur la face d'un trumeau béton P3 (coins rentrants de la terrasse du personnel). Il diffère de L10, où la baie part vers l'intérieur.",
   "premiere_vue": {
-   "troncon": "T42",
-   "debut_m": 97.5,
-   "fin_m": 97.8
+   "troncon": "T56",
+   "debut_m": 117.79,
+   "fin_m": 118.1
   }
  },
  {
@@ -455,21 +455,21 @@
  },
  {
   "id": "X5",
-  "nom": "Claustra de blocs mixtes en rive de la terrasse de lecture",
+  "nom": "Claustra de blocs mixtes en rive de terrasse (terrasse de lecture, terrasse du personnel)",
   "genre": "element_exterieur",
   "decision": "exclu",
   "couches": [
    {
     "nature": "autre",
     "epaisseur_cm": 23,
-    "indice": "blocs gris pleins cernés de noir, de -2 à -25"
+    "indice": "blocs gris pleins cernés de noir"
    }
   ],
-  "regle": "Chapelet de blocs gris pleins cernés de noir, d'environ 23 cm d'épaisseur et de 18 à 80 cm de long, carrés et rectangles mêlés, reliés par un trait fin vers -3, avec des blocs d'angle en L (bras de 65 cm, jambe jusqu'à -68). Aucune paroi ni vitrage dans la bande. Il diffère de X3 (carrés réguliers bordés de lames de terrasse) et de X4 (blocs de 30 à 100 cm devant le vitrage M5).",
+  "regle": "Correction : règle généralisée. Chapelet de blocs gris pleins cernés de noir, d'environ 23 cm d'épaisseur et de 14 à 85 cm de long, carrés et rectangles mêlés, reliés par un trait fin sur leur face extérieure (vers -3). À l'est (terrasse de lecture), on trouve des blocs d'angle en L (bras de 65 cm, jambe jusqu'à -68), sans paroi ni vitrage dans la bande. À l'ouest (rive de la terrasse du personnel), le chapelet est dans l'alignement de la façade, entre l'angle P1 de l'axe 7' et le massif P5 ; le guide y fait des allers-retours (T57-T58, T65-T66). Il diffère de X3 (carrés réguliers bordés de lames de terrasse) et de X4 (blocs devant le vitrage M5).",
   "premiere_vue": {
-   "troncon": "T08",
-   "debut_m": 29.7,
-   "fin_m": 33.22
+   "troncon": "T57",
+   "debut_m": 123.1,
+   "fin_m": 123.59
   }
  },
  {
@@ -559,6 +559,90 @@
    "troncon": "T52",
    "debut_m": 112.78,
    "fin_m": 113.03
+  }
+ },
+ {
+  "id": "P5",
+  "nom": "Massif triangulaire béton hors isolant, lame isolée côté intérieur (pointe nord-ouest de la terrasse du personnel)",
+  "genre": "paroi",
+  "decision": "a_confirmer",
+  "couches": [
+   {
+    "nature": "mur",
+    "epaisseur_cm": 40,
+    "indice": "massif plein hachuré, épaisseur variable de 5 à 100 cm"
+   },
+   {
+    "nature": "isolant",
+    "epaisseur_cm": 12,
+    "indice": "rangée d'alvéoles le long de la face en biais"
+   },
+   {
+    "nature": "mur",
+    "epaisseur_cm": 4,
+    "indice": "trait noir épais de la face intérieure en biais"
+   }
+  ],
+  "regle": "Grand massif gris plein cerné de noir épais et hachuré de diagonales fines, en triangle. Une face droite suit le guide (de -3 à -12). La face en biais, côté intérieur, est bordée d'une rangée d'alvéoles puis d'un trait noir épais. L'épaisseur va d'environ 10 cm à la pointe, où part une baie M3 (L10), à plus de 1 m à la base, côté vide de la terrasse du personnel. Il diffère de P4 : dans P4, la lame mur 12 + isolant 12 est côté extérieur et le massif à l'intérieur. Ici, le massif est à l'extérieur de l'isolant. Lecture concordante sur T64, T66 et T67.",
+  "premiere_vue": {
+   "troncon": "T67",
+   "debut_m": 142.41,
+   "fin_m": 144.51
+  }
+ },
+ {
+  "id": "M6",
+  "nom": "Baie vitrée entre deux traits parallèles (allège ou nez de dalle) autour du vide de la terrasse du personnel",
+  "genre": "menuiserie",
+  "decision": "integre",
+  "couches": [
+   {
+    "nature": "vitrage",
+    "epaisseur_cm": 6,
+    "indice": "triple trait fin vers -13 à -25"
+   },
+   {
+    "nature": "cadre",
+    "epaisseur_cm": 5,
+    "indice": "petits dormants carrés aux extrémités"
+   },
+   {
+    "nature": "autre",
+    "epaisseur_cm": 40,
+    "indice": "deux traits fins parallèles à -5 et -45, allège ?"
+   }
+  ],
+  "regle": "Triple trait fin (vitrage) posé vers -13 à -25, entre deux traits fins noirs parallèles à -5 et -45. Ces traits marquent une allège ou un nez de dalle de 40 cm (à confirmer). De petits dormants carrés aux extrémités accrochent la baie à des blocs béton : trumeau de la cage d'escalier (P3), poteau PO2 ou massif P5. Elle diffère de M4 (double trait au 0, sans traits parallèles) et de M1 (vitrage près du 0, un seul trait parallèle à -25/-33, poteaux PO1).",
+  "premiere_vue": {
+   "troncon": "T64",
+   "debut_m": 135.75,
+   "fin_m": 139.76
+  }
+ },
+ {
+  "id": "L11",
+  "nom": "Angle sortant de béton plein non isolé (trumeau P3, base du massif P5)",
+  "genre": "liaison",
+  "decision": "a_confirmer",
+  "couches": [],
+  "regle": "Coin à 90° d'un bloc béton plein, sans alvéoles et cerné de noir épais : trumeau de la cage d'escalier (P3) ou base du massif P5, dont l'isolant passe loin du coin. Une baie peut s'accrocher juste après, en tableau. Il diffère de L1 (retour d'une bande P1/P2 à alvéoles), de L7 (coin vitré sans gris) et de PO2 (poteau carré entre deux baies).",
+  "premiere_vue": {
+   "troncon": "T66",
+   "debut_m": 142.05,
+   "fin_m": 142.17
+  }
+ },
+ {
+  "id": "X10",
+  "nom": "Ligne d'axe et bulle de repère (artefact du guide, hors bâtiment)",
+  "genre": "autre",
+  "decision": "exclu",
+  "couches": [],
+  "regle": "Double trait fin perpendiculaire à la façade, menant à un cercle qui porte un numéro d'axe (bulle « 2 », écrite à l'envers dans la bande aller). Le guide fait un aller-retour dessus, hors du bâtiment. Aucun élément construit : ne rien compter, et rattacher la liaison à la paroi voisine.",
+  "premiere_vue": {
+   "troncon": "T70",
+   "debut_m": 147.52,
+   "fin_m": 148.26
   }
  }
 ]
