@@ -1,0 +1,91 @@
+{
+ "type": "object",
+ "additionalProperties": false,
+ "properties": {
+  "pieces": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "local": {
+      "type": "string",
+      "enum": [
+       "chauffe",
+       "circulation",
+       "non_chauffe",
+       "gaine_technique",
+       "exterieur"
+      ]
+     },
+     "indice": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "local",
+     "indice"
+    ]
+   }
+  },
+  "candidats": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "decision": {
+      "type": "string",
+      "enum": [
+       "local",
+       "vide",
+       "exterieur",
+       "mur"
+      ]
+     },
+     "nom": {
+      "type": "string"
+     },
+     "local": {
+      "type": "string",
+      "enum": [
+       "chauffe",
+       "circulation",
+       "non_chauffe",
+       "gaine_technique",
+       "exterieur"
+      ]
+     },
+     "indice": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "decision",
+     "nom",
+     "local",
+     "indice"
+    ]
+   }
+  },
+  "observations": {
+   "type": "array",
+   "items": {
+    "type": "string"
+   }
+  }
+ },
+ "required": [
+  "pieces",
+  "candidats",
+  "observations"
+ ]
+}

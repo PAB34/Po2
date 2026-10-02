@@ -1,0 +1,3764 @@
+{
+  "version": 1,
+  "method": "claude_code_agent_raster",
+  "uses_pdf_vectors": false,
+  "model": "opus",
+  "viewer_rotation_deg": 270,
+  "manifest": {
+    "version": 1,
+    "method": "claude_code_agent_raster",
+    "uses_pdf_vectors": false,
+    "rotation_deg_ccw": 90,
+    "viewer_rotation_deg": 270,
+    "page_width_px": 4967,
+    "page_height_px": 3509,
+    "crop_box_px": [
+      828,
+      414,
+      3642,
+      3145
+    ],
+    "width_px": 2814,
+    "height_px": 2731,
+    "overview": "/home/user/Po2/essais/R2-cloud/sorties/R2/passe-globale/overview.jpg",
+    "tiles": [
+      {
+        "index": 1,
+        "path": "/home/user/Po2/essais/R2-cloud/sorties/R2/passe-globale/tile-1.jpg",
+        "box_px": [
+          0,
+          0,
+          1014,
+          1475
+        ],
+        "box_norm": [
+          0.0,
+          0.0,
+          360.341,
+          540.095
+        ]
+      },
+      {
+        "index": 2,
+        "path": "/home/user/Po2/essais/R2-cloud/sorties/R2/passe-globale/tile-2.jpg",
+        "box_px": [
+          862,
+          0,
+          1952,
+          1475
+        ],
+        "box_norm": [
+          306.326,
+          0.0,
+          693.674,
+          540.095
+        ]
+      },
+      {
+        "index": 3,
+        "path": "/home/user/Po2/essais/R2-cloud/sorties/R2/passe-globale/tile-3.jpg",
+        "box_px": [
+          1800,
+          0,
+          2814,
+          1475
+        ],
+        "box_norm": [
+          639.659,
+          0.0,
+          1000.0,
+          540.095
+        ]
+      },
+      {
+        "index": 4,
+        "path": "/home/user/Po2/essais/R2-cloud/sorties/R2/passe-globale/tile-4.jpg",
+        "box_px": [
+          0,
+          1256,
+          1014,
+          2731
+        ],
+        "box_norm": [
+          0.0,
+          459.905,
+          360.341,
+          1000.0
+        ]
+      },
+      {
+        "index": 5,
+        "path": "/home/user/Po2/essais/R2-cloud/sorties/R2/passe-globale/tile-5.jpg",
+        "box_px": [
+          862,
+          1256,
+          1952,
+          2731
+        ],
+        "box_norm": [
+          306.326,
+          459.905,
+          693.674,
+          1000.0
+        ]
+      },
+      {
+        "index": 6,
+        "path": "/home/user/Po2/essais/R2-cloud/sorties/R2/passe-globale/tile-6.jpg",
+        "box_px": [
+          1800,
+          1256,
+          2814,
+          2731
+        ],
+        "box_norm": [
+          639.659,
+          459.905,
+          1000.0,
+          1000.0
+        ]
+      }
+    ]
+  },
+  "objects": [
+    {
+      "category": "mur_exterieur",
+      "subtype": "façade nord isolée + retour ouest",
+      "geometry_type": "polyline",
+      "points": [
+        [
+          259.329,
+          304.693
+        ],
+        [
+          249.981,
+          268.97
+        ],
+        [
+          249.981,
+          253.18
+        ],
+        [
+          584.466,
+          253.18
+        ]
+      ],
+      "confidence": 0.85,
+      "evidence": "Mur épais en double trait avec isolant alvéolé, continu en façade nord, retour biais à l'ouest",
+      "review_required": false,
+      "id": "mur_exterieur-001",
+      "points_agent_norm": [
+        [
+          163.5,
+          239.9
+        ],
+        [
+          147,
+          194
+        ],
+        [
+          147,
+          175
+        ],
+        [
+          737.4,
+          175
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          163.5,
+          239.9
+        ],
+        [
+          147.0,
+          194.0
+        ],
+        [
+          147.0,
+          173.712
+        ],
+        [
+          737.4,
+          173.712
+        ]
+      ]
+    },
+    {
+      "category": "mur_exterieur",
+      "subtype": "trumeau triangulaire façade ouest",
+      "geometry_type": "polyline",
+      "points": [
+        [
+          249.981,
+          304.771
+        ],
+        [
+          249.981,
+          342.907
+        ],
+        [
+          255.636,
+          342.907
+        ],
+        [
+          246.008,
+          306.9
+        ]
+      ],
+      "confidence": 0.7,
+      "evidence": "Massif triangulaire plein gris en façade ouest, entre les axes 3 et 4",
+      "review_required": true,
+      "id": "mur_exterieur-002",
+      "points_agent_norm": [
+        [
+          147,
+          240
+        ],
+        [
+          147,
+          289
+        ],
+        [
+          165,
+          289
+        ],
+        [
+          147,
+          240
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          147.0,
+          240.0
+        ],
+        [
+          147.0,
+          289.0
+        ],
+        [
+          156.981,
+          289.0
+        ],
+        [
+          139.986,
+          242.736
+        ]
+      ]
+    },
+    {
+      "category": "mur_exterieur",
+      "subtype": "façade ouest en dents de scie",
+      "geometry_type": "polyline",
+      "points": [
+        [
+          260.179,
+          461.206
+        ],
+        [
+          249.981,
+          461.206
+        ],
+        [
+          249.981,
+          512.573
+        ],
+        [
+          259.329,
+          547.206
+        ]
+      ],
+      "confidence": 0.8,
+      "evidence": "Double trait isolé, segment biais en façade ouest (axes 7' à 9')",
+      "review_required": false,
+      "id": "mur_exterieur-003",
+      "points_agent_norm": [
+        [
+          165,
+          441
+        ],
+        [
+          147,
+          441
+        ],
+        [
+          147,
+          507
+        ],
+        [
+          163.5,
+          551.5
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          165.0,
+          441.0
+        ],
+        [
+          147.0,
+          441.0
+        ],
+        [
+          147.0,
+          507.0
+        ],
+        [
+          163.5,
+          551.5
+        ]
+      ]
+    },
+    {
+      "category": "mur_exterieur",
+      "subtype": "façade ouest en dents de scie",
+      "geometry_type": "polyline",
+      "points": [
+        [
+          249.981,
+          547.206
+        ],
+        [
+          259.329,
+          599.896
+        ]
+      ],
+      "confidence": 0.8,
+      "evidence": "Pan biais isolé en façade ouest (axes 10 à 11')",
+      "review_required": false,
+      "id": "mur_exterieur-004",
+      "points_agent_norm": [
+        [
+          147,
+          551.5
+        ],
+        [
+          163.5,
+          619.2
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          147.0,
+          551.5
+        ],
+        [
+          163.5,
+          619.2
+        ]
+      ]
+    },
+    {
+      "category": "mur_exterieur",
+      "subtype": "façade ouest et angle sud-ouest",
+      "geometry_type": "polyline",
+      "points": [
+        [
+          249.981,
+          599.896
+        ],
+        [
+          249.981,
+          683.528
+        ],
+        [
+          287.729,
+          693.532
+        ],
+        [
+          298.591,
+          681.694
+        ]
+      ],
+      "confidence": 0.8,
+      "evidence": "Mur isolé continu, double trait, angle sud-ouest puis façade sud biaise",
+      "review_required": false,
+      "id": "mur_exterieur-005",
+      "points_agent_norm": [
+        [
+          147,
+          619.2
+        ],
+        [
+          147,
+          729.8
+        ],
+        [
+          211.5,
+          741.2
+        ],
+        [
+          232.8,
+          724.3
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          147.0,
+          619.2
+        ],
+        [
+          147.0,
+          726.657
+        ],
+        [
+          213.628,
+          739.511
+        ],
+        [
+          232.8,
+          724.3
+        ]
+      ]
+    },
+    {
+      "category": "mur_exterieur",
+      "subtype": "façade sud, redent",
+      "geometry_type": "polyline",
+      "points": [
+        [
+          312.584,
+          685.974
+        ],
+        [
+          312.584,
+          699.794
+        ],
+        [
+          324.554,
+          702.967
+        ],
+        [
+          333.829,
+          691.656
+        ]
+      ],
+      "confidence": 0.75,
+      "evidence": "Redent en V isolé en façade sud",
+      "review_required": false,
+      "id": "mur_exterieur-006",
+      "points_agent_norm": [
+        [
+          254.1,
+          729.8
+        ],
+        [
+          255.9,
+          749.2
+        ],
+        [
+          277.2,
+          752.9
+        ],
+        [
+          295,
+          737.1
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          257.5,
+          729.8
+        ],
+        [
+          257.5,
+          747.557
+        ],
+        [
+          278.628,
+          751.633
+        ],
+        [
+          295.0,
+          737.1
+        ]
+      ]
+    },
+    {
+      "category": "mur_exterieur",
+      "subtype": "façade sud, redent",
+      "geometry_type": "polyline",
+      "points": [
+        [
+          348.543,
+          693.285
+        ],
+        [
+          362.042,
+          714.615
+        ],
+        [
+          370.503,
+          714.615
+        ],
+        [
+          370.503,
+          701.073
+        ]
+      ],
+      "confidence": 0.75,
+      "evidence": "Redent en V isolé en façade sud",
+      "review_required": false,
+      "id": "mur_exterieur-007",
+      "points_agent_norm": [
+        [
+          318.8,
+          741.2
+        ],
+        [
+          340.1,
+          765.7
+        ],
+        [
+          361.4,
+          767.5
+        ],
+        [
+          361.4,
+          749.2
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          320.972,
+          739.194
+        ],
+        [
+          344.798,
+          766.6
+        ],
+        [
+          359.733,
+          766.6
+        ],
+        [
+          359.733,
+          749.2
+        ]
+      ]
+    },
+    {
+      "category": "mur_exterieur",
+      "subtype": "façade sud",
+      "geometry_type": "polyline",
+      "points": [
+        [
+          385.044,
+          702.827
+        ],
+        [
+          408.318,
+          723.926
+        ],
+        [
+          461.074,
+          737.908
+        ],
+        [
+          461.074,
+          723.877
+        ]
+      ],
+      "confidence": 0.75,
+      "evidence": "Long pan biais isolé de la façade sud jusqu'au vide sur petite terrasse",
+      "review_required": false,
+      "id": "mur_exterieur-008",
+      "points_agent_norm": [
+        [
+          384.5,
+          752.9
+        ],
+        [
+          428.9,
+          782.2
+        ],
+        [
+          519.6,
+          798.6
+        ],
+        [
+          519.6,
+          778.5
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          385.399,
+          751.454
+        ],
+        [
+          426.48,
+          778.563
+        ],
+        [
+          519.6,
+          796.528
+        ],
+        [
+          519.6,
+          778.5
+        ]
+      ]
+    },
+    {
+      "category": "mur_exterieur",
+      "subtype": "façade sud-est",
+      "geometry_type": "polyline",
+      "points": [
+        [
+          507.351,
+          733.839
+        ],
+        [
+          507.351,
+          747.136
+        ],
+        [
+          584.466,
+          767.574
+        ],
+        [
+          584.466,
+          755.242
+        ]
+      ],
+      "confidence": 0.8,
+      "evidence": "Mur isolé biais en double trait jusqu'à l'angle de la terrasse de lecture",
+      "review_required": false,
+      "id": "mur_exterieur-009",
+      "points_agent_norm": [
+        [
+          594.2,
+          791.3
+        ],
+        [
+          594.2,
+          811.5
+        ],
+        [
+          737.4,
+          838.9
+        ],
+        [
+          737.4,
+          818.8
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          601.283,
+          791.3
+        ],
+        [
+          601.283,
+          808.385
+        ],
+        [
+          737.4,
+          834.645
+        ],
+        [
+          737.4,
+          818.8
+        ]
+      ]
+    },
+    {
+      "category": "menuiserie_exterieure",
+      "subtype": "fenêtre",
+      "geometry_type": "polyline",
+      "points": [
+        [
+          249.981,
+          304.693
+        ],
+        [
+          259.329,
+          304.693
+        ]
+      ],
+      "confidence": 0.55,
+      "evidence": "Trait fin entre deux pans de la façade ouest en dents de scie",
+      "review_required": true,
+      "id": "menuiserie_exterieure-001",
+      "points_agent_norm": [
+        [
+          147,
+          239.9
+        ],
+        [
+          163.5,
+          239.9
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          147.0,
+          239.9
+        ],
+        [
+          163.5,
+          239.9
+        ]
+      ]
+    },
+    {
+      "category": "menuiserie_exterieure",
+      "subtype": "fenêtre",
+      "geometry_type": "polyline",
+      "points": [
+        [
+          249.981,
+          547.206
+        ],
+        [
+          259.329,
+          547.206
+        ]
+      ],
+      "confidence": 0.55,
+      "evidence": "Trait fin double en tableau entre deux pans biais, axe 10",
+      "review_required": true,
+      "id": "menuiserie_exterieure-002",
+      "points_agent_norm": [
+        [
+          147,
+          551.5
+        ],
+        [
+          163.5,
+          551.5
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          147.0,
+          551.5
+        ],
+        [
+          163.5,
+          551.5
+        ]
+      ]
+    },
+    {
+      "category": "menuiserie_exterieure",
+      "subtype": "fenêtre",
+      "geometry_type": "polyline",
+      "points": [
+        [
+          249.981,
+          599.896
+        ],
+        [
+          259.329,
+          599.896
+        ]
+      ],
+      "confidence": 0.55,
+      "evidence": "Trait fin double en tableau entre deux pans biais, axe 11'",
+      "review_required": true,
+      "id": "menuiserie_exterieure-003",
+      "points_agent_norm": [
+        [
+          147,
+          619.2
+        ],
+        [
+          163.5,
+          619.2
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          147.0,
+          619.2
+        ],
+        [
+          163.5,
+          619.2
+        ]
+      ]
+    },
+    {
+      "category": "menuiserie_exterieure",
+      "subtype": "baie",
+      "geometry_type": "polyline",
+      "points": [
+        [
+          298.521,
+          682.217
+        ],
+        [
+          310.727,
+          685.451
+        ]
+      ],
+      "confidence": 0.6,
+      "evidence": "Trait vitré fin entre deux redents de la façade sud",
+      "review_required": true,
+      "id": "menuiserie_exterieure-004",
+      "points_agent_norm": [
+        [
+          232.8,
+          724.3
+        ],
+        [
+          254.1,
+          729.8
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          232.678,
+          724.972
+        ],
+        [
+          254.222,
+          729.128
+        ]
+      ]
+    },
+    {
+      "category": "menuiserie_exterieure",
+      "subtype": "baie",
+      "geometry_type": "polyline",
+      "points": [
+        [
+          333.854,
+          691.471
+        ],
+        [
+          347.289,
+          695.031
+        ]
+      ],
+      "confidence": 0.6,
+      "evidence": "Trait vitré fin entre deux redents de la façade sud",
+      "review_required": true,
+      "id": "menuiserie_exterieure-005",
+      "points_agent_norm": [
+        [
+          295,
+          737.1
+        ],
+        [
+          318.8,
+          741.2
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          295.043,
+          736.863
+        ],
+        [
+          318.757,
+          741.437
+        ]
+      ]
+    },
+    {
+      "category": "menuiserie_exterieure",
+      "subtype": "baie",
+      "geometry_type": "polyline",
+      "points": [
+        [
+          371.485,
+          700.789
+        ],
+        [
+          384.497,
+          704.237
+        ]
+      ],
+      "confidence": 0.6,
+      "evidence": "Trait vitré fin entre deux redents de la façade sud",
+      "review_required": true,
+      "id": "menuiserie_exterieure-006",
+      "points_agent_norm": [
+        [
+          361.4,
+          749.2
+        ],
+        [
+          384.5,
+          752.9
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          361.466,
+          748.835
+        ],
+        [
+          384.434,
+          753.265
+        ]
+      ]
+    },
+    {
+      "category": "menuiserie_exterieure",
+      "subtype": "mur-rideau",
+      "geometry_type": "polyline",
+      "points": [
+        [
+          582.54,
+          258.074
+        ],
+        [
+          582.54,
+          291.54
+        ]
+      ],
+      "confidence": 0.7,
+      "evidence": "Façade vitrée fine en double trait entre l'intérieur et la terrasse de lecture",
+      "review_required": false,
+      "id": "menuiserie_exterieure-007",
+      "points_agent_norm": [
+        [
+          734,
+          180
+        ],
+        [
+          734,
+          223
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          734.0,
+          180.0
+        ],
+        [
+          734.0,
+          223.0
+        ]
+      ]
+    },
+    {
+      "category": "menuiserie_exterieure",
+      "subtype": "porte-fenêtre double",
+      "geometry_type": "polyline",
+      "points": [
+        [
+          582.54,
+          291.54
+        ],
+        [
+          582.54,
+          351.468
+        ]
+      ],
+      "confidence": 0.75,
+      "evidence": "Deux arcs d'ouverture vers la terrasse, mention 2 UP",
+      "review_required": false,
+      "id": "menuiserie_exterieure-008",
+      "points_agent_norm": [
+        [
+          734,
+          223
+        ],
+        [
+          734,
+          300
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          734.0,
+          223.0
+        ],
+        [
+          734.0,
+          300.0
+        ]
+      ]
+    },
+    {
+      "category": "menuiserie_exterieure",
+      "subtype": "mur-rideau",
+      "geometry_type": "polyline",
+      "points": [
+        [
+          582.54,
+          351.468
+        ],
+        [
+          582.54,
+          755.397
+        ]
+      ],
+      "confidence": 0.7,
+      "evidence": "Façade vitrée continue en double trait fin le long de la terrasse de lecture, châssis repérés",
+      "review_required": true,
+      "id": "menuiserie_exterieure-009",
+      "points_agent_norm": [
+        [
+          734,
+          300
+        ],
+        [
+          734,
+          819
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          734.0,
+          300.0
+        ],
+        [
+          734.0,
+          819.0
+        ]
+      ]
+    },
+    {
+      "category": "menuiserie_exterieure",
+      "subtype": "mur-rideau",
+      "geometry_type": "polyline",
+      "points": [
+        [
+          259.329,
+          404.391
+        ],
+        [
+          259.329,
+          459.961
+        ]
+      ],
+      "confidence": 0.45,
+      "evidence": "Double trait fin vertical derrière les poteaux de la façade ouest, entre le vide et le mur plein",
+      "review_required": true,
+      "id": "menuiserie_exterieure-010",
+      "points_agent_norm": [
+        [
+          163.5,
+          368
+        ],
+        [
+          163.5,
+          439.4
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          163.5,
+          368.0
+        ],
+        [
+          163.5,
+          439.4
+        ]
+      ]
+    },
+    {
+      "category": "indetermine",
+      "subtype": "brise-soleil / poteaux façade ouest",
+      "geometry_type": "polyline",
+      "points": [
+        [
+          249.981,
+          344.463
+        ],
+        [
+          249.981,
+          458.093
+        ]
+      ],
+      "confidence": 0.5,
+      "evidence": "Série de petits pleins gris alignés sur l'axe A, axes 4' à 7'",
+      "review_required": true,
+      "id": "indetermine-001",
+      "points_agent_norm": [
+        [
+          147,
+          291
+        ],
+        [
+          147,
+          437
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          147.0,
+          291.0
+        ],
+        [
+          147.0,
+          437.0
+        ]
+      ]
+    },
+    {
+      "category": "garde_corps",
+      "subtype": "garde-corps du vide sur terrasse du personnel",
+      "geometry_type": "polyline",
+      "points": [
+        [
+          260.179,
+          342.907
+        ],
+        [
+          309.468,
+          342.907
+        ]
+      ],
+      "confidence": 0.45,
+      "evidence": "Double trait fin bordant le vide côté nord",
+      "review_required": true,
+      "id": "garde_corps-001",
+      "points_agent_norm": [
+        [
+          165,
+          289
+        ],
+        [
+          252,
+          289
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          165.0,
+          289.0
+        ],
+        [
+          252.0,
+          289.0
+        ]
+      ]
+    },
+    {
+      "category": "garde_corps",
+      "subtype": "garde-corps du vide sur terrasse du personnel",
+      "geometry_type": "polyline",
+      "points": [
+        [
+          260.179,
+          404.391
+        ],
+        [
+          309.468,
+          404.391
+        ]
+      ],
+      "confidence": 0.45,
+      "evidence": "Double trait fin bordant le vide côté sud",
+      "review_required": true,
+      "id": "garde_corps-002",
+      "points_agent_norm": [
+        [
+          165,
+          368
+        ],
+        [
+          252,
+          368
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          165.0,
+          368.0
+        ],
+        [
+          252.0,
+          368.0
+        ]
+      ]
+    },
+    {
+      "category": "garde_corps",
+      "subtype": "garde-corps du vide sur petite terrasse",
+      "geometry_type": "polyline",
+      "points": [
+        [
+          461.301,
+          739.053
+        ],
+        [
+          461.301,
+          690.021
+        ],
+        [
+          504.358,
+          690.021
+        ],
+        [
+          504.358,
+          746.836
+        ]
+      ],
+      "confidence": 0.45,
+      "evidence": "Double trait fin autour du vide barré d'une croix",
+      "review_required": true,
+      "id": "garde_corps-003",
+      "points_agent_norm": [
+        [
+          520,
+          798
+        ],
+        [
+          520,
+          735
+        ],
+        [
+          596,
+          735
+        ],
+        [
+          596,
+          808
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          520.0,
+          798.0
+        ],
+        [
+          520.0,
+          735.0
+        ],
+        [
+          596.0,
+          735.0
+        ],
+        [
+          596.0,
+          808.0
+        ]
+      ]
+    },
+    {
+      "category": "refend",
+      "subtype": "cage d'escalier encloisonnée et locaux techniques",
+      "geometry_type": "polyline",
+      "points": [
+        [
+          310.601,
+          339.015
+        ],
+        [
+          384.44,
+          339.015
+        ],
+        [
+          384.44,
+          409.839
+        ],
+        [
+          310.601,
+          409.839
+        ],
+        [
+          310.601,
+          339.015
+        ]
+      ],
+      "confidence": 0.8,
+      "evidence": "Murs épais en trait fort autour de l'escalier hélicoïdal et des gaines CF/CVC/ventilation",
+      "review_required": false,
+      "id": "refend-001",
+      "points_agent_norm": [
+        [
+          254,
+          284
+        ],
+        [
+          386,
+          284
+        ],
+        [
+          386,
+          375
+        ],
+        [
+          254,
+          375
+        ],
+        [
+          254,
+          284
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          254.0,
+          284.0
+        ],
+        [
+          384.333,
+          284.0
+        ],
+        [
+          384.333,
+          375.0
+        ],
+        [
+          254.0,
+          375.0
+        ],
+        [
+          254.0,
+          284.0
+        ]
+      ]
+    },
+    {
+      "category": "cloison",
+      "subtype": "séparation escalier / gaines",
+      "geometry_type": "polyline",
+      "points": [
+        [
+          314.567,
+          392.717
+        ],
+        [
+          384.251,
+          392.717
+        ]
+      ],
+      "confidence": 0.7,
+      "evidence": "Trait double séparant l'escalier de la rangée de gaines",
+      "review_required": false,
+      "id": "cloison-001",
+      "points_agent_norm": [
+        [
+          261,
+          353
+        ],
+        [
+          384,
+          353
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          261.0,
+          353.0
+        ],
+        [
+          384.0,
+          353.0
+        ]
+      ]
+    },
+    {
+      "category": "cloison",
+      "subtype": "séparation gaines",
+      "geometry_type": "polyline",
+      "points": [
+        [
+          335.812,
+          392.717
+        ],
+        [
+          335.812,
+          409.839
+        ]
+      ],
+      "confidence": 0.65,
+      "evidence": "Trait vertical entre CF et CVC",
+      "review_required": false,
+      "id": "cloison-002",
+      "points_agent_norm": [
+        [
+          298.5,
+          353
+        ],
+        [
+          298.5,
+          375
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          298.5,
+          353.0
+        ],
+        [
+          298.5,
+          375.0
+        ]
+      ]
+    },
+    {
+      "category": "cloison",
+      "subtype": "séparation gaines",
+      "geometry_type": "polyline",
+      "points": [
+        [
+          364.819,
+          392.717
+        ],
+        [
+          364.819,
+          409.839
+        ]
+      ],
+      "confidence": 0.65,
+      "evidence": "Trait vertical entre CVC et ventilation",
+      "review_required": false,
+      "id": "cloison-003",
+      "points_agent_norm": [
+        [
+          349.7,
+          353
+        ],
+        [
+          349.7,
+          375
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          349.7,
+          353.0
+        ],
+        [
+          349.7,
+          375.0
+        ]
+      ]
+    },
+    {
+      "category": "menuiserie_interieure",
+      "subtype": "porte CF1/2H+FP",
+      "geometry_type": "polyline",
+      "points": [
+        [
+          385.384,
+          375.594
+        ],
+        [
+          385.384,
+          391.627
+        ]
+      ],
+      "confidence": 0.75,
+      "evidence": "Arc de porte et mention CF1/2H+FP 1 UP sur la paroi est de l'escalier",
+      "review_required": false,
+      "id": "menuiserie_interieure-001",
+      "points_agent_norm": [
+        [
+          386,
+          331
+        ],
+        [
+          386,
+          351.6
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          386.0,
+          331.0
+        ],
+        [
+          386.0,
+          351.6
+        ]
+      ]
+    },
+    {
+      "category": "refend",
+      "subtype": "gaine ascenseur nord",
+      "geometry_type": "polyline",
+      "points": [
+        [
+          407.309,
+          338.795
+        ],
+        [
+          433.72,
+          338.795
+        ],
+        [
+          433.72,
+          368.888
+        ],
+        [
+          412.503,
+          368.888
+        ],
+        [
+          412.503,
+          337.459
+        ]
+      ],
+      "confidence": 0.8,
+      "evidence": "Murs épais pochés gris autour de la cabine 75x1.6",
+      "review_required": false,
+      "id": "refend-002",
+      "points_agent_norm": [
+        [
+          424.7,
+          282
+        ],
+        [
+          473.4,
+          282
+        ],
+        [
+          473.4,
+          331.4
+        ],
+        [
+          424.7,
+          331.4
+        ],
+        [
+          424.7,
+          282
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          424.7,
+          283.717
+        ],
+        [
+          471.317,
+          283.717
+        ],
+        [
+          471.317,
+          322.383
+        ],
+        [
+          433.867,
+          322.383
+        ],
+        [
+          433.867,
+          282.0
+        ]
+      ]
+    },
+    {
+      "category": "refend",
+      "subtype": "gaine ascenseur sud",
+      "geometry_type": "polyline",
+      "points": [
+        [
+          407.309,
+          587.324
+        ],
+        [
+          433.72,
+          587.324
+        ],
+        [
+          433.72,
+          616.748
+        ],
+        [
+          407.309,
+          616.748
+        ],
+        [
+          407.309,
+          579.972
+        ]
+      ],
+      "confidence": 0.8,
+      "evidence": "Murs épais pochés gris autour de la cabine 75x1.6",
+      "review_required": false,
+      "id": "refend-003",
+      "points_agent_norm": [
+        [
+          424.7,
+          593.6
+        ],
+        [
+          473.4,
+          593.6
+        ],
+        [
+          473.4,
+          643
+        ],
+        [
+          424.7,
+          643
+        ],
+        [
+          424.7,
+          593.6
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          424.7,
+          603.046
+        ],
+        [
+          471.317,
+          603.046
+        ],
+        [
+          471.317,
+          640.853
+        ],
+        [
+          424.7,
+          640.853
+        ],
+        [
+          424.7,
+          593.6
+        ]
+      ]
+    },
+    {
+      "category": "refend",
+      "subtype": "gaine EP",
+      "geometry_type": "polyline",
+      "points": [
+        [
+          480.79,
+          606.058
+        ],
+        [
+          507.2,
+          606.058
+        ],
+        [
+          507.2,
+          616.748
+        ],
+        [
+          481.97,
+          616.748
+        ],
+        [
+          481.97,
+          604.721
+        ]
+      ],
+      "confidence": 0.7,
+      "evidence": "Cadre épais poché gris avec mention EP",
+      "review_required": false,
+      "id": "refend-004",
+      "points_agent_norm": [
+        [
+          554.4,
+          625.4
+        ],
+        [
+          603.1,
+          625.4
+        ],
+        [
+          603.1,
+          643
+        ],
+        [
+          554.4,
+          643
+        ],
+        [
+          554.4,
+          625.4
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          554.4,
+          627.117
+        ],
+        [
+          601.017,
+          627.117
+        ],
+        [
+          601.017,
+          640.853
+        ],
+        [
+          556.483,
+          640.853
+        ],
+        [
+          556.483,
+          625.4
+        ]
+      ]
+    },
+    {
+      "category": "cloison",
+      "subtype": "paroi PF1/2H boîte à vents",
+      "geometry_type": "polyline",
+      "points": [
+        [
+          410.709,
+          411.551
+        ],
+        [
+          504.197,
+          411.551
+        ],
+        [
+          504.197,
+          474.679
+        ],
+        [
+          411.181,
+          474.679
+        ],
+        [
+          411.181,
+          411.551
+        ]
+      ],
+      "confidence": 0.6,
+      "evidence": "Rectangle en double trait fin, mentions PF1/2H sur les quatre côtés",
+      "review_required": true,
+      "id": "cloison-004",
+      "points_agent_norm": [
+        [
+          430.7,
+          377.2
+        ],
+        [
+          597.8,
+          377.2
+        ],
+        [
+          597.8,
+          459.6
+        ],
+        [
+          430.7,
+          459.6
+        ],
+        [
+          430.7,
+          377.2
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          430.7,
+          377.2
+        ],
+        [
+          595.717,
+          377.2
+        ],
+        [
+          595.717,
+          458.312
+        ],
+        [
+          431.533,
+          458.312
+        ],
+        [
+          431.533,
+          377.2
+        ]
+      ]
+    },
+    {
+      "category": "indetermine",
+      "subtype": "boîte à vents / boîte à lumière",
+      "geometry_type": "polygon",
+      "points": [
+        [
+          504.924,
+          412.174
+        ],
+        [
+          504.924,
+          475.215
+        ],
+        [
+          411.162,
+          475.215
+        ],
+        [
+          411.162,
+          412.174
+        ]
+      ],
+      "confidence": 0.4,
+      "evidence": "Volume vitré PF1/2H sans croix de vide ; puits de lumière ou local, nature incertaine",
+      "review_required": true,
+      "id": "indetermine-002",
+      "points_agent_norm": [
+        [
+          431.5,
+          378
+        ],
+        [
+          597,
+          378
+        ],
+        [
+          597,
+          459
+        ],
+        [
+          431.5,
+          459
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          597.0,
+          378.0
+        ],
+        [
+          597.0,
+          459.0
+        ],
+        [
+          431.5,
+          459.0
+        ],
+        [
+          431.5,
+          378.0
+        ]
+      ]
+    },
+    {
+      "category": "indetermine",
+      "subtype": "muret accueil",
+      "geometry_type": "polygon",
+      "points": [
+        [
+          537.557,
+          406.726
+        ],
+        [
+          537.557,
+          410.15
+        ],
+        [
+          522.43,
+          410.15
+        ],
+        [
+          522.43,
+          406.726
+        ]
+      ],
+      "confidence": 0.35,
+      "evidence": "Petit plein gris près de la mention ACCUEIL",
+      "review_required": true,
+      "id": "indetermine-003",
+      "points_agent_norm": [
+        [
+          627.9,
+          371
+        ],
+        [
+          654.6,
+          371
+        ],
+        [
+          654.6,
+          375.4
+        ],
+        [
+          627.9,
+          375.4
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          654.6,
+          371.0
+        ],
+        [
+          654.6,
+          375.4
+        ],
+        [
+          627.9,
+          375.4
+        ],
+        [
+          627.9,
+          371.0
+        ]
+      ]
+    },
+    {
+      "category": "poteau",
+      "subtype": "massif d'angle nord-est terrasse",
+      "geometry_type": "polygon",
+      "points": [
+        [
+          642.876,
+          251.069
+        ],
+        [
+          642.876,
+          261.965
+        ],
+        [
+          634.662,
+          261.965
+        ],
+        [
+          634.662,
+          251.069
+        ]
+      ],
+      "confidence": 0.6,
+      "evidence": "Plein noir en L à l'angle nord-est de la terrasse",
+      "review_required": true,
+      "id": "poteau-001",
+      "points_agent_norm": [
+        [
+          826,
+          171
+        ],
+        [
+          840.5,
+          171
+        ],
+        [
+          840.5,
+          185
+        ],
+        [
+          826,
+          185
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          840.5,
+          171.0
+        ],
+        [
+          840.5,
+          185.0
+        ],
+        [
+          826.0,
+          185.0
+        ],
+        [
+          826.0,
+          171.0
+        ]
+      ]
+    },
+    {
+      "category": "poteau",
+      "subtype": "poteau carré terrasse",
+      "geometry_type": "polygon",
+      "points": [
+        [
+          642.876,
+          356.838
+        ],
+        [
+          642.876,
+          373.882
+        ],
+        [
+          630.752,
+          373.882
+        ],
+        [
+          630.752,
+          356.838
+        ]
+      ],
+      "confidence": 0.7,
+      "evidence": "Section carrée pochée en rive de la terrasse, axe 4'-5",
+      "review_required": false,
+      "id": "poteau-002",
+      "points_agent_norm": [
+        [
+          819.1,
+          306.9
+        ],
+        [
+          840.5,
+          306.9
+        ],
+        [
+          840.5,
+          328.8
+        ],
+        [
+          819.1,
+          328.8
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          840.5,
+          306.9
+        ],
+        [
+          840.5,
+          328.8
+        ],
+        [
+          819.1,
+          328.8
+        ],
+        [
+          819.1,
+          306.9
+        ]
+      ]
+    },
+    {
+      "category": "poteau",
+      "subtype": "lame brise-soleil",
+      "geometry_type": "polygon",
+      "points": [
+        [
+          642.876,
+          407.115
+        ],
+        [
+          642.876,
+          410.228
+        ],
+        [
+          630.752,
+          410.228
+        ],
+        [
+          630.752,
+          407.115
+        ]
+      ],
+      "confidence": 0.55,
+      "evidence": "Lame trapézoïdale pochée en rive est, axe 6",
+      "review_required": true,
+      "id": "poteau-003",
+      "points_agent_norm": [
+        [
+          819.1,
+          371.5
+        ],
+        [
+          840.5,
+          371.5
+        ],
+        [
+          840.5,
+          375.5
+        ],
+        [
+          819.1,
+          375.5
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          840.5,
+          371.5
+        ],
+        [
+          840.5,
+          375.5
+        ],
+        [
+          819.1,
+          375.5
+        ],
+        [
+          819.1,
+          371.5
+        ]
+      ]
+    },
+    {
+      "category": "poteau",
+      "subtype": "lame brise-soleil",
+      "geometry_type": "polygon",
+      "points": [
+        [
+          642.876,
+          441.36
+        ],
+        [
+          642.876,
+          444.473
+        ],
+        [
+          630.752,
+          444.473
+        ],
+        [
+          630.752,
+          441.36
+        ]
+      ],
+      "confidence": 0.55,
+      "evidence": "Lame pochée en rive est, axe 7",
+      "review_required": true,
+      "id": "poteau-004",
+      "points_agent_norm": [
+        [
+          819.1,
+          415.5
+        ],
+        [
+          840.5,
+          415.5
+        ],
+        [
+          840.5,
+          419.5
+        ],
+        [
+          819.1,
+          419.5
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          840.5,
+          415.5
+        ],
+        [
+          840.5,
+          419.5
+        ],
+        [
+          819.1,
+          419.5
+        ],
+        [
+          819.1,
+          415.5
+        ]
+      ]
+    },
+    {
+      "category": "poteau",
+      "subtype": "lame brise-soleil",
+      "geometry_type": "polygon",
+      "points": [
+        [
+          642.876,
+          475.526
+        ],
+        [
+          642.876,
+          478.639
+        ],
+        [
+          630.752,
+          478.639
+        ],
+        [
+          630.752,
+          475.526
+        ]
+      ],
+      "confidence": 0.55,
+      "evidence": "Lame pochée en rive est, axe 8",
+      "review_required": true,
+      "id": "poteau-005",
+      "points_agent_norm": [
+        [
+          819.1,
+          459.4
+        ],
+        [
+          840.5,
+          459.4
+        ],
+        [
+          840.5,
+          463.4
+        ],
+        [
+          819.1,
+          463.4
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          840.5,
+          459.4
+        ],
+        [
+          840.5,
+          463.4
+        ],
+        [
+          819.1,
+          463.4
+        ],
+        [
+          819.1,
+          459.4
+        ]
+      ]
+    },
+    {
+      "category": "poteau",
+      "subtype": "lame brise-soleil",
+      "geometry_type": "polygon",
+      "points": [
+        [
+          642.876,
+          511.016
+        ],
+        [
+          642.876,
+          514.129
+        ],
+        [
+          630.752,
+          514.129
+        ],
+        [
+          630.752,
+          511.016
+        ]
+      ],
+      "confidence": 0.55,
+      "evidence": "Lame pochée en rive est, axe 9",
+      "review_required": true,
+      "id": "poteau-006",
+      "points_agent_norm": [
+        [
+          819.1,
+          505
+        ],
+        [
+          840.5,
+          505
+        ],
+        [
+          840.5,
+          509
+        ],
+        [
+          819.1,
+          509
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          840.5,
+          505.0
+        ],
+        [
+          840.5,
+          509.0
+        ],
+        [
+          819.1,
+          509.0
+        ],
+        [
+          819.1,
+          505.0
+        ]
+      ]
+    },
+    {
+      "category": "poteau",
+      "subtype": "lame brise-soleil",
+      "geometry_type": "polygon",
+      "points": [
+        [
+          642.876,
+          545.65
+        ],
+        [
+          642.876,
+          548.763
+        ],
+        [
+          630.752,
+          548.763
+        ],
+        [
+          630.752,
+          545.65
+        ]
+      ],
+      "confidence": 0.55,
+      "evidence": "Lame pochée en rive est, axe 10",
+      "review_required": true,
+      "id": "poteau-007",
+      "points_agent_norm": [
+        [
+          819.1,
+          549.5
+        ],
+        [
+          840.5,
+          549.5
+        ],
+        [
+          840.5,
+          553.5
+        ],
+        [
+          819.1,
+          553.5
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          840.5,
+          549.5
+        ],
+        [
+          840.5,
+          553.5
+        ],
+        [
+          819.1,
+          553.5
+        ],
+        [
+          819.1,
+          549.5
+        ]
+      ]
+    },
+    {
+      "category": "poteau",
+      "subtype": "lame brise-soleil",
+      "geometry_type": "polygon",
+      "points": [
+        [
+          642.876,
+          580.283
+        ],
+        [
+          642.876,
+          583.396
+        ],
+        [
+          630.752,
+          583.396
+        ],
+        [
+          630.752,
+          580.283
+        ]
+      ],
+      "confidence": 0.55,
+      "evidence": "Lame pochée en rive est, axe 11",
+      "review_required": true,
+      "id": "poteau-008",
+      "points_agent_norm": [
+        [
+          819.1,
+          594
+        ],
+        [
+          840.5,
+          594
+        ],
+        [
+          840.5,
+          598
+        ],
+        [
+          819.1,
+          598
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          840.5,
+          594.0
+        ],
+        [
+          840.5,
+          598.0
+        ],
+        [
+          819.1,
+          598.0
+        ],
+        [
+          819.1,
+          594.0
+        ]
+      ]
+    },
+    {
+      "category": "poteau",
+      "subtype": "lame brise-soleil",
+      "geometry_type": "polygon",
+      "points": [
+        [
+          642.876,
+          614.839
+        ],
+        [
+          642.876,
+          617.952
+        ],
+        [
+          630.752,
+          617.952
+        ],
+        [
+          630.752,
+          614.839
+        ]
+      ],
+      "confidence": 0.55,
+      "evidence": "Lame pochée en rive est, axe 12",
+      "review_required": true,
+      "id": "poteau-009",
+      "points_agent_norm": [
+        [
+          819.1,
+          638.4
+        ],
+        [
+          840.5,
+          638.4
+        ],
+        [
+          840.5,
+          642.4
+        ],
+        [
+          819.1,
+          642.4
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          840.5,
+          638.4
+        ],
+        [
+          840.5,
+          642.4
+        ],
+        [
+          819.1,
+          642.4
+        ],
+        [
+          819.1,
+          638.4
+        ]
+      ]
+    },
+    {
+      "category": "poteau",
+      "subtype": "lame brise-soleil",
+      "geometry_type": "polygon",
+      "points": [
+        [
+          642.876,
+          649.551
+        ],
+        [
+          642.876,
+          652.664
+        ],
+        [
+          630.752,
+          652.664
+        ],
+        [
+          630.752,
+          649.551
+        ]
+      ],
+      "confidence": 0.55,
+      "evidence": "Lame pochée en rive est, axe 13",
+      "review_required": true,
+      "id": "poteau-010",
+      "points_agent_norm": [
+        [
+          819.1,
+          683
+        ],
+        [
+          840.5,
+          683
+        ],
+        [
+          840.5,
+          687
+        ],
+        [
+          819.1,
+          687
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          840.5,
+          683.0
+        ],
+        [
+          840.5,
+          687.0
+        ],
+        [
+          819.1,
+          687.0
+        ],
+        [
+          819.1,
+          683.0
+        ]
+      ]
+    },
+    {
+      "category": "poteau",
+      "subtype": "lame brise-soleil",
+      "geometry_type": "polygon",
+      "points": [
+        [
+          642.876,
+          684.418
+        ],
+        [
+          642.876,
+          687.531
+        ],
+        [
+          630.752,
+          687.531
+        ],
+        [
+          630.752,
+          684.418
+        ]
+      ],
+      "confidence": 0.55,
+      "evidence": "Lame pochée en rive est, axe 14",
+      "review_required": true,
+      "id": "poteau-011",
+      "points_agent_norm": [
+        [
+          819.1,
+          727.8
+        ],
+        [
+          840.5,
+          727.8
+        ],
+        [
+          840.5,
+          731.8
+        ],
+        [
+          819.1,
+          731.8
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          840.5,
+          727.8
+        ],
+        [
+          840.5,
+          731.8
+        ],
+        [
+          819.1,
+          731.8
+        ],
+        [
+          819.1,
+          727.8
+        ]
+      ]
+    },
+    {
+      "category": "poteau",
+      "subtype": "lame brise-soleil",
+      "geometry_type": "polygon",
+      "points": [
+        [
+          642.876,
+          718.818
+        ],
+        [
+          642.876,
+          721.931
+        ],
+        [
+          630.752,
+          721.931
+        ],
+        [
+          630.752,
+          718.818
+        ]
+      ],
+      "confidence": 0.55,
+      "evidence": "Lame pochée en rive est, axe 15",
+      "review_required": true,
+      "id": "poteau-012",
+      "points_agent_norm": [
+        [
+          819.1,
+          772
+        ],
+        [
+          840.5,
+          772
+        ],
+        [
+          840.5,
+          776
+        ],
+        [
+          819.1,
+          776
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          840.5,
+          772.0
+        ],
+        [
+          840.5,
+          776.0
+        ],
+        [
+          819.1,
+          776.0
+        ],
+        [
+          819.1,
+          772.0
+        ]
+      ]
+    },
+    {
+      "category": "poteau",
+      "subtype": "massif d'angle sud-est terrasse",
+      "geometry_type": "polygon",
+      "points": [
+        [
+          642.876,
+          755.242
+        ],
+        [
+          642.876,
+          787.396
+        ],
+        [
+          630.752,
+          784.183
+        ],
+        [
+          630.752,
+          755.242
+        ]
+      ],
+      "confidence": 0.6,
+      "evidence": "Plein noir en L à l'angle sud-est, axes 16-17",
+      "review_required": true,
+      "id": "poteau-013",
+      "points_agent_norm": [
+        [
+          819.1,
+          818.8
+        ],
+        [
+          840.5,
+          818.8
+        ],
+        [
+          840.5,
+          859.1
+        ],
+        [
+          819.1,
+          857
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          840.5,
+          818.8
+        ],
+        [
+          840.5,
+          860.114
+        ],
+        [
+          819.1,
+          855.986
+        ],
+        [
+          819.1,
+          818.8
+        ]
+      ]
+    },
+    {
+      "category": "terrasse",
+      "subtype": "terrasse de lecture",
+      "geometry_type": "polygon",
+      "points": [
+        [
+          642.876,
+          257.295
+        ],
+        [
+          642.876,
+          786.486
+        ],
+        [
+          584.466,
+          771.006
+        ],
+        [
+          584.466,
+          257.295
+        ]
+      ],
+      "confidence": 0.8,
+      "evidence": "Hachures de lames de platelage, libellé terrasse de lecture, rive à poteaux",
+      "review_required": false,
+      "id": "terrasse-001",
+      "points_agent_norm": [
+        [
+          737.4,
+          179
+        ],
+        [
+          840.5,
+          179
+        ],
+        [
+          840.5,
+          859
+        ],
+        [
+          737.4,
+          839
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          840.5,
+          179.0
+        ],
+        [
+          840.5,
+          858.945
+        ],
+        [
+          737.4,
+          839.055
+        ],
+        [
+          737.4,
+          179.0
+        ]
+      ]
+    },
+    {
+      "category": "piece",
+      "subtype": "terrasse de lecture",
+      "geometry_type": "polygon",
+      "points": [
+        [
+          641.46,
+          257.295
+        ],
+        [
+          641.46,
+          785.909
+        ],
+        [
+          584.466,
+          770.804
+        ],
+        [
+          584.466,
+          257.295
+        ]
+      ],
+      "confidence": 0.75,
+      "evidence": "Libellé terrasse de lecture, platelage extérieur hors façade vitrée",
+      "review_required": false,
+      "local": "exterieur",
+      "id": "piece-001",
+      "points_agent_norm": [
+        [
+          737.4,
+          179
+        ],
+        [
+          838,
+          179
+        ],
+        [
+          838,
+          858
+        ],
+        [
+          737.4,
+          839
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          838.0,
+          179.0
+        ],
+        [
+          838.0,
+          858.204
+        ],
+        [
+          737.4,
+          838.796
+        ],
+        [
+          737.4,
+          179.0
+        ]
+      ]
+    },
+    {
+      "category": "piece",
+      "subtype": "5.1 Fiction / 5.2 Recherche et Documentation / 5.3 Roman noir",
+      "geometry_type": "polygon",
+      "points": [
+        [
+          581.973,
+          258.074
+        ],
+        [
+          581.973,
+          768.406
+        ],
+        [
+          504.358,
+          747.836
+        ],
+        [
+          504.358,
+          690.021
+        ],
+        [
+          461.301,
+          690.021
+        ],
+        [
+          461.301,
+          739.27
+        ],
+        [
+          409.379,
+          725.51
+        ],
+        [
+          384.54,
+          704.277
+        ],
+        [
+          371.221,
+          700.747
+        ],
+        [
+          371.221,
+          713.37
+        ],
+        [
+          359.841,
+          713.37
+        ],
+        [
+          347.563,
+          694.897
+        ],
+        [
+          334.529,
+          691.443
+        ],
+        [
+          323.311,
+          702.798
+        ],
+        [
+          311.7,
+          699.721
+        ],
+        [
+          310.571,
+          685.752
+        ],
+        [
+          298.38,
+          682.522
+        ],
+        [
+          286.451,
+          692.95
+        ],
+        [
+          252.814,
+          684.036
+        ],
+        [
+          252.814,
+          601.297
+        ],
+        [
+          260.179,
+          599.74
+        ],
+        [
+          252.814,
+          548.374
+        ],
+        [
+          260.179,
+          546.817
+        ],
+        [
+          252.814,
+          513.351
+        ],
+        [
+          252.814,
+          461.206
+        ],
+        [
+          260.179,
+          461.206
+        ],
+        [
+          260.179,
+          411.396
+        ],
+        [
+          385.384,
+          411.396
+        ],
+        [
+          385.384,
+          337.459
+        ],
+        [
+          309.468,
+          337.459
+        ],
+        [
+          309.468,
+          342.907
+        ],
+        [
+          260.179,
+          342.907
+        ],
+        [
+          251.681,
+          305.549
+        ],
+        [
+          260.179,
+          303.214
+        ],
+        [
+          252.814,
+          270.526
+        ],
+        [
+          252.814,
+          258.074
+        ]
+      ],
+      "confidence": 0.6,
+      "evidence": "Plateau ouvert sans cloison séparatrice entre les trois libellés de zones ; contour au nu intérieur des façades",
+      "review_required": true,
+      "local": "chauffe",
+      "id": "piece-002",
+      "enclaves": [
+        "indetermine-002",
+        "indetermine-003",
+        "piece-007",
+        "piece-008",
+        "piece-009"
+      ],
+      "points_agent_norm": [
+        [
+          152,
+          180
+        ],
+        [
+          733,
+          180
+        ],
+        [
+          733,
+          836
+        ],
+        [
+          596,
+          809
+        ],
+        [
+          596,
+          735
+        ],
+        [
+          520,
+          735
+        ],
+        [
+          520,
+          798
+        ],
+        [
+          429,
+          781
+        ],
+        [
+          384,
+          753
+        ],
+        [
+          361,
+          749
+        ],
+        [
+          361,
+          766
+        ],
+        [
+          340,
+          764
+        ],
+        [
+          319,
+          741
+        ],
+        [
+          296,
+          737
+        ],
+        [
+          277,
+          751
+        ],
+        [
+          256,
+          748
+        ],
+        [
+          254,
+          730
+        ],
+        [
+          233,
+          725
+        ],
+        [
+          211,
+          739
+        ],
+        [
+          152,
+          727
+        ],
+        [
+          152,
+          621
+        ],
+        [
+          165,
+          619
+        ],
+        [
+          152,
+          553
+        ],
+        [
+          165,
+          551
+        ],
+        [
+          152,
+          508
+        ],
+        [
+          152,
+          441
+        ],
+        [
+          165,
+          441
+        ],
+        [
+          165,
+          377
+        ],
+        [
+          386,
+          377
+        ],
+        [
+          386,
+          282
+        ],
+        [
+          252,
+          282
+        ],
+        [
+          252,
+          289
+        ],
+        [
+          165,
+          289
+        ],
+        [
+          150,
+          241
+        ],
+        [
+          165,
+          238
+        ],
+        [
+          152,
+          196
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          733.0,
+          180.0
+        ],
+        [
+          733.0,
+          835.715
+        ],
+        [
+          596.0,
+          809.285
+        ],
+        [
+          596.0,
+          735.0
+        ],
+        [
+          520.0,
+          735.0
+        ],
+        [
+          520.0,
+          798.278
+        ],
+        [
+          428.353,
+          780.598
+        ],
+        [
+          384.509,
+          753.317
+        ],
+        [
+          361.0,
+          748.781
+        ],
+        [
+          361.0,
+          765.0
+        ],
+        [
+          340.913,
+          765.0
+        ],
+        [
+          319.242,
+          741.265
+        ],
+        [
+          296.235,
+          736.827
+        ],
+        [
+          276.435,
+          751.417
+        ],
+        [
+          255.94,
+          747.463
+        ],
+        [
+          253.946,
+          729.515
+        ],
+        [
+          232.428,
+          725.364
+        ],
+        [
+          211.373,
+          738.763
+        ],
+        [
+          152.0,
+          727.309
+        ],
+        [
+          152.0,
+          621.0
+        ],
+        [
+          165.0,
+          619.0
+        ],
+        [
+          152.0,
+          553.0
+        ],
+        [
+          165.0,
+          551.0
+        ],
+        [
+          152.0,
+          508.0
+        ],
+        [
+          152.0,
+          441.0
+        ],
+        [
+          165.0,
+          441.0
+        ],
+        [
+          165.0,
+          377.0
+        ],
+        [
+          386.0,
+          377.0
+        ],
+        [
+          386.0,
+          282.0
+        ],
+        [
+          252.0,
+          282.0
+        ],
+        [
+          252.0,
+          289.0
+        ],
+        [
+          165.0,
+          289.0
+        ],
+        [
+          150.0,
+          241.0
+        ],
+        [
+          165.0,
+          238.0
+        ],
+        [
+          152.0,
+          196.0
+        ],
+        [
+          152.0,
+          180.0
+        ]
+      ]
+    },
+    {
+      "category": "piece",
+      "subtype": "escalier",
+      "geometry_type": "polygon",
+      "points": [
+        [
+          384.251,
+          342.907
+        ],
+        [
+          384.251,
+          391.627
+        ],
+        [
+          314.567,
+          391.627
+        ],
+        [
+          314.567,
+          342.907
+        ]
+      ],
+      "confidence": 0.75,
+      "evidence": "Escalier hélicoïdal dans une cage aux murs épais, porte CF",
+      "review_required": false,
+      "local": "non_chauffe",
+      "id": "piece-003",
+      "points_agent_norm": [
+        [
+          261,
+          289
+        ],
+        [
+          384,
+          289
+        ],
+        [
+          384,
+          351.6
+        ],
+        [
+          261,
+          351.6
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          384.0,
+          289.0
+        ],
+        [
+          384.0,
+          351.6
+        ],
+        [
+          261.0,
+          351.6
+        ],
+        [
+          261.0,
+          289.0
+        ]
+      ]
+    },
+    {
+      "category": "piece",
+      "subtype": "CF Cf",
+      "geometry_type": "polygon",
+      "points": [
+        [
+          335.812,
+          394.273
+        ],
+        [
+          335.812,
+          408.672
+        ],
+        [
+          314.567,
+          408.672
+        ],
+        [
+          314.567,
+          394.273
+        ]
+      ],
+      "confidence": 0.65,
+      "evidence": "Libellé CF Cf, petite gaine en bas de la cage d'escalier",
+      "review_required": false,
+      "local": "gaine_technique",
+      "id": "piece-004",
+      "points_agent_norm": [
+        [
+          261,
+          355
+        ],
+        [
+          298.5,
+          355
+        ],
+        [
+          298.5,
+          373.5
+        ],
+        [
+          261,
+          373.5
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          298.5,
+          355.0
+        ],
+        [
+          298.5,
+          373.5
+        ],
+        [
+          261.0,
+          373.5
+        ],
+        [
+          261.0,
+          355.0
+        ]
+      ]
+    },
+    {
+      "category": "piece",
+      "subtype": "CVC EU EP",
+      "geometry_type": "polygon",
+      "points": [
+        [
+          364.819,
+          394.273
+        ],
+        [
+          364.819,
+          408.672
+        ],
+        [
+          335.812,
+          408.672
+        ],
+        [
+          335.812,
+          394.273
+        ]
+      ],
+      "confidence": 0.65,
+      "evidence": "Libellé CVC EU EP",
+      "review_required": false,
+      "local": "gaine_technique",
+      "id": "piece-005",
+      "points_agent_norm": [
+        [
+          298.5,
+          355
+        ],
+        [
+          349.7,
+          355
+        ],
+        [
+          349.7,
+          373.5
+        ],
+        [
+          298.5,
+          373.5
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          349.7,
+          355.0
+        ],
+        [
+          349.7,
+          373.5
+        ],
+        [
+          298.5,
+          373.5
+        ],
+        [
+          298.5,
+          355.0
+        ]
+      ]
+    },
+    {
+      "category": "piece",
+      "subtype": "ventilation",
+      "geometry_type": "polygon",
+      "points": [
+        [
+          384.251,
+          394.273
+        ],
+        [
+          384.251,
+          408.672
+        ],
+        [
+          364.819,
+          408.672
+        ],
+        [
+          364.819,
+          394.273
+        ]
+      ],
+      "confidence": 0.65,
+      "evidence": "Libellé ventilation",
+      "review_required": false,
+      "local": "gaine_technique",
+      "id": "piece-006",
+      "points_agent_norm": [
+        [
+          349.7,
+          355
+        ],
+        [
+          384,
+          355
+        ],
+        [
+          384,
+          373.5
+        ],
+        [
+          349.7,
+          373.5
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          384.0,
+          355.0
+        ],
+        [
+          384.0,
+          373.5
+        ],
+        [
+          349.7,
+          373.5
+        ],
+        [
+          349.7,
+          355.0
+        ]
+      ]
+    },
+    {
+      "category": "piece",
+      "subtype": "ascenseur 75x1.6 nord",
+      "geometry_type": "polygon",
+      "points": [
+        [
+          432.464,
+          341.739
+        ],
+        [
+          432.464,
+          367.345
+        ],
+        [
+          412.748,
+          367.345
+        ],
+        [
+          412.748,
+          341.739
+        ]
+      ],
+      "confidence": 0.7,
+      "evidence": "Cabine dans gaine maçonnée, mention 75x1.6",
+      "review_required": false,
+      "local": "gaine_technique",
+      "id": "piece-007",
+      "points_agent_norm": [
+        [
+          434.3,
+          287.5
+        ],
+        [
+          469.1,
+          287.5
+        ],
+        [
+          469.1,
+          320.4
+        ],
+        [
+          434.3,
+          320.4
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          469.1,
+          287.5
+        ],
+        [
+          469.1,
+          320.4
+        ],
+        [
+          434.3,
+          320.4
+        ],
+        [
+          434.3,
+          287.5
+        ]
+      ]
+    },
+    {
+      "category": "piece",
+      "subtype": "ascenseur 75x1.6 sud",
+      "geometry_type": "polygon",
+      "points": [
+        [
+          432.407,
+          585.653
+        ],
+        [
+          432.407,
+          615.54
+        ],
+        [
+          413.145,
+          615.54
+        ],
+        [
+          413.145,
+          585.653
+        ]
+      ],
+      "confidence": 0.7,
+      "evidence": "Cabine dans gaine maçonnée, mention 75x1.6",
+      "review_required": false,
+      "local": "gaine_technique",
+      "id": "piece-008",
+      "points_agent_norm": [
+        [
+          435,
+          600.9
+        ],
+        [
+          469,
+          600.9
+        ],
+        [
+          469,
+          639.3
+        ],
+        [
+          435,
+          639.3
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          469.0,
+          600.9
+        ],
+        [
+          469.0,
+          639.3
+        ],
+        [
+          435.0,
+          639.3
+        ],
+        [
+          435.0,
+          600.9
+        ]
+      ]
+    },
+    {
+      "category": "piece",
+      "subtype": "EP",
+      "geometry_type": "polygon",
+      "points": [
+        [
+          506.624,
+          606.745
+        ],
+        [
+          506.624,
+          616.473
+        ],
+        [
+          482.263,
+          616.473
+        ],
+        [
+          482.263,
+          606.745
+        ]
+      ],
+      "confidence": 0.6,
+      "evidence": "Libellé EP dans un cadre épais",
+      "review_required": false,
+      "local": "gaine_technique",
+      "id": "piece-009",
+      "points_agent_norm": [
+        [
+          557,
+          628
+        ],
+        [
+          600,
+          628
+        ],
+        [
+          600,
+          640.5
+        ],
+        [
+          557,
+          640.5
+        ]
+      ],
+      "points_analysis_norm": [
+        [
+          600.0,
+          628.0
+        ],
+        [
+          600.0,
+          640.5
+        ],
+        [
+          557.0,
+          640.5
+        ],
+        [
+          557.0,
+          628.0
+        ]
+      ]
+    }
+  ],
+  "observations": [
+    "Repère : x_global = x_tuile*0.3554 + décalage, y_global = y_tuile*0.3662 + décalage (tuiles de 1014x1475 px).",
+    "Le plateau 5.1/5.2/5.3 ne présente aucune cloison visible entre les zones : décrit comme un seul polygone. Les gaines et ascenseurs se trouvent à l'intérieur de ce polygone, il y a donc un recouvrement à corriger par soustraction.",
+    "Les vides exclus des pièces : vide sur terrasse du personnel R+1 (165-252 x 289-368), vide sur R+1 (256-383 x 597-683), trémie de l'escalier droit et vide (429-599 x 465-550), vide sur petite terrasse R+1 (520-596 x 735-808).",
+    "L'escalier droit de 24 marches au centre (429-598 x 465-504) est ouvert dans le plateau, il n'est pas encloisonné. Un escalier extérieur de 23 marches se trouve sur la terrasse de lecture (780-819 x 228-373).",
+    "La boîte à vents/boîte à lumière (parois PF1/2H) est de nature incertaine (puits de lumière ou local) : classée indéterminée.",
+    "Les petits poteaux de la façade ouest (axes 4' à 7') et ceux des rives nord et sud de la terrasse ne sont pas inventoriés un par un. Les coordonnées des pans de façade en dents de scie sont approximatives.",
+    "Le mobilier, les rayonnages, les cotes, les axes et la légende ont été ignorés."
+  ],
+  "geometry_cleanup": {
+    "pieces_separees": 0,
+    "directions_deg": [
+      0.0,
+      90.0,
+      10.6
+    ],
+    "sommets_avant": 229,
+    "sommets_apres": 229,
+    "objets_recales": 12
+  }
+}
