@@ -121,6 +121,30 @@
    "etat": "en attente",
    "detail": "agent thermicien-enveloppe ; réponse attendue dans reponse-lot-6.json",
    "date": "2026-10-02 10:10:50"
+  },
+  {
+   "etape": "lot-6",
+   "etat": "intégré",
+   "detail": "catalogue : 43 composants",
+   "date": "2026-10-02 10:13:19"
+  },
+  {
+   "etape": "restitution",
+   "etat": "faite",
+   "detail": "enveloppe.json",
+   "date": "2026-10-02 10:13:47"
+  },
+  {
+   "etape": "fichier-etude",
+   "etat": "écrit",
+   "detail": "etude-R2.json ; cohérence : attention (16 anomalie(s))",
+   "date": "2026-10-02 10:13:50"
+  },
+  {
+   "etape": "etude",
+   "etat": "terminée",
+   "detail": "/home/user/Po2/essais/R2-cloud/sorties-opus55-xhigh/R2/A-FAIRE.md",
+   "date": "2026-10-02 10:13:50"
   }
  ]
 }
