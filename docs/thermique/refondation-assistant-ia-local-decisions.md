@@ -58,6 +58,9 @@ intérieur à 2,1 cm de médiane, 97 % d'accord opaque/vitré ; `analyse-par-mis
   Les livrables s'importent dans le format d'échange de D272.
 - **D279 — Pilote : le R+1 du projet 1**, étape par étape, en commençant par écrire `conventions.md` à partir des
   décisions déjà prises (nu intérieur, doublage BA13 présumé, découpage par local, NF EN ISO 14683, angles…).
+- **D280 bis (2026-10-02) — Étape 0 : dépôt par le client, puis tri et nommage par l'IA** avant l'étape 1 ;
+  convention de nommage : `convention-nommage-pieces-decisions.md` (D281–D285). Le site est la maison de chaque
+  étude ; le serveur MCP publié est la cible (`interaction-claude-plateforme-recherche.md`).
 - **D280 — Ordre de reprise** : 1 et 2 (formaliser l'existant) → 4 (import M1) → 3 (coupes par mission) → 5 →
   7 → 10 (import M2) → 11 (métrés) → 14 (premier livrable) ; puis 6, 8, 9, 12, 13.
 
