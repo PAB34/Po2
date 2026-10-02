@@ -529,11 +529,11 @@
   "genre": "liaison",
   "decision": "a_confirmer",
   "couches": [],
-  "regle": "Le double trait fin M4 bute sur un bloc gris sans alvéoles de 44 cm (−3/−47) qui tourne de 90° ; aux deux angles est de la trémie « terrasse du personnel » (138.43 et 141.78), avec une jambe L8 (refend CF) à 25-30 cm de l'angle. Diffère de L6/L7 (sans gris) et de L10 (P1 isolé).",
+  "regle": "Complément : vu depuis la pièce 5.2 (U01, face nord de la cage) comme un bloc gris carré 43×43 sans alvéoles à +3/+45 posé sur le voile P6, prolongé vers le sud par le double trait fin M4 avec dormant carré (+45/+85) ; trait noir épais descendant à −40 sur son bord ouest (rive de la trémie). Le voile ouest de la cage sur la trémie est donc vitré (M4) entre deux blocs P3 d'angle.",
   "premiere_vue": {
-   "troncon": "T61",
-   "debut_m": 138.43,
-   "fin_m": 138.55
+   "troncon": "U01",
+   "debut_m": 10011.37,
+   "fin_m": 10011.8
   }
  },
  {
@@ -560,6 +560,131 @@
    "troncon": "T67",
    "debut_m": 153.32,
    "fin_m": 154.21
+  }
+ },
+ {
+  "id": "P6",
+  "nom": "Voile béton 27 cm non isolé des blocs fermés (cage d'escalier CF, gaine ascenseur, locaux techniques)",
+  "genre": "paroi",
+  "decision": "a_confirmer",
+  "couches": [
+   {
+    "nature": "mur",
+    "epaisseur_cm": 27,
+    "indice": "bande grise 20-23 cm à fines diagonales entre deux traits noirs épais de 3-4 cm"
+   }
+  ],
+  "regle": "Bande grise uniforme de 0 à +27 bordée de deux traits noirs épais, fines diagonales, jamais d'alvéoles ni de doublage. ≠ P3 (44 cm, en biais), ≠ P1 (alvéoles). Vu sur la face nord (U01-U02) et est (U16) de la cage CF, sur la face nord (U03) et est (U13) de la gaine ascenseur, sur les locaux techniques (U08, U09, U17 à +33/+60). Statut thermique des locaux derrière (cage CF, gaine, CVC/ventilation) à confirmer.",
+  "premiere_vue": {
+   "troncon": "U02",
+   "debut_m": 10014.23,
+   "fin_m": 10017.08
+  }
+ },
+ {
+  "id": "P7",
+  "nom": "Voile béton 55 cm de la face sud de la gaine ascenseur (avec niche de la gaine EP)",
+  "genre": "paroi",
+  "decision": "a_confirmer",
+  "couches": [
+   {
+    "nature": "mur",
+    "epaisseur_cm": 55,
+    "indice": "gris uniforme 0/+55 à fines diagonales, traits noirs épais en rives"
+   }
+  ],
+  "regle": "Gris uniforme de 0 à +53/+57 bordé de traits noirs épais ; niche blanche de 25×35 cm (gaine EP, texte EP) ouverte côté local à 10208.90-10210.19 ; se termine à l'ouest par le bloc d'angle du voile ouest (40 cm, monte à +75). Vu en bout dans U13 (53 cm à 10207.30-10207.83). ≠ P6 (27), ≠ P3 (44, pas de niche).",
+  "premiere_vue": {
+   "troncon": "U14",
+   "debut_m": 10208.08,
+   "fin_m": 10208.95
+  }
+ },
+ {
+  "id": "P8",
+  "nom": "Cloison légère entre locaux techniques (CVC / ventilation)",
+  "genre": "paroi",
+  "decision": "a_confirmer",
+  "couches": [
+   {
+    "nature": "autre",
+    "epaisseur_cm": 5,
+    "indice": "trait noir simple de 4-5 cm, ou double trait fin de 7 cm"
+   }
+  ],
+  "regle": "Trait noir simple de 4-5 cm (ou double trait fin de 7 cm) sans gris, perpendiculaire ou parallèle au guide, entre les textes CVC / ventilation ; vu montant à 10168.95 (U08), descendant à 10367.25 et 10368.55 (U17), le long du guide à +2/+6 (U18). Cloison intérieure de locaux techniques : hors enveloppe sauf si l'un des locaux est chauffé.",
+  "premiere_vue": {
+   "troncon": "U18",
+   "debut_m": 10370.49,
+   "fin_m": 10371.32
+  }
+ },
+ {
+  "id": "M7",
+  "nom": "Cloison vitrée pare-flamme PF1/2H de la boîte à vents / boîte à lumière",
+  "genre": "menuiserie",
+  "decision": "a_confirmer",
+  "couches": [
+   {
+    "nature": "cadre",
+    "epaisseur_cm": 4,
+    "indice": "trait fin extérieur"
+   },
+   {
+    "nature": "vitrage",
+    "epaisseur_cm": 2,
+    "indice": "trait central"
+   },
+   {
+    "nature": "cadre",
+    "epaisseur_cm": 4,
+    "indice": "trait fin intérieur"
+   }
+  ],
+  "regle": "Triple trait fin parallèle de 10 cm sans gris, petits carrés noirs de 7 cm tous les ~2,1 m (montants), tags PF1/2H ; nu +5/+15 sur U10-U11, +36/+45 sur U12 (guide décalé de 29 cm au jog du côté 18). Angle de boîte en triple trait montant à 10174.04. ≠ M1 (pas de trait parallèle à −25/−33 ni poteaux PO1), ≠ M4 (pas de dormants carrés). Cloison intérieure au volume chauffé : probablement hors enveloppe.",
+  "premiere_vue": {
+   "troncon": "U10",
+   "debut_m": 10174.1,
+   "fin_m": 10176.58
+  }
+ },
+ {
+  "id": "L13",
+  "nom": "Angle rentrant du local sur le coin extérieur d'un bloc fermé en voiles P6/P7 (cage CF, gaine ascenseur)",
+  "genre": "liaison",
+  "decision": "a_confirmer",
+  "couches": [],
+  "regle": "Le voile le long du guide (0/+27 ou 0/+55) rencontre un voile gris perpendiculaire qui part vers l'extérieur (vers le haut) sur toute la hauteur de bande, coin extérieur en L, sans alvéoles. Variante jambage : bloc de 40 cm plafonné à +40 (U03) ou +75 (U15) = about du voile ouest de la gaine avant la porte palière. ≠ L1 (retour gris vers l'intérieur, alvéoles), ≠ L11 (baie M4 et voile P3).",
+  "premiere_vue": {
+   "troncon": "U13",
+   "debut_m": 10205.46,
+   "fin_m": 10205.71
+  }
+ },
+ {
+  "id": "L15",
+  "nom": "Angle de la cloison vitrée M7 (boîte à lumière)",
+  "genre": "liaison",
+  "decision": "a_confirmer",
+  "couches": [],
+  "regle": "Triple trait fin M7 qui tourne à 90° vers l'extérieur sans gris ni dormant marqué (coin nord-ouest de la boîte à 10174.04). ≠ L6/L7 (baies M4 avec dormant carré).",
+  "premiere_vue": {
+   "troncon": "U10",
+   "debut_m": 10174.04,
+   "fin_m": 10174.1
+  }
+ },
+ {
+  "id": "X8",
+  "nom": "Débattement de la porte CF (2 UP) de la cage d'escalier suivi par le contour du local",
+  "genre": "autre",
+  "decision": "exclu",
+  "couches": [],
+  "regle": "Arcs de cercle (rayon ≈1,4 m) tangents au guide, vantail gris épais en biais, textes UP et CF1/2H+FP, aucune paroi le long du guide : le contour du local a traversé la porte ouverte et longe l'arc dans le palier de la cage. La vraie limite est la porte CF (≈1,4 m) dans le voile est P6 de la cage, à partir de 10219.07 (U16).",
+  "premiere_vue": {
+   "troncon": "U04",
+   "debut_m": 10165.72,
+   "fin_m": 10166.53
   }
  }
 ]
