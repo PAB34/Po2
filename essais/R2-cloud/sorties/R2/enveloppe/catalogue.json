@@ -443,5 +443,18 @@
    "fin_m": 151.13,
    "autre_niveau": true
   }
+ },
+ {
+  "id": "L9",
+  "nom": "Jonction tableau de baie M4 contre voile béton plein (noyau P3 ou massif P4)",
+  "genre": "liaison",
+  "decision": "a_confirmer",
+  "couches": [],
+  "regle": "Un petit dormant carré de la baie M4 bute sur un bloc gris plein sans alvéoles, souvent en angle rentrant. Ce n'est pas L2, car le voile n'est pas une paroi P1 isolée. Ce n'est pas L6/L7 : il y a du gris. Ce n'est pas PO2 : le gris est un voile long, pas un poteau carré.",
+  "premiere_vue": {
+   "troncon": "T46",
+   "debut_m": 128.97,
+   "fin_m": 129.05
+  }
  }
 ]
