@@ -564,40 +564,40 @@
  },
  {
   "id": "P6",
-  "nom": "Voile béton 27 cm non isolé des blocs fermés (cage d'escalier CF, gaine ascenseur, locaux techniques)",
+  "nom": "Voile béton ≈27 cm non isolé des blocs fermés (cage CF, gaines ascenseur et EP, locaux techniques)",
   "genre": "paroi",
   "decision": "a_confirmer",
   "couches": [
    {
     "nature": "mur",
     "epaisseur_cm": 27,
-    "indice": "bande grise 20-23 cm à fines diagonales entre deux traits noirs épais de 3-4 cm"
+    "indice": "gris uniforme cerné de deux traits noirs épais, fines diagonales"
    }
   ],
-  "regle": "Bande grise uniforme de 0 à +27 bordée de deux traits noirs épais, fines diagonales, jamais d'alvéoles ni de doublage. ≠ P3 (44 cm, en biais), ≠ P1 (alvéoles). Vu sur la face nord (U01-U02) et est (U16) de la cage CF, sur la face nord (U03) et est (U13) de la gaine ascenseur, sur les locaux techniques (U08, U09, U17 à +33/+60). Statut thermique des locaux derrière (cage CF, gaine, CVC/ventilation) à confirmer.",
+  "regle": "Bande grise uniforme bordée de deux traits noirs épais, fines diagonales, jamais d'alvéoles ni de doublage. Lot 6 : lu 22-25 cm sur les murs nord des locaux CF et CVC face à la cage d'escalier (U19 +37/+60, U20 +36/+58, marches de la cage au-dessus), 27-31 sur la gaine EP de 5.3 (U31 0/+28 face sud avec cavité blanche +27/+70, U25 +52/+83 face nord), 25-30 sur les faces est et sud de la gaine ascenseur sud (U33 0/+25-30, U34 +2/+30, U24 +11/+40). ≠ P7 (50-55), ≠ P3 (44 en biais), ≠ P1 (alvéoles).",
   "premiere_vue": {
-   "troncon": "U02",
-   "debut_m": 10014.23,
-   "fin_m": 10017.08
+   "troncon": "U31",
+   "debut_m": 10737.03,
+   "fin_m": 10738.95
   }
  },
  {
   "id": "P7",
-  "nom": "Voile béton 55 cm de la face sud de la gaine ascenseur (avec niche de la gaine EP)",
+  "nom": "Voile béton épais 50-55 cm des gaines ascenseur (face sud de la gaine nord avec niche EP ; voile ouest et jambages nord de la gaine sud)",
   "genre": "paroi",
   "decision": "a_confirmer",
   "couches": [
    {
     "nature": "mur",
     "epaisseur_cm": 55,
-    "indice": "gris uniforme 0/+55 à fines diagonales, traits noirs épais en rives"
+    "indice": "gris uniforme cerné de traits noirs épais, fines diagonales, sans alvéoles ; lu 50 sur la gaine sud"
    }
   ],
-  "regle": "Gris uniforme de 0 à +53/+57 bordé de traits noirs épais ; niche blanche de 25×35 cm (gaine EP, texte EP) ouverte côté local à 10208.90-10210.19 ; se termine à l'ouest par le bloc d'angle du voile ouest (40 cm, monte à +75). Vu en bout dans U13 (53 cm à 10207.30-10207.83). ≠ P6 (27), ≠ P3 (44, pas de niche).",
+  "regle": "Gris uniforme cerné de traits noirs épais, fines diagonales, sans alvéoles. Gaine nord : face sud 0/+55 avec niche EP (U13/U15). Gaine sud (5.3) : voile ouest lu 50 cm en bout dans U34 (10747.60-10748.11) et vu de face à +40 jusqu'au bord +90 de la bande dans U21 et U35 (guide décalé de 40 cm, coupe les pupitres CONSULT) ; jambages de la porte palière M8 à +45 jusqu'au bord +90 dans U22-U23 (épaisseur réelle hors bande, ≥45). ≠ P6 (27).",
   "premiere_vue": {
-   "troncon": "U14",
-   "debut_m": 10208.08,
-   "fin_m": 10208.95
+   "troncon": "U34",
+   "debut_m": 10747.6,
+   "fin_m": 10748.11
   }
  },
  {
@@ -633,7 +633,7 @@
    {
     "nature": "vitrage",
     "epaisseur_cm": 2,
-    "indice": "trait central"
+    "indice": "trait fin central"
    },
    {
     "nature": "cadre",
@@ -641,37 +641,37 @@
     "indice": "trait fin intérieur"
    }
   ],
-  "regle": "Triple trait fin parallèle de 10 cm sans gris, petits carrés noirs de 7 cm tous les ~2,1 m (montants), tags PF1/2H ; nu +5/+15 sur U10-U11, +36/+45 sur U12 (guide décalé de 29 cm au jog du côté 18). Angle de boîte en triple trait montant à 10174.04. ≠ M1 (pas de trait parallèle à −25/−33 ni poteaux PO1), ≠ M4 (pas de dormants carrés). Cloison intérieure au volume chauffé : probablement hors enveloppe.",
+  "regle": "Triple trait fin parallèle de 10 cm sans gris, petits carrés noirs de 7 cm (montants) tous les 1,8-2,1 m, tags PF1/2H ; nu +5/+15 sur U10-U11, +36/+45 sur U12. Lot 6 : vu sur les trois autres faces de la boîte, à +5/−4 sur U26 (est), U27-U28 (sud, marches du vide à −30/−40 dessous) et à +40/+50 sur U29 (ouest, guide décalé de 40 cm) ; angles L15 aux quatre coins. ≠ M1 (pas de trait parallèle ni poteaux PO1), ≠ M4 (pas de dormants carrés). Cloison intérieure au volume chauffé : probablement hors enveloppe.",
   "premiere_vue": {
-   "troncon": "U10",
-   "debut_m": 10174.1,
-   "fin_m": 10176.58
+   "troncon": "U27",
+   "debut_m": 10554.95,
+   "fin_m": 10558.8
   }
  },
  {
   "id": "L13",
-  "nom": "Angle rentrant du local sur le coin extérieur d'un bloc fermé en voiles P6/P7 (cage CF, gaine ascenseur)",
+  "nom": "Angle rentrant du local sur le coin extérieur d'un bloc fermé en voiles P6/P7 (cage CF, gaines ascenseur et EP)",
   "genre": "liaison",
   "decision": "a_confirmer",
   "couches": [],
-  "regle": "Le voile le long du guide (0/+27 ou 0/+55) rencontre un voile gris perpendiculaire qui part vers l'extérieur (vers le haut) sur toute la hauteur de bande, coin extérieur en L, sans alvéoles. Variante jambage : bloc de 40 cm plafonné à +40 (U03) ou +75 (U15) = about du voile ouest de la gaine avant la porte palière. ≠ L1 (retour gris vers l'intérieur, alvéoles), ≠ L11 (baie M4 et voile P3).",
+  "regle": "Le voile le long du guide rencontre un voile gris perpendiculaire qui part vers l'extérieur (vers le haut) sur toute la hauteur de bande, coin extérieur en L, sans alvéoles ; variante jambage plafonné (U03, U15). Lot 6 : coins de la gaine ascenseur sud (NW dans U21/U22 avec 43 cm de vide entre l'about carré du voile et le tournant du guide ; SE dans U33/U34 jambage 22 cm ; SW dans U34 jambage 50 cm P7) et de la gaine EP (U25 NW avec 44 cm de vide, U31 jambages 20-22 cm montant de 0 à +90). ≠ L1 (retour gris vers l'intérieur, alvéoles), ≠ L11 (baie M4 et voile P3), ≠ L16 (voile traversant les deux côtés).",
   "premiere_vue": {
-   "troncon": "U13",
-   "debut_m": 10205.46,
-   "fin_m": 10205.71
+   "troncon": "U34",
+   "debut_m": 10747.6,
+   "fin_m": 10748.11
   }
  },
  {
   "id": "L15",
-  "nom": "Angle de la cloison vitrée M7 (boîte à lumière)",
+  "nom": "Angle de la cloison vitrée M7 (boîte à vents / boîte à lumière)",
   "genre": "liaison",
   "decision": "a_confirmer",
   "couches": [],
-  "regle": "Triple trait fin M7 qui tourne à 90° vers l'extérieur sans gris ni dormant marqué (coin nord-ouest de la boîte à 10174.04). ≠ L6/L7 (baies M4 avec dormant carré).",
+  "regle": "Triple trait fin M7 qui tourne à 90° vers l'extérieur sans gris ni dormant marqué (montant carré de 7 cm au coin). Lot 6 : vu aux quatre coins de la boîte, NE 10551.09 (U26), SE 10554.87 (U26/U27), SW 10562.73 (U28), NW 10566.98 (U29, triple trait montant de +40 à +90). ≠ L6/L7 (baies M4 avec dormant carré).",
   "premiere_vue": {
-   "troncon": "U10",
-   "debut_m": 10174.04,
-   "fin_m": 10174.1
+   "troncon": "U28",
+   "debut_m": 10562.66,
+   "fin_m": 10562.73
   }
  },
  {
@@ -685,6 +685,38 @@
    "troncon": "U04",
    "debut_m": 10165.72,
    "fin_m": 10166.53
+  }
+ },
+ {
+  "id": "M8",
+  "nom": "Porte palière d'ascenseur coulissante (face nord de la gaine ascenseur sud, 5.3)",
+  "genre": "menuiserie",
+  "decision": "a_confirmer",
+  "couches": [
+   {
+    "nature": "cadre",
+    "epaisseur_cm": 4,
+    "indice": "double trait fin à +84/+88 au fond de l'épaisseur des jambages"
+   }
+  ],
+  "regle": "Baie de 1,18 m (10514.30-10515.48) entre deux jambages gris épais P7 sur la face nord de la gaine ascenseur de 5.3 ; double trait fin à +84/+88 (côté cabine, au fond de l'épaisseur du voile) avec un petit décroché au milieu (vantaux coulissants) et débordant de 25 cm sur les jambages ; demi-cercle r≈0,7 m (giration PMR) côté local. Pas de vantail battant ni d'arc tangent (≠ M2, ≠ X8), pas de vitrage (≠ M4, ≠ M7).",
+  "premiere_vue": {
+   "troncon": "U23",
+   "debut_m": 10514.3,
+   "fin_m": 10515.24
+  }
+ },
+ {
+  "id": "L16",
+  "nom": "Angle sortant / jonction en T d'un local technique sur un voile perpendiculaire traversant",
+  "genre": "liaison",
+  "decision": "a_confirmer",
+  "couches": [],
+  "regle": "Le voile P6 le long du guide (+36/+58) bute sur un voile gris d'environ 44 cm, sans alvéoles, perpendiculaire au guide et traversant toute la bande (de −40 à +80, bord noir à +80) : coin du local CF sur le voile ouest du bloc escalier / locaux techniques, le voile continuant au-delà des deux faces. ≠ L13 (le local contourne le coin extérieur d'un bloc), ≠ L1 (alvéoles, retour vers l'intérieur seulement).",
+  "premiere_vue": {
+   "troncon": "U20",
+   "debut_m": 10376.26,
+   "fin_m": 10376.36
   }
  }
 ]

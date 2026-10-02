@@ -115,6 +115,30 @@
    "etat": "en attente",
    "detail": "agent thermicien-enveloppe ; réponse attendue dans reponse-lot-6.json",
    "date": "2026-10-02 11:22:36"
+  },
+  {
+   "etape": "lot-6",
+   "etat": "intégré",
+   "detail": "catalogue : 40 composants",
+   "date": "2026-10-02 11:42:21"
+  },
+  {
+   "etape": "restitution",
+   "etat": "faite",
+   "detail": "enveloppe.json",
+   "date": "2026-10-02 11:42:57"
+  },
+  {
+   "etape": "fichier-etude",
+   "etat": "écrit",
+   "detail": "etude-R2.json ; cohérence : attention (13 anomalie(s))",
+   "date": "2026-10-02 11:43:01"
+  },
+  {
+   "etape": "etude",
+   "etat": "terminée",
+   "detail": "/home/user/Po2/essais/R2-cloud/sorties-fable51-xhigh/R2/A-FAIRE.md",
+   "date": "2026-10-02 11:43:01"
   }
  ]
 }
