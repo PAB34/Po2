@@ -1,8 +1,8 @@
-# En attente de l'agent `thermicien-enveloppe` (lot-4)
+# En attente de l'agent `thermicien-enveloppe` (lot-5)
 
-1. Lancer l'agent `thermicien-enveloppe` avec, pour consigne, le contenu de `/home/user/Po2/essais/R2-cloud/sorties-fable51-xhigh/R2/consigne-lot-4.md`.
-2. Sa réponse doit être un JSON conforme à `/home/user/Po2/essais/R2-cloud/sorties-fable51-xhigh/R2/schema-lot-4.json` ; l'enregistrer telle quelle dans
-   `/home/user/Po2/essais/R2-cloud/sorties-fable51-xhigh/R2/enveloppe/reponse-lot-4.json`.
+1. Lancer l'agent `thermicien-enveloppe` avec, pour consigne, le contenu de `/home/user/Po2/essais/R2-cloud/sorties-fable51-xhigh/R2/consigne-lot-5.md`.
+2. Sa réponse doit être un JSON conforme à `/home/user/Po2/essais/R2-cloud/sorties-fable51-xhigh/R2/schema-lot-5.json` ; l'enregistrer telle quelle dans
+   `/home/user/Po2/essais/R2-cloud/sorties-fable51-xhigh/R2/enveloppe/reponse-lot-5.json`.
 3. Relancer (depuis `saas/backend`) :
 
 ```

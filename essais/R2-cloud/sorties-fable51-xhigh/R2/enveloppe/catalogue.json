@@ -130,19 +130,19 @@
    {
     "nature": "vitrage",
     "epaisseur_cm": 6,
-    "indice": "triple trait fin"
+    "indice": "double ou triple trait fin"
    },
    {
     "nature": "cadre",
     "epaisseur_cm": 4,
-    "indice": "petits dormants noirs rectangulaires aux deux abouts"
+    "indice": "petits dormants carrés aux deux bouts"
    }
   ],
-  "regle": "Triple trait fin entre deux abouts de mur P1/P4 terminés par de petits dormants ; sur la façade sud en biais de 40° par rapport aux parois (T38, T42) ; sur la façade ouest la baie est le retour du redan, perpendiculaire au guide, 0,8-0,85 m vers l'intérieur (115.65, 118.75) ou vers l'extérieur (122.17), visible seulement dans les recouvrements.",
+  "regle": "Correction : au nord de la façade ouest (T65) le guide parcourt le retour lui-même : double trait fin à −2/−8 sur 0,9 m entre deux dormants carrés, P1 précédent descendant vers l'intérieur (150.6), P1 suivant montant en biais vers l'extérieur (151.5) ; revu en biais dans T66 (de +30 à −55). À T55 seul un trait fin unique à 0 est visible : à confirmer. Ailleurs (T38, T42, 115.65, 118.75, 122.17) : triple trait perpendiculaire au guide, visible dans les recouvrements.",
   "premiere_vue": {
-   "troncon": "T38",
-   "debut_m": 100.71,
-   "fin_m": 101.67
+   "troncon": "T65",
+   "debut_m": 150.65,
+   "fin_m": 151.26
   }
  },
  {
@@ -272,19 +272,19 @@
    {
     "nature": "autre",
     "epaisseur_cm": 25,
-    "indice": "carré gris cerné de noir"
+    "indice": "carrés ou rectangles gris cernés de noir"
    }
   ],
-  "regle": "Rangée de carrés gris cernés de noir, 20 à 33 cm, alignés sur la ligne guide (entre +7 et -28), reliés par un trait fin ; en rive de la petite terrasse et en rive nord de la terrasse de lecture. Aussi en rive de l'encoche extérieure au sud de 5.3 (70.4-73.15 m) : carrés de 20 cm mêlés à des blocs de 38-42 cm, à -3/-25, en biais dans T23. Ce n'est pas PO1 : petits, en série, sans mur-rideau.",
+  "regle": "Rangée de carrés/rectangles gris cernés (11 à 85 cm) reliés par un trait fin. En rive ouest de la terrasse du personnel : T57 129.15-129.67 à −2/−20, T58 à 45°, T63 à −5/−30, T64 147.33-148.05 à +8/+40 ; le guide fait un aller-retour sur cette rangée (demi-tour à 147.33). Aucune enveloppe sous ces intervalles : la paroi réelle est le retour du P1 (T57/T58) ou la dent P5 (T62/T64). Ce n'est pas PO1 ni X4.",
   "premiere_vue": {
-   "troncon": "T22",
-   "debut_m": 70.38,
-   "fin_m": 71.72
+   "troncon": "T63",
+   "debut_m": 146.56,
+   "fin_m": 147.33
   }
  },
  {
   "id": "M4",
-  "nom": "Baie vitrée donnant sur la petite terrasse (fixe et porte-fenêtre)",
+  "nom": "Baie vitrée donnant sur une terrasse ou une trémie (fixe et porte-fenêtre)",
   "genre": "menuiserie",
   "decision": "integre",
   "couches": [
@@ -296,14 +296,14 @@
    {
     "nature": "cadre",
     "epaisseur_cm": 5,
-    "indice": "petits dormants carrés"
+    "indice": "dormants carrés aux angles et abouts"
    }
   ],
-  "regle": "Double trait fin avec de petits dormants carrés régulièrement répartis ; un vantail ouvre vers la terrasse (arc). Ce n'est pas M1 : pas de trait parallèle à -25/-33 ni de poteaux, et ce n'est pas M3 : la baie n'est pas prise entre des abouts de P1 en redans. Autour de la trémie « vide sur petite terrasse » (T26-T30) : double/triple trait fin 10-20 cm derrière le trait épais de rive de trémie (à 0 dans T29-T30, à -50 dans T28), dormants carrés seulement aux angles et aux abouts de P1 ; trois côtés droits (2.8 + 2.9 + 2.0 m) que le guide ne suit pas exactement (T27 en biais, T28 décalé).",
+  "regle": "Double trait fin avec dormants carrés aux angles et aux abouts. Autour de la trémie « vide sur terrasse du personnel » (T59-T62, 130.6-145.85) : vitrage fixe à −3/−8 (T59), −20/−27 (T60), −17/−25 (T61), −13/−20 (T62), angles sur dormant (L7 à 133.95, L11 à 138.43 et 141.78). Correction : les traits obliques de 1,4 m partant des angles sont les diagonales du symbole de vide, pas des vantaux ouverts ; ne pas y lire de porte-fenêtre. Toujours ≠ M1 (pas de trait parallèle ni poteaux) et ≠ M3 (pas d'abouts de redans).",
   "premiere_vue": {
-   "troncon": "T29",
-   "debut_m": 83.95,
-   "fin_m": 86.64
+   "troncon": "T59",
+   "debut_m": 130.7,
+   "fin_m": 133.95
   }
  },
  {
@@ -492,6 +492,74 @@
    "troncon": "T30",
    "debut_m": 88.35,
    "fin_m": 88.45
+  }
+ },
+ {
+  "id": "P5",
+  "nom": "Dent de scie ouest à massif béton extérieur (dent des files 3-4, coin nord-ouest de la trémie)",
+  "genre": "paroi",
+  "decision": "a_confirmer",
+  "couches": [
+   {
+    "nature": "mur",
+    "epaisseur_cm": 45,
+    "indice": "massif gris à fines diagonales, triangulaire, 0 à 93 cm"
+   },
+   {
+    "nature": "isolant",
+    "epaisseur_cm": 12,
+    "indice": "rangée d'alvéoles le long de l'hypoténuse"
+   },
+   {
+    "nature": "mur",
+    "epaisseur_cm": 20,
+    "indice": "trait noir épais 8 cm (T64) à gris 20 (T65)"
+   }
+  ],
+  "regle": "Massif gris sans alvéoles (fines diagonales) côté EXTÉRIEUR, entre la face droite le long du guide et une lame isolée (alvéoles + trait noir épais) posée sur l'hypoténuse intérieure ; épaisseur du massif de 0 (pointe au dormant) à 93 cm (coin). ≠ P4 corrigé (massif côté intérieur de la lame), ≠ P3 (pas de lame isolée). Vu sur la même dent : face sud dans T62 (145.85-146.9, −3/−48 puis lame à 45° vers −90) et face ouest dans T64 (148.05-150.5, +15/−78 vers −16/−28). La lame lue verticalement dans T65 (150.6) fait 45 cm (trait 5 + alvéoles 17 + gris 20) alors que dans T64 elle lit alvéoles 12 + trait noir 8 : voile intérieur à confirmer.",
+  "premiere_vue": {
+   "troncon": "T64",
+   "debut_m": 148.05,
+   "fin_m": 150.51
+  }
+ },
+ {
+  "id": "L11",
+  "nom": "Angle rentrant entre baie M4 de la trémie et voile massif P3 de la cage d'escalier CF",
+  "genre": "liaison",
+  "decision": "a_confirmer",
+  "couches": [],
+  "regle": "Le double trait fin M4 bute sur un bloc gris sans alvéoles de 44 cm (−3/−47) qui tourne de 90° ; aux deux angles est de la trémie « terrasse du personnel » (138.43 et 141.78), avec une jambe L8 (refend CF) à 25-30 cm de l'angle. Diffère de L6/L7 (sans gris) et de L10 (P1 isolé).",
+  "premiere_vue": {
+   "troncon": "T61",
+   "debut_m": 138.43,
+   "fin_m": 138.55
+  }
+ },
+ {
+  "id": "L12",
+  "nom": "Jonction baie M4 / massif P5 (départ en biais de la lame isolée)",
+  "genre": "liaison",
+  "decision": "a_confirmer",
+  "couches": [],
+  "regle": "Le double trait fin bute sur une face verticale grise de 45 cm (−3 à −48) ; le gris continue le long du guide et la lame à alvéoles part en biais (45° dans T62) vers l'intérieur : environ 30 cm de massif non isolé entre la fin du vitrage et le départ de l'isolant. Diffère de L11 (pas de retour à 90° du gris).",
+  "premiere_vue": {
+   "troncon": "T62",
+   "debut_m": 145.85,
+   "fin_m": 145.95
+  }
+ },
+ {
+  "id": "X7",
+  "nom": "Boucle du guide sur un trait d'axe de trame hors bâtiment (bulles « 2 » et « 1' »)",
+  "genre": "autre",
+  "decision": "exclu",
+  "couches": [],
+  "regle": "Deux traits fins parallèles (−7/−20) aboutissant à des bulles d'axe ; aller vers l'ouest (T67, bulle à l'envers) et retour (T68, bulle à l'endroit) sur le même point de façade (pointe du P1 lue à 153.3 et à 155.15). Aucune paroi dessous : à ignorer, comme les cotes et axes.",
+  "premiere_vue": {
+   "troncon": "T67",
+   "debut_m": 153.32,
+   "fin_m": 154.21
   }
  }
 ]
