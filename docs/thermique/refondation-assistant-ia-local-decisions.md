@@ -64,6 +64,30 @@ intérieur à 2,1 cm de médiane, 97 % d'accord opaque/vitré ; `analyse-par-mis
 - **D280 — Ordre de reprise** : 1 et 2 (formaliser l'existant) → 4 (import M1) → 3 (coupes par mission) → 5 →
   7 → 10 (import M2) → 11 (métrés) → 14 (premier livrable) ; puis 6, 8, 9, 12, 13.
 
+## Le parcours d'une étude, du dépôt au livrable (précision du thermicien, 2026-10-02)
+
+« Une fois que toutes les pièces ont été déposées sur la plateforme, l'IA les parcourt toutes, puis travaille étape
+par étape sur tous les documents, documente tout, et repère les informations potentiellement manquantes en vue de la
+parfaite réalisation de l'étude thermique. »
+
+- **D286 — Dépôt, puis tri** (étape 0) : le client dépose ; l'IA reconnaît et nomme chaque pièce
+  (`convention-nommage-pieces-decisions.md`).
+- **D287 — Lecture de tout le dossier** (étape 1 du guide, approfondie) : l'IA lit **chaque pièce** et rédige sa
+  **fiche** : ce qu'elle montre, ce qu'elle permet de lire pour chacune des 14 étapes, sa qualité (vectoriel,
+  scanné, échelle lisible…).
+- **D288 — Le registre des informations de l'étude** : une ligne par information nécessaire (hauteur sous plafond du
+  N1, composition du mur P1, Uw des menuiseries, nature du plancher bas, système de chauffage…). Pour chacune :
+  **où elle a été trouvée** (pièce, page, zone), **sa valeur**, et son **statut** : lue, déduite, supposée par
+  défaut, manquante, validée par le thermicien. La liste des informations nécessaires vient du guide (« ce qu'il
+  faut réunir » et « ce que j'attends de vous » de chaque étape). C'est la mémoire de l'étude : chaque étape le lit et
+  le complète.
+- **D289 — Les manques, classés par impact** : ce qui bloque le calcul, ce qui l'approche (valeur par défaut),
+  ce qui ne joue presque pas. Pour chaque manque, la pièce ou la question qui le comblerait, prête à être envoyée au
+  client (« il manque le carnet de menuiseries : Uw, Sw et dimensions des baies »).
+- **D290 — Puis les étapes 2 à 14**, une par une ; chacune lit le registre, travaille sur les pièces utiles,
+  documente ce qu'elle a fait (livrable, hypothèses et doutes), met à jour le registre, et attend la validation.
+  Le contrôle croisé (étape 13) et la note d'hypothèses du livrable (étape 14) se rédigent à partir du registre.
+
 ## Questions
 
 1. **Rôle du site** : (a) il reste la table de validation et d'affichage, les analyses se font avec Claude sur le
