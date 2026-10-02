@@ -11,3 +11,4 @@ Relevé dans la trace `subagents/agent-*.jsonl` de chaque appel.
 | Lot 3 (fin en erreur max_output_tokens, JSON complet récupéré) | thermicien-enveloppe | claude-fable-5-1 | xhigh | 4107 s |
 | Lot 4 | thermicien-enveloppe | claude-fable-5-1 | xhigh | 1577 s |
 | Lot 5 | thermicien-enveloppe | claude-fable-5-1 | xhigh | 1337 s |
+| Lot 6 | thermicien-enveloppe | claude-fable-5-1 | xhigh | 1090 s |
