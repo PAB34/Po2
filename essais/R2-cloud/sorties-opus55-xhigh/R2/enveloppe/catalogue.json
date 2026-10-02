@@ -188,12 +188,11 @@
   "genre": "liaison",
   "decision": "integre",
   "couches": [],
-  "regle": "Le trait intérieur de P1 remonte en biais pour rejoindre le nu extérieur ; départ d'une baie en diagonale vers le haut",
+  "regle": "Correction de la règle. Le mur qui borde la baie M3 est soit biseauté (le trait intérieur remonte en biais jusqu'au nu extérieur et au dormant), soit à bout droit avec un petit talon sur lequel la baie arrive au nu extérieur. La baie part vers le haut (extérieur) ou en arrive, sous un angle aigu de 40° à 120° dans les dents de scie. Il diffère de L10, où la baie part vers l'intérieur.",
   "premiere_vue": {
-   "troncon": "T17",
-   "debut_m": 66.8,
-   "fin_m": 67.14,
-   "autre_niveau": true
+   "troncon": "T42",
+   "debut_m": 97.5,
+   "fin_m": 97.8
   }
  },
  {
@@ -372,26 +371,25 @@
   "couches": [
    {
     "nature": "mur",
-    "epaisseur_cm": 30,
-    "indice": "massif gris, épaisseur variable de 0 à 70 cm"
+    "epaisseur_cm": 12,
+    "indice": "voile extérieur de la lame, juste sous le nu extérieur"
    },
    {
     "nature": "isolant",
     "epaisseur_cm": 12,
-    "indice": "rangée d'alvéoles le long de la face en biais"
+    "indice": "rangée d'alvéoles le long de la lame"
    },
    {
     "nature": "mur",
-    "epaisseur_cm": 12,
-    "indice": "voile intérieur, trait noir épais"
+    "epaisseur_cm": 30,
+    "indice": "massif gris côté intérieur, épaisseur variable de 0 à plus de 90"
    }
   ],
-  "regle": "Remplissage gris en triangle : une face droite et l'autre en biais, rangée d'alvéoles le long de la lame ; épaisseur variable de 0 à plus de 90 cm (≠ P1 constant) ; isolé (≠ P3)",
+  "regle": "Correction de l'ordre des couches. Sur ce niveau, dans des bandes à l'endroit (T51, T54), la lame mur 12 + isolant 12 est côté extérieur, avec la rangée d'alvéoles 10 à 25 cm sous le nu. Elle est doublée côté intérieur d'un massif gris plein, avec une face droite et une face en biais. L'épaisseur totale varie de 10 cm à la pointe à plus de 90 cm (≠ P1 constant à 44 cm). L'ancienne fiche, qui mettait le mur 30 en premier, a probablement été relevée sur une bande inversée.",
   "premiere_vue": {
-   "troncon": "T49",
-   "debut_m": 126.0,
-   "fin_m": 127.97,
-   "autre_niveau": true
+   "troncon": "T51",
+   "debut_m": 111.0,
+   "fin_m": 112.78
   }
  },
  {
@@ -548,6 +546,19 @@
    "troncon": "T26",
    "debut_m": 63.17,
    "fin_m": 65.1
+  }
+ },
+ {
+  "id": "L10",
+  "nom": "Angle sortant avec départ de baie vers l'intérieur (dents de scie ouest)",
+  "genre": "liaison",
+  "decision": "a_confirmer",
+  "couches": [],
+  "regle": "Bout d'une lame P1/P4, en pointe ou par la face droite du massif, portant un petit dormant. De là part, à angle droit vers le bas (intérieur), le double trait fin d'une baie M3. Il diffère de L2, où la baie part vers l'extérieur (angle rentrant), et de L1, qui est un retour de bande grise sans baie. Dans T51, l'isolant s'arrête environ 40 cm avant la pointe.",
+  "premiere_vue": {
+   "troncon": "T52",
+   "debut_m": 112.78,
+   "fin_m": 113.03
   }
  }
 ]
