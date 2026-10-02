@@ -54,7 +54,11 @@ Date : 2026-10-02. Objectif 1 de la boussole (R+1 parfait). Remplace le lot B de
 
 ## Ce que cela change ailleurs (à traiter dans le même lot ou noté)
 
-- **Locaux** : un mur est rattaché au local dont le contour longe sa ligne (calcul géométrique, plus le tronçon).
+- **Découpage pièce par pièce (D18 à D20) : on le garde.** Il coupe aujourd'hui les intervalles d'un tronçon. Il
+  s'appliquera à la **ligne du mur tracé**, avec la même règle : sondage à 30 cm à l'intérieur de la ligne ;
+  coupe là où la pièce derrière change ; recalage sur l'about de cloison à moins de 30 cm. Un mur tracé d'un
+  seul trait sur trois bureaux donne donc trois morceaux, un par bureau, sans que vous le coupiez. Cela suppose
+  que les **locaux** existent avant les murs : c'est l'enjeu de la question 1.
 - **Menuiseries** : elles restent posées comme aujourd'hui. Leur surface sera retirée du mur qu'elles
   coupent au moment du calcul (objectif 5).
 - **Ponts thermiques** : les angles se déduiront des rencontres entre murs tracés. Lot à part, après les murs.

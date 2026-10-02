@@ -20,6 +20,23 @@ médiathèque (projet 1), plans PDF aplatis au 1/100.
 | 4 | 09-22 → | **IA qui longe la façade** (`thermicien-enveloppe`) sur des bandes redressées, avec catalogue appris | R+1 : 72 tronçons, 171 m, 208 intervalles, **23 composants** ; P1 reconnu 29 fois sous le même nom ; contrôle par l'image : P1 96 %, baies M1/M4 100 % | **Le meilleur résultat obtenu**, mais mesures approximatives (voir § 3) |
 | 5 | 09-29 | **IA qui lit les coupes** (`thermicien-coupe`) | **0 sur 13** hauteurs justes (vues et numéros de pièces bien lus) ; l'algorithme qui déduit le trait de coupe fait 8/8 et 3/3 | Retirée le 10-01 (D230) : vues créées et mesurées à la main |
 
+**Ces méthodes 3 et 4 forment une seule chaîne**, encore en service : c'est elle qui a produit l'étude
+actuelle du R+1 (`chaine-analyse-plan-raster.md`).
+
+1. L'IA inventorie **tous les composants** du plan : pièces, murs, refends, cloisons, isolants, menuiseries,
+   poteaux, terrasses.
+2. L'algorithme **recale les pièces** sur les murs (D26, D26 bis) : 21 pièces sur 22 recalées, 2 circulations
+   oubliées retrouvées, puis l'IA donne leur nature ; 24 locaux au final.
+3. L'IA longe la façade : relevé par tronçon.
+4. L'algorithme fait le **découpage pièce par pièce** (D18 à D20, `thermique_enveloppe_pieces.py`) : chaque paroi et
+   chaque baie est coupée là où la pièce derrière change, avec recalage sur l'about de cloison à moins de 30 cm.
+   Chaque angle va à la pièce qui le contient ; un refend est partagé moitié-moitié. Résultat au R+1 :
+   **230 éléments rattachés**, puis les fiches par local.
+
+Le découpage lui-même **fonctionne** : il est exact chaque fois que les pièces et le relevé sont justes. Ses
+erreurs viennent de l'amont : guide qui coupe une dent de scie, pièce qui n'atteint pas la façade, espace ouvert
+d'un seul tenant (D22).
+
 Puis le **R+2 en automatique** (méthodes 3 et 4 sans session ouverte, 10-01) : **23, 25 puis 36 objets** contre
 130 au R+1, et 21 incohérences. L'essai A/B a écarté la piste « consignes mal transmises » ; **la cause exacte
 de l'écart avec le R+1 n'est pas identifiée**. Étude R+2 à ne pas prendre pour base.
@@ -33,7 +50,7 @@ de l'écart avec le R+1 n'est pas identifiée**. Étude R+2 à ne pas prendre po
 3. **Ce qui ne devine rien** : calage des niveaux, mesure par deux clics dans une coupe, modèle de menuiserie
    mesuré puis posé au clic, désignation par l'exemple (les 31 portes du R+1 ne sont que 11 dessins recopiés).
 4. **L'algorithme qui mesure ce que l'IA a désigné** : redressement des tracés, recalage sur le trait réel,
-   déduction du trait de coupe.
+   déduction du trait de coupe, recalage des pièces sur les murs, **découpage pièce par pièce**.
 
 ## 3. Ce qui a échoué
 
