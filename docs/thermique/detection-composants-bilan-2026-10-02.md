@@ -101,6 +101,24 @@ plus de temps qu'elle n'en fait gagner. Ce qui a marché a toujours la même for
 | **Autres niveaux** | Report du R+1 par le calage (murs superposés repris d'office, à confirmer), puis tracé de ce qui diffère. |
 | **IA** | Seulement en lecture ciblée et à la demande : nommer un composant, lire une composition sur un zoom, vérifier une divergence. Jamais de coordonnées, jamais de passe globale. |
 
+## 6. Projets existants du même genre (recherche du 2026-10-02, à évaluer, rien d'installé)
+
+| Projet | Ce qu'il fait | Réserve |
+|---|---|---|
+| [CubiCasa5k](https://github.com/CubiCasa/CubiCasa5k) | jeu de 5 000 plans annotés (80 catégories) et modèle qui segmente murs, pièces, portes, fenêtres | plans de logements finlandais ; usage commercial soumis à licence CubiCasa |
+| [CubiCasa5k-Next](https://github.com/Lqm1/CubiCasa5k-Next) | réécriture du même modèle, licence Apache-2.0 | même domaine d'apprentissage |
+| [FloorPlanNet](https://github.com/thatguywhodoestecheverysatnight/FloorPlanNet) | segmente murs, pièces, portes, fenêtres puis **vectorise** en polygones et axes de murs, avec calage d'échelle et export SVG/DXF | à mesurer sur nos plans |
+| [floor-plan-object-detection](https://github.com/sanatladkat/floor-plan-object-detection) | détection YOLOv8 : poteaux, murs, portes, fenêtres | jeu d'apprentissage réduit |
+| [FloorPlanAnalyzer](https://github.com/mageaustralia/FloorPlanAnalyzer) | combine segmentation classique, YOLOv8 et CubiCasa5k | expérimental |
+| [FloorPlanCAD](https://floorplancad.github.io/) | 15 663 plans CAO annotés, 30 classes (portes, fenêtres, escaliers…) | données vectorielles ; projet arrêté en 2022 |
+| Recherche « symbol spotting » ([Rezvanifar 2020](https://openaccess.thecvf.com/content_CVPRW_2020/papers/w34/Rezvanifar_Symbol_Spotting_on_Digital_Architectural_Floor_Plans_Using_a_Deep_CVPRW_2020_paper.pdf)) | **on recadre un symbole, l'outil retrouve ses semblables** : c'est la détection par l'exemple | travaux de recherche, pas d'outil clé en main repéré |
+
+Constat : ces modèles reconnaissent murs, portes, fenêtres et pièces, mais **pas la composition thermique** (isolant,
+doublage) ; ils ont appris sur d'autres graphismes, surtout du logement. Un « modèle perso » serait un **petit
+modèle de vision** (et non un LLM) réentraîné sur nos plans corrigés : le R+1 validé en serait la première vérité
+terrain. Coût en jetons nul à l'usage. À tester d'abord tel quel sur l'image du R+1, sur le serveur ou en session
+cloud (rien sur le poste), avec l'accord du thermicien.
+
 Le départ à zéro du R+1 (demande du 2026-10-02, `murs-traces-decisions.md`) est l'occasion de **mesurer** cette
 méthode : temps passé pour un niveau complet tracé à la main, à comparer aux heures de correction du relevé
 automatique.
