@@ -3,7 +3,6 @@ name: thermicien-plan
 description: Analyse visuellement un plan raster de bâtiment et restitue ses composants géométriques pour un métré thermique. À utiliser pour les plans PDF aplatis ou les images sans exploiter leurs vecteurs.
 tools: Read
 model: opus
-effort: xhigh
 permissionMode: dontAsk
 maxTurns: 20
 ---

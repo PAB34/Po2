@@ -7,6 +7,138 @@
    "etat": "en attente",
    "detail": "agent thermicien-plan ; réponse attendue dans passe-globale.reponse.json",
    "date": "2026-10-02 08:06:14"
+  },
+  {
+   "etape": "passe-globale",
+   "etat": "en attente",
+   "detail": "agent thermicien-plan ; réponse attendue dans passe-globale.reponse.json",
+   "date": "2026-10-02 08:10:52"
+  },
+  {
+   "etape": "passe-globale",
+   "etat": "faite",
+   "detail": "55 objets",
+   "date": "2026-10-02 08:37:20"
+  },
+  {
+   "etape": "recalage",
+   "etat": "fait",
+   "detail": "9/14 pièces recalées, 1 espaces libres",
+   "date": "2026-10-02 08:38:59"
+  },
+  {
+   "etape": "locaux",
+   "etat": "en attente",
+   "detail": "agent thermicien-plan ; réponse attendue dans locaux.reponse.json",
+   "date": "2026-10-02 08:38:59"
+  },
+  {
+   "etape": "locaux",
+   "etat": "faits",
+   "detail": "15 pièces, dont 0 circulations",
+   "date": "2026-10-02 08:41:57"
+  },
+  {
+   "etape": "catalogue",
+   "etat": "repris",
+   "detail": "../../essais/R2-cloud/catalogue-R1.json",
+   "date": "2026-10-02 08:42:11"
+  },
+  {
+   "etape": "guide",
+   "etat": "fait",
+   "detail": "104 tronçons, 156.14 m",
+   "date": "2026-10-02 08:42:11"
+  },
+  {
+   "etape": "lot-1",
+   "etat": "en attente",
+   "detail": "agent thermicien-enveloppe ; réponse attendue dans reponse-lot-1.json",
+   "date": "2026-10-02 08:42:13"
+  },
+  {
+   "etape": "lot-1",
+   "etat": "intégré",
+   "detail": "catalogue : 26 composants",
+   "date": "2026-10-02 09:03:35"
+  },
+  {
+   "etape": "lot-2",
+   "etat": "en attente",
+   "detail": "agent thermicien-enveloppe ; réponse attendue dans reponse-lot-2.json",
+   "date": "2026-10-02 09:03:38"
+  },
+  {
+   "etape": "lot-2",
+   "etat": "intégré",
+   "detail": "catalogue : 27 composants",
+   "date": "2026-10-02 09:21:27"
+  },
+  {
+   "etape": "lot-3",
+   "etat": "en attente",
+   "detail": "agent thermicien-enveloppe ; réponse attendue dans reponse-lot-3.json",
+   "date": "2026-10-02 09:21:30"
+  },
+  {
+   "etape": "lot-3",
+   "etat": "intégré",
+   "detail": "catalogue : 27 composants",
+   "date": "2026-10-02 10:31:23"
+  },
+  {
+   "etape": "lot-4",
+   "etat": "en attente",
+   "detail": "agent thermicien-enveloppe ; réponse attendue dans reponse-lot-4.json",
+   "date": "2026-10-02 10:31:26"
+  },
+  {
+   "etape": "lot-4",
+   "etat": "intégré",
+   "detail": "catalogue : 31 composants",
+   "date": "2026-10-02 10:58:55"
+  },
+  {
+   "etape": "lot-5",
+   "etat": "en attente",
+   "detail": "agent thermicien-enveloppe ; réponse attendue dans reponse-lot-5.json",
+   "date": "2026-10-02 10:58:58"
+  },
+  {
+   "etape": "lot-5",
+   "etat": "intégré",
+   "detail": "catalogue : 38 composants",
+   "date": "2026-10-02 11:22:32"
+  },
+  {
+   "etape": "lot-6",
+   "etat": "en attente",
+   "detail": "agent thermicien-enveloppe ; réponse attendue dans reponse-lot-6.json",
+   "date": "2026-10-02 11:22:36"
+  },
+  {
+   "etape": "lot-6",
+   "etat": "intégré",
+   "detail": "catalogue : 40 composants",
+   "date": "2026-10-02 11:42:21"
+  },
+  {
+   "etape": "restitution",
+   "etat": "faite",
+   "detail": "enveloppe.json",
+   "date": "2026-10-02 11:42:57"
+  },
+  {
+   "etape": "fichier-etude",
+   "etat": "écrit",
+   "detail": "etude-R2.json ; cohérence : attention (13 anomalie(s))",
+   "date": "2026-10-02 11:43:01"
+  },
+  {
+   "etape": "etude",
+   "etat": "terminée",
+   "detail": "/home/user/Po2/essais/R2-cloud/sorties-fable51-xhigh/R2/A-FAIRE.md",
+   "date": "2026-10-02 11:43:01"
   }
  ]
 }

@@ -1,0 +1,722 @@
+[
+ {
+  "id": "P1",
+  "nom": "Double voile béton avec isolant intercalé",
+  "genre": "paroi",
+  "decision": "integre",
+  "couches": [
+   {
+    "nature": "mur",
+    "epaisseur_cm": 12,
+    "indice": "trait noir épais puis gris sous le nu extérieur"
+   },
+   {
+    "nature": "isolant",
+    "epaisseur_cm": 12,
+    "indice": "rangée d'alvéoles hexagonales"
+   },
+   {
+    "nature": "mur",
+    "epaisseur_cm": 20,
+    "indice": "gris bordé d'un trait noir épais côté intérieur"
+   }
+  ],
+  "regle": "Bande grise d'environ 44 cm bordée de deux traits noirs épais, une rangée d'alvéoles hexagonales à 12-25 cm sous le nu extérieur ; nu extérieur autour de 0 (de -2 à +13). Sur la façade sud de R2 (T21-T36) le total lu sur la règle est 45-55 cm (voile intérieur lu 20-25) et le nu extérieur va de +26 à -13 selon le biais du guide ; aux abouts de redans l'about est biseauté (face intérieure qui remonte, T32-T33).",
+  "premiere_vue": {
+   "troncon": "T25",
+   "debut_m": 76.38,
+   "fin_m": 79.8
+  }
+ },
+ {
+  "id": "P2",
+  "nom": "Double voile béton épais avec isolant (angle sud-est)",
+  "genre": "paroi",
+  "decision": "integre",
+  "couches": [
+   {
+    "nature": "mur",
+    "epaisseur_cm": 20,
+    "indice": "voile gris extérieur épais au-dessus du 0"
+   },
+   {
+    "nature": "isolant",
+    "epaisseur_cm": 12,
+    "indice": "alvéoles hexagonales de 0 à -12"
+   },
+   {
+    "nature": "mur",
+    "epaisseur_cm": 22,
+    "indice": "voile gris intérieur, trait noir à -34"
+   }
+  ],
+  "regle": "Comme P1 mais nu extérieur vers +20 et épaisseur totale d'environ 54 cm ; alvéoles juste sous le 0 ; se trouve après la fin du mur-rideau de la façade est",
+  "premiere_vue": {
+   "troncon": "T14",
+   "debut_m": 60.15,
+   "fin_m": 60.95,
+   "autre_niveau": true
+  }
+ },
+ {
+  "id": "P3",
+  "nom": "Voile béton massif non isolé (masse de la tour sud-est)",
+  "genre": "paroi",
+  "decision": "a_confirmer",
+  "couches": [
+   {
+    "nature": "mur",
+    "epaisseur_cm": 44,
+    "indice": "gris plein sans alvéoles"
+   }
+  ],
+  "regle": "Remplissage gris sans rangée d'alvéoles (parfois fines diagonales), bordé de traits noirs épais, souvent en biais ; l'isolant de P1/P2 le quitte. Sur R2 : bloc en L d'environ 1,1 x 0,9 m à l'angle sud-est de la terrasse de lecture (64.6-65.6 m), bras de 40-45 cm, sans isolant.",
+  "premiere_vue": {
+   "troncon": "T18",
+   "debut_m": 64.6,
+   "fin_m": 65.01
+  }
+ },
+ {
+  "id": "M1",
+  "nom": "Façade vitrée / mur-rideau au nu extérieur",
+  "genre": "menuiserie",
+  "decision": "integre",
+  "couches": [
+   {
+    "nature": "vitrage",
+    "epaisseur_cm": 4,
+    "indice": "double trait fin (autre niveau)"
+   },
+   {
+    "nature": "autre",
+    "epaisseur_cm": 25,
+    "indice": "trait simple parallèle à -25/-33 (autre niveau)"
+   }
+  ],
+  "regle": "Double trait fin continu près du 0 avec un trait simple parallèle à -25 (nord) ou -33 (est). Sur ce niveau, côté est (30.7 à 59.2 m), seul un trait fin continu à +30 est visible dans la bande ; le double trait vitrage est probablement hors bande (>+40, le platelage de la terrasse commence vers +65) : à confirmer avec une bande plus large. Paires de traits gris fins espacés de 25 cm tous les 2,1 m vers l'intérieur = poteaux ou meneaux à confirmer.",
+  "premiere_vue": {
+   "troncon": "T10",
+   "debut_m": 35.1,
+   "fin_m": 39.87
+  }
+ },
+ {
+  "id": "M2",
+  "nom": "Porte sur l'escalier extérieur est",
+  "genre": "menuiserie",
+  "decision": "a_confirmer",
+  "couches": [
+   {
+    "nature": "cadre",
+    "epaisseur_cm": 5,
+    "indice": "rectangle fin de dormant entre +8 et -5"
+   }
+  ],
+  "regle": "Arcs d'ouverture côté extérieur (en haut) dans la ligne du mur-rideau, dormant rectangulaire fin",
+  "premiere_vue": {
+   "troncon": "T12",
+   "debut_m": 48.05,
+   "fin_m": 49.74,
+   "autre_niveau": true
+  }
+ },
+ {
+  "id": "M3",
+  "nom": "Fenêtre dans une façade en redans (y compris retours perpendiculaires)",
+  "genre": "menuiserie",
+  "decision": "integre",
+  "couches": [
+   {
+    "nature": "vitrage",
+    "epaisseur_cm": 6,
+    "indice": "double ou triple trait fin"
+   },
+   {
+    "nature": "cadre",
+    "epaisseur_cm": 4,
+    "indice": "petits dormants carrés aux deux bouts"
+   }
+  ],
+  "regle": "Correction : au nord de la façade ouest (T65) le guide parcourt le retour lui-même : double trait fin à −2/−8 sur 0,9 m entre deux dormants carrés, P1 précédent descendant vers l'intérieur (150.6), P1 suivant montant en biais vers l'extérieur (151.5) ; revu en biais dans T66 (de +30 à −55). À T55 seul un trait fin unique à 0 est visible : à confirmer. Ailleurs (T38, T42, 115.65, 118.75, 122.17) : triple trait perpendiculaire au guide, visible dans les recouvrements.",
+  "premiere_vue": {
+   "troncon": "T65",
+   "debut_m": 150.65,
+   "fin_m": 151.26
+  }
+ },
+ {
+  "id": "PO1",
+  "nom": "Poteau béton carré derrière le mur-rideau",
+  "genre": "poteau",
+  "decision": "integre",
+  "couches": [
+   {
+    "nature": "mur",
+    "epaisseur_cm": 29,
+    "indice": "carré gris, cadre noir épais, de -4 à -33"
+   }
+  ],
+  "regle": "Carré gris d'environ 29 x 29 cm cerné de noir, collé sous le double trait du mur-rideau par une petite patte ; sans isolant autour",
+  "premiere_vue": {
+   "troncon": "T09",
+   "debut_m": 35.34,
+   "fin_m": 35.63,
+   "autre_niveau": true
+  }
+ },
+ {
+  "id": "L1",
+  "nom": "Angle sortant de paroi P1 ou P2",
+  "genre": "liaison",
+  "decision": "integre",
+  "couches": [],
+  "regle": "Retour de la bande grise à alvéoles vers le bas (intérieur) ou en diagonale à l'extrémité d'une paroi",
+  "premiere_vue": {
+   "troncon": "T01",
+   "debut_m": 0.0,
+   "fin_m": 0.45,
+   "autre_niveau": true
+  }
+ },
+ {
+  "id": "L2",
+  "nom": "Angle rentrant avec tableau de fenêtre",
+  "genre": "liaison",
+  "decision": "integre",
+  "couches": [],
+  "regle": "Le trait intérieur de P1 remonte en biais pour rejoindre le nu extérieur ; départ d'une baie en diagonale vers le haut",
+  "premiere_vue": {
+   "troncon": "T17",
+   "debut_m": 66.8,
+   "fin_m": 67.14,
+   "autre_niveau": true
+  }
+ },
+ {
+  "id": "L3",
+  "nom": "About de refend isolé sur façade",
+  "genre": "liaison",
+  "decision": "a_confirmer",
+  "couches": [],
+  "regle": "Bande grise verticale avec alvéoles, d'environ 40 cm, qui part vers l'intérieur depuis la paroi P1 à la fin d'une baie",
+  "premiere_vue": {
+   "troncon": "T06",
+   "debut_m": 22.78,
+   "fin_m": 23.17,
+   "autre_niveau": true
+  }
+ },
+ {
+  "id": "L4",
+  "nom": "About de cloison sur mur-rideau (meneau)",
+  "genre": "liaison",
+  "decision": "a_confirmer",
+  "couches": [],
+  "regle": "Deux traits verticaux rapprochés (environ 7 cm) sous le vitrage M1, prolongés par une cloison vers l'intérieur",
+  "premiere_vue": {
+   "troncon": "T02",
+   "debut_m": 7.31,
+   "fin_m": 7.37,
+   "autre_niveau": true
+  }
+ },
+ {
+  "id": "L5",
+  "nom": "Jonction entre voile non isolé P3 et paroi isolée P1",
+  "genre": "liaison",
+  "decision": "integre",
+  "couches": [],
+  "regle": "Alvéoles qui descendent verticalement dans le gris, là où le gris sans isolant (P3) rejoint P1",
+  "premiere_vue": {
+   "troncon": "T16",
+   "debut_m": 63.21,
+   "fin_m": 63.67,
+   "autre_niveau": true
+  }
+ },
+ {
+  "id": "X1",
+  "nom": "Brise-soleil ou jardinière devant les baies nord",
+  "genre": "element_exterieur",
+  "decision": "exclu",
+  "couches": [],
+  "regle": "Triangles de traits fins entre 0 et +33 au-dessus des baies M1 de la façade nord",
+  "premiere_vue": {
+   "troncon": "T02",
+   "debut_m": 4.32,
+   "fin_m": 8.63,
+   "autre_niveau": true
+  }
+ },
+ {
+  "id": "X2",
+  "nom": "Escalier extérieur longeant la façade est",
+  "genre": "element_exterieur",
+  "decision": "exclu",
+  "couches": [],
+  "regle": "Série de traits verticaux réguliers (marches) entre +15 et +40, au-dessus d'un trait horizontal vers +15",
+  "premiere_vue": {
+   "troncon": "T10",
+   "debut_m": 39.13,
+   "fin_m": 43.59,
+   "autre_niveau": true
+  }
+ },
+ {
+  "id": "X3",
+  "nom": "Potelets / claustra de rive de terrasse",
+  "genre": "element_exterieur",
+  "decision": "exclu",
+  "couches": [
+   {
+    "nature": "autre",
+    "epaisseur_cm": 25,
+    "indice": "carrés ou rectangles gris cernés de noir"
+   }
+  ],
+  "regle": "Rangée de carrés/rectangles gris cernés (11 à 85 cm) reliés par un trait fin. En rive ouest de la terrasse du personnel : T57 129.15-129.67 à −2/−20, T58 à 45°, T63 à −5/−30, T64 147.33-148.05 à +8/+40 ; le guide fait un aller-retour sur cette rangée (demi-tour à 147.33). Aucune enveloppe sous ces intervalles : la paroi réelle est le retour du P1 (T57/T58) ou la dent P5 (T62/T64). Ce n'est pas PO1 ni X4.",
+  "premiere_vue": {
+   "troncon": "T63",
+   "debut_m": 146.56,
+   "fin_m": 147.33
+  }
+ },
+ {
+  "id": "M4",
+  "nom": "Baie vitrée donnant sur une terrasse ou une trémie (fixe et porte-fenêtre)",
+  "genre": "menuiserie",
+  "decision": "integre",
+  "couches": [
+   {
+    "nature": "vitrage",
+    "epaisseur_cm": 4,
+    "indice": "double trait fin"
+   },
+   {
+    "nature": "cadre",
+    "epaisseur_cm": 5,
+    "indice": "dormants carrés aux angles et abouts"
+   }
+  ],
+  "regle": "Double trait fin avec dormants carrés aux angles et aux abouts. Autour de la trémie « vide sur terrasse du personnel » (T59-T62, 130.6-145.85) : vitrage fixe à −3/−8 (T59), −20/−27 (T60), −17/−25 (T61), −13/−20 (T62), angles sur dormant (L7 à 133.95, L11 à 138.43 et 141.78). Correction : les traits obliques de 1,4 m partant des angles sont les diagonales du symbole de vide, pas des vantaux ouverts ; ne pas y lire de porte-fenêtre. Toujours ≠ M1 (pas de trait parallèle ni poteaux) et ≠ M3 (pas d'abouts de redans).",
+  "premiere_vue": {
+   "troncon": "T59",
+   "debut_m": 130.7,
+   "fin_m": 133.95
+  }
+ },
+ {
+  "id": "L6",
+  "nom": "Angle rentrant entre deux baies vitrées M4",
+  "genre": "liaison",
+  "decision": "a_confirmer",
+  "couches": [],
+  "regle": "Deux lignes de vitrage M4 qui se rejoignent à angle droit sur un petit dormant carré, avec des traits fins verticaux et sans remplissage gris : coin vitré de la terrasse, sans mur béton. Vu aussi aux angles NE (≈83.97 dans T28, ≈83.2 dans T29) et NW (≈86.78 dans T29, ≈86.35 dans T30) de la trémie vide sur petite terrasse à R2 ; la position lue varie de 0.4-0.8 m selon la bande car le guide est décalé de la baie.",
+  "premiere_vue": {
+   "troncon": "T28",
+   "debut_m": 83.76,
+   "fin_m": 83.95
+  }
+ },
+ {
+  "id": "M5",
+  "nom": "Long vitrage en retrait derrière le claustra sud-ouest",
+  "genre": "menuiserie",
+  "decision": "integre",
+  "couches": [
+   {
+    "nature": "vitrage",
+    "epaisseur_cm": 6,
+    "indice": "triple trait fin continu d'environ 6 cm"
+   }
+  ],
+  "regle": "Triple trait fin continu et long, souvent en biais par rapport au guide, derrière le chapelet X4 ; sans petits dormants réguliers (≠ M4), sans abouts de redans (≠ M3), sans trait parallèle ni poteau (≠ M1)",
+  "premiere_vue": {
+   "troncon": "T38",
+   "debut_m": 103.17,
+   "fin_m": 106.83,
+   "autre_niveau": true
+  }
+ },
+ {
+  "id": "X4",
+  "nom": "Claustra de blocs pleins rectangulaires (sud-ouest)",
+  "genre": "element_exterieur",
+  "decision": "exclu",
+  "couches": [
+   {
+    "nature": "autre",
+    "epaisseur_cm": 22,
+    "indice": "blocs gris cernés de noir, 22 cm d'épaisseur"
+   }
+  ],
+  "regle": "Chapelet de blocs gris pleins cernés de noir, 22 cm d'épaisseur et 30 à 100 cm de long, reliés par un trait fin ; plus longs que les carrés X3, sans alvéoles, devant le vitrage M5",
+  "premiere_vue": {
+   "troncon": "T39",
+   "debut_m": 106.83,
+   "fin_m": 107.42,
+   "autre_niveau": true
+  }
+ },
+ {
+  "id": "P4",
+  "nom": "Lame P1 (mur 12 + isolant 12) accolée côté intérieur à un voile béton d'épaisseur variable (massif ou coin des dents de scie)",
+  "genre": "paroi",
+  "decision": "a_confirmer",
+  "couches": [
+   {
+    "nature": "mur",
+    "epaisseur_cm": 12,
+    "indice": "trait noir épais extérieur puis gris, comme P1"
+   },
+   {
+    "nature": "isolant",
+    "epaisseur_cm": 12,
+    "indice": "rangée d'alvéoles hexagonales parallèle à la face extérieure"
+   },
+   {
+    "nature": "mur",
+    "epaisseur_cm": 40,
+    "indice": "gris plein, épaisseur variable 0 à >65 cm, face intérieure en biais"
+   }
+  ],
+  "regle": "Correction de fiche : le massif gris est côté INTÉRIEUR de la lame isolée (sous les alvéoles), pas côté extérieur. Une face droite (extérieure, le long du guide), l'autre en biais ; épaisseur totale variable, de 10-22 cm aux dormants (coins amincis des redans ouest T49, T52, T53) à plus de 90 cm (massif ouest T45-T46, apex sous le P1 à 113.85 puis gris monolithique sans trait intérieur jusqu'à 115.6). ≠ P1 (épaisseur constante 44), ≠ P3 (sans alvéoles).",
+  "premiere_vue": {
+   "troncon": "T46",
+   "debut_m": 113.85,
+   "fin_m": 115.55
+  }
+ },
+ {
+  "id": "PO2",
+  "nom": "Poteau béton d'angle rentrant entre baies de la terrasse du personnel",
+  "genre": "poteau",
+  "decision": "integre",
+  "couches": [
+   {
+    "nature": "mur",
+    "epaisseur_cm": 42,
+    "indice": "carré gris plein cerné noir, sans alvéoles"
+   }
+  ],
+  "regle": "Carré gris d'environ 40-43 cm cerné de noir, au coin rentrant de deux baies M4. Il diffère de PO1 : il est plus gros, porte les dormants et ne se trouve pas sous un mur-rideau.",
+  "premiere_vue": {
+   "troncon": "T61",
+   "debut_m": 153.98,
+   "fin_m": 154.12,
+   "autre_niveau": true
+  }
+ },
+ {
+  "id": "L7",
+  "nom": "Angle sortant vitré entre deux baies",
+  "genre": "liaison",
+  "decision": "a_confirmer",
+  "couches": [],
+  "regle": "Deux baies M4 à angle droit qui se rejoignent sur un dormant carré, sans gris. Il diffère de L6 parce que l'angle est sortant (coin nord-ouest de la salle de pause).",
+  "premiere_vue": {
+   "troncon": "T59",
+   "debut_m": 146.0,
+   "fin_m": 146.09,
+   "autre_niveau": true
+  }
+ },
+ {
+  "id": "L8",
+  "nom": "About de refend béton non isolé sur voile P3",
+  "genre": "liaison",
+  "decision": "a_confirmer",
+  "couches": [],
+  "regle": "Jambe grise d'environ 20 cm sans alvéoles qui descend vers l'intérieur depuis un voile P3. Il diffère de L3, qui est isolé.",
+  "premiere_vue": {
+   "troncon": "T61",
+   "debut_m": 150.93,
+   "fin_m": 151.13,
+   "autre_niveau": true
+  }
+ },
+ {
+  "id": "X6",
+  "nom": "Platelage et lisse de rive de la terrasse de lecture",
+  "genre": "element_exterieur",
+  "decision": "exclu",
+  "couches": [],
+  "regle": "Lames de platelage (traits fins parallèles espacés d'environ 15 cm) bordées par la lisse de rive (double ou triple trait fin avec petits montants) ; la ligne guide passe dessus sur les côtés 5 à 8 (59.8-64.6 m). Ni carrés en série (X3) ni blocs pleins (X4) ; ne pas confondre avec les marches X2 (traits réguliers courts).",
+  "premiere_vue": {
+   "troncon": "T16",
+   "debut_m": 62.81,
+   "fin_m": 63.87
+  }
+ },
+ {
+  "id": "L9",
+  "nom": "Angle rentrant sud-est de la façade est sur la terrasse de lecture",
+  "genre": "liaison",
+  "decision": "a_confirmer",
+  "couches": [],
+  "regle": "Le trait fin de façade M1 (+30) s'épaissit (7 cm) de +40 à -55 au droit du rebord sud de la terrasse, sans retour gris le long du guide ; suivi du panneau vitré en biais M6 et d'un bloc P1 (gris + alvéoles) à -60/-90. Angle rentrant : le volume chauffé 5.3 se poursuit sous le rebord sud de la terrasse.",
+  "premiere_vue": {
+   "troncon": "T15",
+   "debut_m": 58.92,
+   "fin_m": 59.3
+  }
+ },
+ {
+  "id": "M6",
+  "nom": "Panneau vitré en biais à l'angle sud-est de la façade est",
+  "genre": "menuiserie",
+  "decision": "a_confirmer",
+  "couches": [
+   {
+    "nature": "vitrage",
+    "epaisseur_cm": 6,
+    "indice": "triple trait fin incliné"
+   }
+  ],
+  "regle": "Triple trait fin incliné d'environ 17° traversant la bande de +40 à -55 sur 0,5 m, terminé en bas par de petits dormants noirs posés sur un bloc P1. Court et isolé à l'angle sud-est (≠ M5 long derrière X4, ≠ M4 avec dormants répartis).",
+  "premiere_vue": {
+   "troncon": "T15",
+   "debut_m": 59.3,
+   "fin_m": 59.8
+  }
+ },
+ {
+  "id": "L10",
+  "nom": "About de cloison à l'angle sud-ouest de la trémie (jonction baie M4 / about P1)",
+  "genre": "liaison",
+  "decision": "a_confirmer",
+  "couches": [],
+  "regle": "Double trait noir de 7 cm perpendiculaire au guide, de 0 à -90, à l'extrémité du voile P1 bordant la trémie, là où commence la baie M4 ; sans gris ni alvéoles ; prolonge la ligne du P1 vers l'intérieur (revu dans T31 à -70/-90 sous l'about du P1). Diffère de L4 : pas de mur-rideau M1, c'est l'about d'un P1 prolongé par une cloison.",
+  "premiere_vue": {
+   "troncon": "T30",
+   "debut_m": 88.35,
+   "fin_m": 88.45
+  }
+ },
+ {
+  "id": "P5",
+  "nom": "Dent de scie ouest à massif béton extérieur (dent des files 3-4, coin nord-ouest de la trémie)",
+  "genre": "paroi",
+  "decision": "a_confirmer",
+  "couches": [
+   {
+    "nature": "mur",
+    "epaisseur_cm": 45,
+    "indice": "massif gris à fines diagonales, triangulaire, 0 à 93 cm"
+   },
+   {
+    "nature": "isolant",
+    "epaisseur_cm": 12,
+    "indice": "rangée d'alvéoles le long de l'hypoténuse"
+   },
+   {
+    "nature": "mur",
+    "epaisseur_cm": 20,
+    "indice": "trait noir épais 8 cm (T64) à gris 20 (T65)"
+   }
+  ],
+  "regle": "Massif gris sans alvéoles (fines diagonales) côté EXTÉRIEUR, entre la face droite le long du guide et une lame isolée (alvéoles + trait noir épais) posée sur l'hypoténuse intérieure ; épaisseur du massif de 0 (pointe au dormant) à 93 cm (coin). ≠ P4 corrigé (massif côté intérieur de la lame), ≠ P3 (pas de lame isolée). Vu sur la même dent : face sud dans T62 (145.85-146.9, −3/−48 puis lame à 45° vers −90) et face ouest dans T64 (148.05-150.5, +15/−78 vers −16/−28). La lame lue verticalement dans T65 (150.6) fait 45 cm (trait 5 + alvéoles 17 + gris 20) alors que dans T64 elle lit alvéoles 12 + trait noir 8 : voile intérieur à confirmer.",
+  "premiere_vue": {
+   "troncon": "T64",
+   "debut_m": 148.05,
+   "fin_m": 150.51
+  }
+ },
+ {
+  "id": "L11",
+  "nom": "Angle rentrant entre baie M4 de la trémie et voile massif P3 de la cage d'escalier CF",
+  "genre": "liaison",
+  "decision": "a_confirmer",
+  "couches": [],
+  "regle": "Complément : vu depuis la pièce 5.2 (U01, face nord de la cage) comme un bloc gris carré 43×43 sans alvéoles à +3/+45 posé sur le voile P6, prolongé vers le sud par le double trait fin M4 avec dormant carré (+45/+85) ; trait noir épais descendant à −40 sur son bord ouest (rive de la trémie). Le voile ouest de la cage sur la trémie est donc vitré (M4) entre deux blocs P3 d'angle.",
+  "premiere_vue": {
+   "troncon": "U01",
+   "debut_m": 10011.37,
+   "fin_m": 10011.8
+  }
+ },
+ {
+  "id": "L12",
+  "nom": "Jonction baie M4 / massif P5 (départ en biais de la lame isolée)",
+  "genre": "liaison",
+  "decision": "a_confirmer",
+  "couches": [],
+  "regle": "Le double trait fin bute sur une face verticale grise de 45 cm (−3 à −48) ; le gris continue le long du guide et la lame à alvéoles part en biais (45° dans T62) vers l'intérieur : environ 30 cm de massif non isolé entre la fin du vitrage et le départ de l'isolant. Diffère de L11 (pas de retour à 90° du gris).",
+  "premiere_vue": {
+   "troncon": "T62",
+   "debut_m": 145.85,
+   "fin_m": 145.95
+  }
+ },
+ {
+  "id": "X7",
+  "nom": "Boucle du guide sur un trait d'axe de trame hors bâtiment (bulles « 2 » et « 1' »)",
+  "genre": "autre",
+  "decision": "exclu",
+  "couches": [],
+  "regle": "Deux traits fins parallèles (−7/−20) aboutissant à des bulles d'axe ; aller vers l'ouest (T67, bulle à l'envers) et retour (T68, bulle à l'endroit) sur le même point de façade (pointe du P1 lue à 153.3 et à 155.15). Aucune paroi dessous : à ignorer, comme les cotes et axes.",
+  "premiere_vue": {
+   "troncon": "T67",
+   "debut_m": 153.32,
+   "fin_m": 154.21
+  }
+ },
+ {
+  "id": "P6",
+  "nom": "Voile béton ≈27 cm non isolé des blocs fermés (cage CF, gaines ascenseur et EP, locaux techniques)",
+  "genre": "paroi",
+  "decision": "a_confirmer",
+  "couches": [
+   {
+    "nature": "mur",
+    "epaisseur_cm": 27,
+    "indice": "gris uniforme cerné de deux traits noirs épais, fines diagonales"
+   }
+  ],
+  "regle": "Bande grise uniforme bordée de deux traits noirs épais, fines diagonales, jamais d'alvéoles ni de doublage. Lot 6 : lu 22-25 cm sur les murs nord des locaux CF et CVC face à la cage d'escalier (U19 +37/+60, U20 +36/+58, marches de la cage au-dessus), 27-31 sur la gaine EP de 5.3 (U31 0/+28 face sud avec cavité blanche +27/+70, U25 +52/+83 face nord), 25-30 sur les faces est et sud de la gaine ascenseur sud (U33 0/+25-30, U34 +2/+30, U24 +11/+40). ≠ P7 (50-55), ≠ P3 (44 en biais), ≠ P1 (alvéoles).",
+  "premiere_vue": {
+   "troncon": "U31",
+   "debut_m": 10737.03,
+   "fin_m": 10738.95
+  }
+ },
+ {
+  "id": "P7",
+  "nom": "Voile béton épais 50-55 cm des gaines ascenseur (face sud de la gaine nord avec niche EP ; voile ouest et jambages nord de la gaine sud)",
+  "genre": "paroi",
+  "decision": "a_confirmer",
+  "couches": [
+   {
+    "nature": "mur",
+    "epaisseur_cm": 55,
+    "indice": "gris uniforme cerné de traits noirs épais, fines diagonales, sans alvéoles ; lu 50 sur la gaine sud"
+   }
+  ],
+  "regle": "Gris uniforme cerné de traits noirs épais, fines diagonales, sans alvéoles. Gaine nord : face sud 0/+55 avec niche EP (U13/U15). Gaine sud (5.3) : voile ouest lu 50 cm en bout dans U34 (10747.60-10748.11) et vu de face à +40 jusqu'au bord +90 de la bande dans U21 et U35 (guide décalé de 40 cm, coupe les pupitres CONSULT) ; jambages de la porte palière M8 à +45 jusqu'au bord +90 dans U22-U23 (épaisseur réelle hors bande, ≥45). ≠ P6 (27).",
+  "premiere_vue": {
+   "troncon": "U34",
+   "debut_m": 10747.6,
+   "fin_m": 10748.11
+  }
+ },
+ {
+  "id": "P8",
+  "nom": "Cloison légère entre locaux techniques (CVC / ventilation)",
+  "genre": "paroi",
+  "decision": "a_confirmer",
+  "couches": [
+   {
+    "nature": "autre",
+    "epaisseur_cm": 5,
+    "indice": "trait noir simple de 4-5 cm, ou double trait fin de 7 cm"
+   }
+  ],
+  "regle": "Trait noir simple de 4-5 cm (ou double trait fin de 7 cm) sans gris, perpendiculaire ou parallèle au guide, entre les textes CVC / ventilation ; vu montant à 10168.95 (U08), descendant à 10367.25 et 10368.55 (U17), le long du guide à +2/+6 (U18). Cloison intérieure de locaux techniques : hors enveloppe sauf si l'un des locaux est chauffé.",
+  "premiere_vue": {
+   "troncon": "U18",
+   "debut_m": 10370.49,
+   "fin_m": 10371.32
+  }
+ },
+ {
+  "id": "M7",
+  "nom": "Cloison vitrée pare-flamme PF1/2H de la boîte à vents / boîte à lumière",
+  "genre": "menuiserie",
+  "decision": "a_confirmer",
+  "couches": [
+   {
+    "nature": "cadre",
+    "epaisseur_cm": 4,
+    "indice": "trait fin extérieur"
+   },
+   {
+    "nature": "vitrage",
+    "epaisseur_cm": 2,
+    "indice": "trait fin central"
+   },
+   {
+    "nature": "cadre",
+    "epaisseur_cm": 4,
+    "indice": "trait fin intérieur"
+   }
+  ],
+  "regle": "Triple trait fin parallèle de 10 cm sans gris, petits carrés noirs de 7 cm (montants) tous les 1,8-2,1 m, tags PF1/2H ; nu +5/+15 sur U10-U11, +36/+45 sur U12. Lot 6 : vu sur les trois autres faces de la boîte, à +5/−4 sur U26 (est), U27-U28 (sud, marches du vide à −30/−40 dessous) et à +40/+50 sur U29 (ouest, guide décalé de 40 cm) ; angles L15 aux quatre coins. ≠ M1 (pas de trait parallèle ni poteaux PO1), ≠ M4 (pas de dormants carrés). Cloison intérieure au volume chauffé : probablement hors enveloppe.",
+  "premiere_vue": {
+   "troncon": "U27",
+   "debut_m": 10554.95,
+   "fin_m": 10558.8
+  }
+ },
+ {
+  "id": "L13",
+  "nom": "Angle rentrant du local sur le coin extérieur d'un bloc fermé en voiles P6/P7 (cage CF, gaines ascenseur et EP)",
+  "genre": "liaison",
+  "decision": "a_confirmer",
+  "couches": [],
+  "regle": "Le voile le long du guide rencontre un voile gris perpendiculaire qui part vers l'extérieur (vers le haut) sur toute la hauteur de bande, coin extérieur en L, sans alvéoles ; variante jambage plafonné (U03, U15). Lot 6 : coins de la gaine ascenseur sud (NW dans U21/U22 avec 43 cm de vide entre l'about carré du voile et le tournant du guide ; SE dans U33/U34 jambage 22 cm ; SW dans U34 jambage 50 cm P7) et de la gaine EP (U25 NW avec 44 cm de vide, U31 jambages 20-22 cm montant de 0 à +90). ≠ L1 (retour gris vers l'intérieur, alvéoles), ≠ L11 (baie M4 et voile P3), ≠ L16 (voile traversant les deux côtés).",
+  "premiere_vue": {
+   "troncon": "U34",
+   "debut_m": 10747.6,
+   "fin_m": 10748.11
+  }
+ },
+ {
+  "id": "L15",
+  "nom": "Angle de la cloison vitrée M7 (boîte à vents / boîte à lumière)",
+  "genre": "liaison",
+  "decision": "a_confirmer",
+  "couches": [],
+  "regle": "Triple trait fin M7 qui tourne à 90° vers l'extérieur sans gris ni dormant marqué (montant carré de 7 cm au coin). Lot 6 : vu aux quatre coins de la boîte, NE 10551.09 (U26), SE 10554.87 (U26/U27), SW 10562.73 (U28), NW 10566.98 (U29, triple trait montant de +40 à +90). ≠ L6/L7 (baies M4 avec dormant carré).",
+  "premiere_vue": {
+   "troncon": "U28",
+   "debut_m": 10562.66,
+   "fin_m": 10562.73
+  }
+ },
+ {
+  "id": "X8",
+  "nom": "Débattement de la porte CF (2 UP) de la cage d'escalier suivi par le contour du local",
+  "genre": "autre",
+  "decision": "exclu",
+  "couches": [],
+  "regle": "Arcs de cercle (rayon ≈1,4 m) tangents au guide, vantail gris épais en biais, textes UP et CF1/2H+FP, aucune paroi le long du guide : le contour du local a traversé la porte ouverte et longe l'arc dans le palier de la cage. La vraie limite est la porte CF (≈1,4 m) dans le voile est P6 de la cage, à partir de 10219.07 (U16).",
+  "premiere_vue": {
+   "troncon": "U04",
+   "debut_m": 10165.72,
+   "fin_m": 10166.53
+  }
+ },
+ {
+  "id": "M8",
+  "nom": "Porte palière d'ascenseur coulissante (face nord de la gaine ascenseur sud, 5.3)",
+  "genre": "menuiserie",
+  "decision": "a_confirmer",
+  "couches": [
+   {
+    "nature": "cadre",
+    "epaisseur_cm": 4,
+    "indice": "double trait fin à +84/+88 au fond de l'épaisseur des jambages"
+   }
+  ],
+  "regle": "Baie de 1,18 m (10514.30-10515.48) entre deux jambages gris épais P7 sur la face nord de la gaine ascenseur de 5.3 ; double trait fin à +84/+88 (côté cabine, au fond de l'épaisseur du voile) avec un petit décroché au milieu (vantaux coulissants) et débordant de 25 cm sur les jambages ; demi-cercle r≈0,7 m (giration PMR) côté local. Pas de vantail battant ni d'arc tangent (≠ M2, ≠ X8), pas de vitrage (≠ M4, ≠ M7).",
+  "premiere_vue": {
+   "troncon": "U23",
+   "debut_m": 10514.3,
+   "fin_m": 10515.24
+  }
+ },
+ {
+  "id": "L16",
+  "nom": "Angle sortant / jonction en T d'un local technique sur un voile perpendiculaire traversant",
+  "genre": "liaison",
+  "decision": "a_confirmer",
+  "couches": [],
+  "regle": "Le voile P6 le long du guide (+36/+58) bute sur un voile gris d'environ 44 cm, sans alvéoles, perpendiculaire au guide et traversant toute la bande (de −40 à +80, bord noir à +80) : coin du local CF sur le voile ouest du bloc escalier / locaux techniques, le voile continuant au-delà des deux faces. ≠ L13 (le local contourne le coin extérieur d'un bloc), ≠ L1 (alvéoles, retour vers l'intérieur seulement).",
+  "premiere_vue": {
+   "troncon": "U20",
+   "debut_m": 10376.26,
+   "fin_m": 10376.36
+  }
+ }
+]
