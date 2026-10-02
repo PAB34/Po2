@@ -66,3 +66,59 @@ Toutes les écritures de cache des traces sont en 5 min.
 `sorties-opus55-xhigh/` et `sorties-fable51-xhigh/` : `MODELES.md`, `usage.jsonl`, `R2/etude-R2.json`,
 `R2/A-FAIRE.md`, images `R2/enveloppe.pieces.png`, `R2/enveloppe/catalogue.png`, `R2/enveloppe/controle-image.png`.
 Rien n'a été importé sur le site.
+
+## Recommandations
+
+Bilan : environ 63 $ d'agents (Opus 5.5 xhigh ≈ 15 $, Fable 5.1 xhigh ≈ 49 $). S'y ajoute la session
+d'orchestration : recopie des consignes à chaque lot et suivi des deux chaînes pendant environ 4 h, soit près de
+100 $ au total. Le résultat ne justifie pas ce coût : xhigh lit mieux le plan mais ne réduit pas les
+incohérences, qui viennent surtout du guide.
+
+### 1. Modèle et effort
+
+- **Garder Opus 5.5 à l'effort par défaut** pour la chaîne. C'est l'état des agents depuis le retour de ce
+  commit : la ligne `effort` est supprimée. Il donne le meilleur rapport qualité/coût : 11 incohérences en 21 min.
+- **Ne pas utiliser Fable 5.1** pour cette chaîne. Il coûte environ 3,3 fois plus qu'Opus xhigh et lit moins
+  d'objets (55 contre 79). Un lot a aussi dépassé la limite de 64 000 jetons de sortie.
+- **Réserver xhigh à un essai ciblé** : par exemple la seule passe globale, sur un plan dense, si l'inventaire des
+  objets devient le facteur limitant. Il ne sert pas pour les lots d'enveloppe.
+
+### 2. Corriger le guide de l'enveloppe (code Python, aucun appel de modèle)
+
+Ce sont les défauts signalés par les agents, lot après lot, sur les deux chaînes :
+
+- **Façade derrière une terrasse** : à l'est, le guide suit la rive de la terrasse de lecture (claustra, ailettes,
+  lisse) au lieu du mur-rideau, situé 2 à 5 m en retrait. Le guide doit suivre la paroi du volume chauffé, pas
+  le contour des dalles extérieures. Les terrasses, balcons et rives sont à traiter à part.
+- **Allers-retours parasites** : le guide fait des boucles sur les claustras ou potelets (terrasse du personnel)
+  et sur les lignes d'axe jusqu'à leur bulle (« 2 », « 1' »). Il faut exclure les traits d'axe, les bulles et
+  les éléments extérieurs isolés avant de tracer le contour.
+- **Bandes rendues à l'envers** : sur plusieurs tronçons (T38, T44, T53, T62, T69 en Opus ; T43, T48 en
+  Fable), l'extérieur est en bas. Les agents ont dû inverser les profondeurs à la main. Il faut garantir le sens
+  extérieur en haut pour chaque bande, ou indiquer le sens dans le titre.
+- **Guide décalé de la paroi** : il est décalé de 20 à 50 cm devant les baies des trémies et de 40 cm sur
+  certains côtés U. Les coins tombent alors hors des bornes des tronçons. Il faut recaler le guide sur le nu
+  relevé, ou élargir la bande, par exemple de -90 à +100 cm.
+- **Côtés U qui entrent dans les locaux techniques ou les débattements de porte** : le contour de 5.1 et 5.2 est
+  passé par la porte CF ouverte et dans les gaines CF, CVC et ventilation. Il faut fermer les contours des
+  locaux sur les baies de porte avant de générer les côtés U.
+
+### 3. Réduire le coût d'orchestration
+
+- **Faire lire la consigne par l'agent** dans son fichier (`consigne-lot-N.md`, `schema-lot-N.json`) au lieu de
+  la recopier dans le prompt. L'orchestrateur ne transmet alors que deux chemins par lot.
+- **Récupérer la réponse depuis la trace** de l'agent : c'est déjà fait par un script, sans la retaper.
+- **Une seule chaîne à la fois**, sans suivi détaillé pendant les lots.
+
+### 4. Lecture des locaux
+
+- Le R+2 est un plateau ouvert : 5.1, 5.2 et 5.3 n'ont pas de cloison. Le nombre de pièces ne se compare pas au
+  R+1. Il faut demander à l'architecte le découpage des zones, ou accepter une pièce unique.
+- **Statut thermique à confirmer** pour la cage d'escalier CF, les gaines d'ascenseur et EP, les locaux
+  CVC/ventilation et la boîte à vents. De ce statut dépend l'entrée dans l'enveloppe des composants P6, P7, M7,
+  etc.
+
+### 5. Prochain essai conseillé
+
+Corriger le guide (§ 2), puis relancer **une seule** chaîne Opus 5.5 à l'effort par défaut sur le R+2, en
+appliquant le § 3. Comparer ensuite à la colonne « Opus 5.5 medium » de ce tableau.
