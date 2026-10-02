@@ -1,0 +1,226 @@
+{
+ "type": "object",
+ "properties": {
+  "catalogue": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "nom": {
+      "type": "string"
+     },
+     "genre": {
+      "type": "string",
+      "enum": [
+       "paroi",
+       "menuiserie",
+       "poteau",
+       "liaison",
+       "element_exterieur",
+       "autre"
+      ]
+     },
+     "decision": {
+      "type": "string",
+      "enum": [
+       "integre",
+       "exclu",
+       "a_confirmer"
+      ]
+     },
+     "couches": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "nature": {
+         "type": "string",
+         "enum": [
+          "mur",
+          "isolant",
+          "doublage",
+          "lame_air",
+          "parement",
+          "bardage",
+          "vitrage",
+          "cadre",
+          "autre"
+         ]
+        },
+        "epaisseur_cm": {
+         "type": "number"
+        },
+        "indice": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "nature",
+        "epaisseur_cm",
+        "indice"
+       ]
+      }
+     },
+     "regle": {
+      "type": "string"
+     },
+     "premiere_vue": {
+      "type": "object",
+      "properties": {
+       "troncon": {
+        "type": "string"
+       },
+       "debut_m": {
+        "type": "number"
+       },
+       "fin_m": {
+        "type": "number"
+       }
+      },
+      "required": [
+       "troncon",
+       "debut_m",
+       "fin_m"
+      ]
+     }
+    },
+    "required": [
+     "id",
+     "nom",
+     "genre",
+     "decision",
+     "couches",
+     "regle",
+     "premiere_vue"
+    ]
+   }
+  },
+  "elements": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "properties": {
+     "troncon": {
+      "type": "string"
+     },
+     "debut_m": {
+      "type": "number"
+     },
+     "fin_m": {
+      "type": "number"
+     },
+     "type": {
+      "type": "string",
+      "enum": [
+       "paroi",
+       "menuiserie",
+       "poteau",
+       "angle_sortant",
+       "angle_rentrant",
+       "about_refend",
+       "about_plancher",
+       "garde_corps",
+       "indetermine"
+      ]
+     },
+     "composant": {
+      "type": "string"
+     },
+     "nu_exterieur_cm": {
+      "type": "number"
+     },
+     "nu_interieur_cm": {
+      "type": "number"
+     },
+     "nu_exterieur_fin_cm": {
+      "type": "number"
+     },
+     "nu_interieur_fin_cm": {
+      "type": "number"
+     },
+     "couches": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "nature": {
+         "type": "string",
+         "enum": [
+          "mur",
+          "isolant",
+          "doublage",
+          "lame_air",
+          "parement",
+          "bardage",
+          "vitrage",
+          "cadre",
+          "autre"
+         ]
+        },
+        "epaisseur_cm": {
+         "type": "number"
+        },
+        "indice": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "nature",
+        "epaisseur_cm",
+        "indice"
+       ]
+      }
+     },
+     "menuiserie_type": {
+      "type": "string"
+     },
+     "cadre_cm": {
+      "type": "number"
+     },
+     "confiance": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+     },
+     "indice": {
+      "type": "string"
+     },
+     "a_verifier": {
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "troncon",
+     "debut_m",
+     "fin_m",
+     "type",
+     "composant",
+     "nu_exterieur_cm",
+     "nu_interieur_cm",
+     "nu_exterieur_fin_cm",
+     "nu_interieur_fin_cm",
+     "couches",
+     "menuiserie_type",
+     "cadre_cm",
+     "confiance",
+     "indice",
+     "a_verifier"
+    ]
+   }
+  },
+  "observations": {
+   "type": "array",
+   "items": {
+    "type": "string"
+   }
+  }
+ },
+ "required": [
+  "catalogue",
+  "elements",
+  "observations"
+ ]
+}

@@ -443,5 +443,94 @@
    "fin_m": 151.13,
    "autre_niveau": true
   }
+ },
+ {
+  "id": "L9",
+  "nom": "About de cloison mince sur paroi P1",
+  "genre": "liaison",
+  "decision": "a_confirmer",
+  "couches": [],
+  "regle": "Double trait noir parallèle de 10 à 12 cm, perpendiculaire à P1, qui part du nu intérieur (-45) vers l'intérieur, sans remplissage gris ni alvéoles. Il diffère de L3 (bande grise isolée d'environ 40 cm), de L8 (jambe grise de 20 cm sur P3) et de L4 (cloison sur mur-rideau).",
+  "premiere_vue": {
+   "troncon": "T02",
+   "debut_m": 5.19,
+   "fin_m": 5.32
+  }
+ },
+ {
+  "id": "X5",
+  "nom": "Claustra de blocs mixtes en rive de la terrasse de lecture",
+  "genre": "element_exterieur",
+  "decision": "exclu",
+  "couches": [
+   {
+    "nature": "autre",
+    "epaisseur_cm": 23,
+    "indice": "blocs gris pleins cernés de noir, de -2 à -25"
+   }
+  ],
+  "regle": "Chapelet de blocs gris pleins cernés de noir, d'environ 23 cm d'épaisseur et de 18 à 80 cm de long, carrés et rectangles mêlés, reliés par un trait fin vers -3, avec des blocs d'angle en L (bras de 65 cm, jambe jusqu'à -68). Aucune paroi ni vitrage dans la bande. Il diffère de X3 (carrés réguliers bordés de lames de terrasse) et de X4 (blocs de 30 à 100 cm devant le vitrage M5).",
+  "premiere_vue": {
+   "troncon": "T08",
+   "debut_m": 29.7,
+   "fin_m": 33.22
+  }
+ },
+ {
+  "id": "X6",
+  "nom": "Massif béton plein d'environ 1 m en rive de la terrasse de lecture",
+  "genre": "element_exterieur",
+  "decision": "exclu",
+  "couches": [
+   {
+    "nature": "mur",
+    "epaisseur_cm": 108,
+    "indice": "1,08 m le long du guide, profondeur supérieure à 89 cm"
+   }
+  ],
+  "regle": "Grand rectangle gris plein cerné de noir épais, de 1,08 m le long du guide, du 0 jusqu'au-delà de -90, hachuré de diagonales fines, au bout du claustra X5 (environ 1 x 1 m sur le plan). Ce n'est ni PO1/PO2 (trop gros, pas de vitrage) ni P3 (isolé sur la terrasse, hors volume chauffé).",
+  "premiere_vue": {
+   "troncon": "T14",
+   "debut_m": 39.49,
+   "fin_m": 40.61
+  }
+ },
+ {
+  "id": "X7",
+  "nom": "Ailettes pleines perpendiculaires en rive est de la terrasse de lecture",
+  "genre": "element_exterieur",
+  "decision": "exclu",
+  "couches": [
+   {
+    "nature": "autre",
+    "epaisseur_cm": 101,
+    "indice": "ailette grise de 26 cm de large, de +15 à -86"
+   }
+  ],
+  "regle": "Lame grise pleine cernée de noir, de 26 cm le long du guide, perpendiculaire à celui-ci de +15 à -86, légèrement trapézoïdale, répétée environ tous les 2,06 m. Elle relie la lisse à +14 à la rive des lames vers -87. Elle diffère de X5 (blocs alignés sur le guide) et de X1 (triangles de traits fins).",
+  "premiere_vue": {
+   "troncon": "T17",
+   "debut_m": 44.54,
+   "fin_m": 44.82
+  }
+ },
+ {
+  "id": "X8",
+  "nom": "Lisse de rive entre ailettes (garde-corps de la terrasse de lecture)",
+  "genre": "element_exterieur",
+  "decision": "exclu",
+  "couches": [
+   {
+    "nature": "autre",
+    "epaisseur_cm": 1,
+    "indice": "trait fin continu à +14"
+   }
+  ],
+  "regle": "Trait fin continu vers +14 qui joint les têtes des ailettes X7, avec un double trait à -87 et des amorces de lames de terrasse en dessous. Pas de remplissage gris, pas de vitrage.",
+  "premiere_vue": {
+   "troncon": "T17",
+   "debut_m": 44.82,
+   "fin_m": 46.61
+  }
  }
 ]
