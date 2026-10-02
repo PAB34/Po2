@@ -33,7 +33,7 @@ dont les couches **ne sont pas forcément parallèles**.
   Écarté avec le motif « mur supprimé par le thermicien », réactivable.
 - Étude d'avant D242 : recalculée une fois à l'ouverture (sans version) pour gagner ses lignes de métré.
 
-## Lot B — à concevoir (questions)
+## Lot B — remplacé le 2026-10-02 par `murs-traces-decisions.md` (D248–D253 : murs tracés librement)
 
 - **D245 (proposé) — Redessiner la ligne de métré** : mur désigné, « Redessiner la ligne », deux clics sur la
   face intérieure (début, fin). Le serveur en tire les bornes sur le tronçon **et** le nu intérieur au début et à

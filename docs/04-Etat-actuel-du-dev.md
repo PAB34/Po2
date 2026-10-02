@@ -30,6 +30,11 @@ d'objectifs dans l'ordre : (1) R+1 parfait [lot B murs : 3 questions ouvertes da
 étape + nettoyage des fonctions retirées, (3) bibliothèques fiables, (4) autres niveaux par report sans IA,
 (5) livrable déperditions. Tout lot doit servir un de ces objectifs.
 
+**2026-10-02 (suite) — EN ATTENTE DE RÉPONSES** : `docs/thermique/murs-traces-decisions.md` (D248–D253 : mur =
+ligne libre tracée, poignées, clic droit « Créer un mur », gestes enregistrés aussitôt, « Repartir de zéro » du
+R+1 avec sauvegarde ; 5 questions ; remplace le lot B). Bilan de la détection :
+`docs/thermique/detection-composants-bilan-2026-10-02.md` (l'IA reconnaît, ne mesure pas).
+
 **CAP DÉCIDÉ LE 2026-10-01 : consolider le R+1 jusqu'à ce qu'il soit parfait, AVANT tout autre niveau.**
 - La passe globale automatique (`run_etude_niveau.py --mode cli`) est **insuffisante** : essai A/B sur le R+2,
   23 / 25 / 36 objets contre 130 au R+1 (le R+1 avait été fait en session interactive, mode « attente »). La
