@@ -352,7 +352,7 @@ def convertir_contours(contenu: dict[str, Any], transform: list[Any], width: flo
     enveloppe_etude = contenu.get("enveloppe")
     if isinstance(enveloppe_etude, dict):
         # Tracé des éléments (D75) et position des liaisons (D74) : dessinés sur le plan, donc en points PDF.
-        for objet in enveloppe_etude.get("objets", []):
+        for objet in enveloppe_etude.get("objets", []) + enveloppe_etude.get("lignes_metre", []):
             objet["points_pdf"] = [
                 _inverser_transform(transform, x * width / 1000, y * height / 1000)
                 for x, y in objet.get("points", [])

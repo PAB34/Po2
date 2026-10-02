@@ -28,6 +28,8 @@ const COULEURS_ELEMENT: Record<string, string> = {
   poteau: "#6b7280",
   garde_corps: "#0d9488",
   indetermine: "#dc2626",
+  // D242 : la ligne de métré d'un mur, à l'étape des parois.
+  ligne_metre: "#0f766e",
 };
 
 const COULEURS_PONT: Record<string, string> = {
@@ -312,6 +314,7 @@ export function StudyMetrics({
             vise ? "is-selected" : "",
             shape.review_required ? "is-doute" : "",
             shape.category === "menuiserie_exterieure" ? "is-menuiserie" : "",
+            shape.category === "ligne_metre" ? "is-ligne-metre" : "",
             famille && (shape.category === "menuiserie_exterieure") !== (famille === "menuiseries") ? "is-estompe" : "",
           ]
             .filter(Boolean)
@@ -330,6 +333,19 @@ export function StudyMetrics({
               ) : (
                 <polyline {...commun} fill="none" />
               )}
+              {/* D242 : la ligne de métré porte son étiquette (composant · épaisseur) quand elle est assez longue. */}
+              {shape.category === "ligne_metre" &&
+                (() => {
+                  const ecran = (shape.points_pdf ?? []).map(toScreen);
+                  if (ecran.length < 2 || longueurEcran(ecran as [number, number][]) < COTE_LISIBLE_PX) return null;
+                  const [ax, ay] = ecran[0];
+                  const [bx, by] = ecran[ecran.length - 1];
+                  return (
+                    <text className="th-ligne-metre__etiquette" x={(ax + bx) / 2} y={(ay + by) / 2 - 6} textAnchor="middle">
+                      {shape.subtype}
+                    </text>
+                  );
+                })()}
               <title>{`${shape.subtype}${shape.review_required ? " · à vérifier" : ""}`}</title>
             </g>
           );

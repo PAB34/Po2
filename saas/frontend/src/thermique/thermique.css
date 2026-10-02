@@ -3458,3 +3458,59 @@ circle.th-seg--measure {
   gap: 0.35rem;
   margin: 0.4rem 0;
 }
+/* D242 : un mur = sa ligne de métré, à l'étape des parois. */
+.th-metrics--parois .th-metric-element.is-ligne-metre {
+  stroke-width: 6;
+  stroke-linecap: butt;
+}
+
+.th-metrics--parois .th-metric-element.is-ligne-metre.is-selected {
+  stroke-width: 9;
+}
+
+.th-ligne-metre__etiquette {
+  fill: #0f766e;
+  font-size: 10px;
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 3px;
+  pointer-events: none;
+}
+
+/* D243 : la composition d'un mur, couche par couche. */
+.th-composition__couches {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0.3rem 0;
+  padding-left: 1.2rem;
+}
+
+.th-composition__couches li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.th-composition__couches input {
+  width: 5rem;
+}
+
+.th-composition__etat {
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: var(--po2-color-amber-soft);
+  font-size: 0.78rem;
+}
+
+.th-composition__etat.is-valide {
+  background: var(--po2-color-mint-soft);
+}
+
+.th-composition__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}

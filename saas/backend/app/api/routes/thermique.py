@@ -504,7 +504,10 @@ def _reunir_les_menuiseries_une_fois(db: Session, sheet: ThermiqueSheet, etude: 
     exposition posée, sans créer de version (comme une pose du nord). Un échec laisse l'étude telle quelle."""
     try:
         contenu = json.loads(etude.content_json)
-        if contenu.get(MENUISERIES_REUNIES) or "enveloppe" not in contenu:
+        if "enveloppe" not in contenu:
+            return
+        # Recalcul unique aussi pour une étude d'avant les lignes de métré (D242, 2026-10-02).
+        if contenu.get(MENUISERIES_REUNIES) and "lignes_metre" in contenu["enveloppe"]:
             return
         transform, largeur, hauteur = _repere_de_la_planche(sheet, contenu)
         recalcule = edition.reconstruire(contenu)

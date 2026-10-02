@@ -5,6 +5,7 @@ import type {
   MenuiseriesDuProjet,
   ModeleMenuiserie,
   StudyContent,
+  StudyCouche,
   StudyElementChanges,
   StudyElementRef,
   StudyElementScope,
@@ -28,7 +29,7 @@ import {
 } from "./elements";
 import { baieDeElement, provenanceBaie } from "./baies";
 import { expositionLisible } from "./modeles";
-import { epaisseurTotaleCm } from "./parois";
+import { NATURES_COUCHE, changesDeComposition, couchesValidees } from "./parois";
 
 const LIBELLES_CHAMP: Record<string, string> = {
   type: "type",
@@ -181,7 +182,6 @@ function Detail({
   onMesurerBaie,
   modeles = [],
   onChoisirModele,
-  onCopierComposition,
 }: {
   element: StudyReleveElement;
   content: StudyContent;
@@ -194,26 +194,40 @@ function Detail({
   onMesurerBaie?: () => void;
   modeles?: ModeleMenuiserie[];
   onChoisirModele?: (element: StudyReleveElement, nom: string) => void;
-  /** D239 : prendre cette paroi comme référence pour le pinceau de composition. */
-  onCopierComposition?: (element: StudyReleveElement) => void;
 }) {
   const menuiserie = element.type === "menuiserie";
-  // D239 : la composition d'une paroi, et le pinceau qui la copie sur d'autres.
+  // D243, D244 : la composition d'un mur se vérifie et se valide ici ; un mur de trop se supprime d'un geste.
+  const porteurs =
+    element.type === "paroi" && element.composant
+      ? content.enveloppe.releve_brut.elements.filter(
+          (autre) =>
+            autre.type === "paroi" &&
+            !autre.exclu &&
+            autre.composant === element.composant &&
+            !(autre.troncon === element.troncon && autre.debut_m === element.debut_m && autre.fin_m === element.fin_m),
+        )
+      : [];
   const composition =
     element.type === "paroi" && !element.exclu ? (
-      <div className="th-composition">
-        <p className="th-muted">
-          Composition : <strong>{element.composant ?? "—"}</strong> · {epaisseurTotaleCm(element)} cm
-          {(element.couches ?? []).length > 0 &&
-            ` (${(element.couches ?? []).map((couche) => `${couche.nature} ${couche.epaisseur_cm}`).join(" + ")})`}
-          {element.retrace ? " · mur retracé" : ""}
-        </p>
-        {onCopierComposition && (
-          <button type="button" className="po2-button po2-button--secondary" disabled={busy} onClick={() => onCopierComposition(element)}>
-            Copier sa composition (pinceau)
-          </button>
-        )}
-      </div>
+      <EditeurComposition
+        key={`${element.troncon}|${element.debut_m}|${element.fin_m}`}
+        element={element}
+        autres={porteurs.length}
+        busy={busy}
+        onValider={(couches, partout) => {
+          const inchangee = JSON.stringify(couchesValidees(couches)) === JSON.stringify(couchesValidees(element.couches ?? []));
+          if (inchangee && !partout) {
+            onOperation({ type: "element_confirmer", element: refDeElement(element) });
+            return;
+          }
+          for (const mur of partout ? [element, ...porteurs] : [element]) {
+            onOperation({ type: "element_corriger", element: refDeElement(mur), changes: changesDeComposition(mur, couches) });
+          }
+        }}
+        onSupprimer={() =>
+          onOperation({ type: "element_ecarter", element: refDeElement(element), motif: "mur supprimé par le thermicien" })
+        }
+      />
     ) : null;
   const lecture = (
     <>
@@ -341,10 +355,123 @@ function Detail({
           <Etat element={element} />
         </header>
         {composition}
-        {lecture}
-        {gestes}
+        {element.type === "paroi" && !element.exclu ? (
+          // D243 : pour un mur, la composition d'abord ; la lecture de l'IA et les autres corrections sont repliées.
+          <details className="th-element-releve">
+            <summary>Corriger le relevé</summary>
+            {lecture}
+            {gestes}
+          </details>
+        ) : (
+          <>
+            {lecture}
+            {gestes}
+          </>
+        )}
       </article>
     </>
+  );
+}
+
+/**
+ * La composition d'un mur, couche par couche, de l'extérieur vers l'intérieur (D243). « Valider la composition »
+ * l'enregistre (ce mur seul, ou aussi les autres murs du même composant) et marque le mur comme vérifié.
+ */
+export function EditeurComposition({
+  element,
+  autres,
+  busy,
+  onValider,
+  onSupprimer,
+}: {
+  element: StudyReleveElement;
+  /** Autres murs actifs du même composant. */
+  autres: number;
+  busy: boolean;
+  onValider: (couches: StudyCouche[], partout: boolean) => void;
+  onSupprimer: () => void;
+}) {
+  const [couches, setCouches] = useState<StudyCouche[]>(() =>
+    (element.couches ?? []).length ? (element.couches ?? []).map((couche) => ({ ...couche })) : [{ nature: "mur", epaisseur_cm: 20 }],
+  );
+  const [partout, setPartout] = useState(false);
+  const total = Math.round(couches.reduce((somme, couche) => somme + (couche.epaisseur_cm || 0), 0) * 10) / 10;
+  const valide = Boolean(element.confirme || element.corrige);
+  const changer = (rang: number, champ: Partial<StudyCouche>) =>
+    setCouches((liste) => liste.map((couche, i) => (i === rang ? { ...couche, ...champ, presume: false } : couche)));
+  return (
+    <div className="th-composition">
+      <p>
+        Composition <strong>{element.composant ?? "sans composant"}</strong> · <strong>{total} cm</strong>{" "}
+        <span className={valide ? "th-composition__etat is-valide" : "th-composition__etat"}>{valide ? "validée" : "à valider"}</span>
+      </p>
+      <small className="th-muted">De l'extérieur (en haut) vers l'intérieur (en bas) ; la ligne de métré est la face intérieure.</small>
+      <ol className="th-composition__couches">
+        {couches.map((couche, rang) => (
+          <li key={rang}>
+            <select
+              aria-label={`Nature de la couche ${rang + 1}`}
+              value={couche.nature}
+              disabled={busy}
+              onChange={(event) => changer(rang, { nature: event.target.value })}
+            >
+              {!NATURES_COUCHE.some((n) => n.id === couche.nature) && <option value={couche.nature}>{couche.nature}</option>}
+              {NATURES_COUCHE.map((nature) => (
+                <option key={nature.id} value={nature.id}>
+                  {nature.label}
+                </option>
+              ))}
+            </select>
+            <input
+              aria-label={`Épaisseur de la couche ${rang + 1} (cm)`}
+              type="number"
+              min={0.1}
+              step={0.1}
+              value={couche.epaisseur_cm}
+              disabled={busy}
+              onChange={(event) => changer(rang, { epaisseur_cm: Number(event.target.value) })}
+            />
+            <span className="th-muted">cm{couche.presume ? " (présumé)" : ""}</span>
+            <button
+              type="button"
+              className="th-link"
+              aria-label={`Retirer la couche ${rang + 1}`}
+              disabled={busy || couches.length === 1}
+              onClick={() => setCouches((liste) => liste.filter((_, i) => i !== rang))}
+            >
+              ×
+            </button>
+          </li>
+        ))}
+      </ol>
+      <button
+        type="button"
+        className="th-link"
+        disabled={busy}
+        onClick={() => setCouches((liste) => [...liste, { nature: "isolant", epaisseur_cm: 10 }])}
+      >
+        + Ajouter une couche
+      </button>
+      {autres > 0 && element.composant && (
+        <label className="th-inline">
+          <input type="checkbox" checked={partout} onChange={(event) => setPartout(event.target.checked)} />
+          Appliquer aussi aux {autres} autres murs {element.composant}
+        </label>
+      )}
+      <div className="th-composition__actions">
+        <button
+          type="button"
+          className="po2-button po2-button--primary"
+          disabled={busy || couchesValidees(couches).length === 0}
+          onClick={() => onValider(couches, partout)}
+        >
+          Valider la composition
+        </button>
+        <button type="button" className="po2-button po2-button--danger" disabled={busy} onClick={onSupprimer}>
+          Supprimer ce mur
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -506,13 +633,10 @@ export function ElementPanel({
   sheetId = null,
   onMesurerBaie,
   onChoisirModele,
-  onCopierComposition,
   famille,
 }: {
   /** D227 : l'étape ne liste que les parois, ou que les menuiseries. */
   famille?: "parois" | "menuiseries";
-  /** D239 : prendre une paroi comme référence pour le pinceau de composition. */
-  onCopierComposition?: (element: StudyReleveElement) => void;
   content: StudyContent;
   room: StudyRoom | null;
   selected: StudyElementRef | null;
@@ -567,7 +691,6 @@ export function ElementPanel({
           onMesurerBaie={onMesurerBaie}
           modeles={menuiseries?.modeles ?? []}
           onChoisirModele={onChoisirModele}
-          onCopierComposition={onCopierComposition}
         />
         {message && <p className="th-alert">{message}</p>}
       </section>

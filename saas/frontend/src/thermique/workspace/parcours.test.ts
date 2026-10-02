@@ -121,7 +121,7 @@ describe("le parcours du niveau", () => {
     );
     const enveloppe = etapes.find((item) => item.id === "enveloppe");
     const ponts = etapes.find((item) => item.id === "ponts");
-    expect(enveloppe?.reste).toBe("1 paroi à vérifier");
+    expect(enveloppe?.reste).toBe("1 mur à valider sur 1");
     // Deux ponts douteux et un déjà confirmé : c'est bien deux qui restent.
     expect(ponts?.reste).toBe("2 ponts à juger sur 3");
     expect(ponts?.etat).toBe("en_cours");
@@ -161,7 +161,8 @@ describe("le parcours du niveau", () => {
   });
 
   it("un local sans hauteur garde l'étape des locaux ouverte ; tout étant fini, on se pose sur les ponts (D213)", () => {
-    const study = etude([element()], ["Bureau"], ["L0"]);
+    // D243 : le mur doit avoir sa composition validée pour que l'étape des parois soit finie.
+    const study = etude([element({ confirme: true })], ["Bureau"], ["L0"]);
     const sans = parcours(planche(), study);
     expect(etapeCourante(sans)).toBe("locaux");
     expect(sans[2].reste).toContain("hauteur à mesurer");

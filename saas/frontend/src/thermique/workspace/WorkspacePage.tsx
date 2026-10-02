@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "../../providers/AuthProvider";
-import { thermiqueApi, type CompositionCopiee, type CorrectionDeVue, type HautDeVue, type PdfPoint, type StudyElementRef, type StudyOperation, type StudyReleveElement, type ProjectDetail, type Sheet, type Study, type VueCoupe } from "../api";
+import { thermiqueApi, type CorrectionDeVue, type HautDeVue, type PdfPoint, type StudyElementRef, type ProjectDetail, type Sheet, type Study, type VueCoupe } from "../api";
 import { TileSheetViewer, type ViewerTool, type ViewerView } from "../components/TileSheetViewer";
 import { STATUS_LABELS } from "../natures";
 import { allSheets, projectQueryKey, projectsQueryKey } from "../projectCache";
@@ -23,7 +23,7 @@ import { PontsPanel } from "./PontsPanel";
 import { coteAt, empreinteCote, milieuCote, rangVise, type CoteVisee } from "./cotes";
 import { elementDuPont, paroisATrancher, pontAt, pontDeElement, refDeElement, trouverElement, viserSurLePlan } from "./elements";
 import { baieDeLElement, cleDeRef, cotesDesMenuiseries, menuiseriesDeMemeLargeur } from "./modeles";
-import { compositionDe, correctionDuPinceau, paroisDuComposant, retracerEntre } from "./parois";
+import { formesEtapeParois } from "./parois";
 import { BibliothequeModeles, CotesMenuiseries } from "./ModelesMenuiseries";
 import { demandeUneHauteur, etapeCourante, hauteurConnue, locauxSansHauteur, parcours, vueDeLEtape, type EtapeId } from "./parcours";
 import { TYPES_PONT_REATTRIBUABLES } from "./pontsTypes";
@@ -253,7 +253,6 @@ export function WorkspacePage() {
         setCadreVue(null);
         setHauteurAPoser(null);
         setModeleAPoser(null);
-        setPinceau(null);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -537,6 +536,18 @@ export function WorkspacePage() {
 
   // Le pont en cours amène le plan à lui : l'étape sert à les distinguer un à un (Q4).
   const elementCourant = shownStudy ? trouverElement(shownStudy.content, elementsState.selected) : null;
+  // D244 : à l'étape des parois, la touche Suppr supprime le mur désigné (écarté, réactivable).
+  const murDesigne = etape === "enveloppe" && elementCourant?.type === "paroi" && !elementCourant.exclu ? elementCourant : null;
+  useEffect(() => {
+    if (!murDesigne || editionState.draft) return;
+    const supprimer = (event: KeyboardEvent) => {
+      if (event.key !== "Delete" || cibleEditable(event.target)) return;
+      event.preventDefault();
+      elementsState.apply({ type: "element_ecarter", element: refDeElement(murDesigne), motif: "mur supprimé par le thermicien" });
+    };
+    window.addEventListener("keydown", supprimer);
+    return () => window.removeEventListener("keydown", supprimer);
+  }, [murDesigne, editionState.draft, elementsState]);
   const pontCourant =
     etape === "ponts" && shownStudy && elementCourant ? pontDeElement(shownStudy.content, elementCourant) : null;
   // Le côté désigné, s'il est toujours le même côté du local ouvert. Pas à l'étape des ponts, où la
@@ -600,33 +611,6 @@ export function WorkspacePage() {
         setModeleMessage(echec instanceof Error ? echec.message : "Le modèle n'a pas été posé.");
       }
     });
-  };
-  // D239, D240 : pinceau de composition et mur retracé. Mêmes enregistrements en file que les modèles.
-  const [pinceau, setPinceau] = useState<{ composition: CompositionCopiee; source: StudyElementRef; poses: number; retrace: PdfPoint | null | false } | null>(null);
-  const [pinceauMessage, setPinceauMessage] = useState<string | null>(null);
-  useEffect(() => setPinceau(null), [sheetId]);
-  const enregistrerGestes = (operations: StudyOperation[], motif: string, succes: string) => {
-    if (!token || !sheetId || operations.length === 0) return;
-    if (elementsState.pending > 0 || editionState.pending > 0 || editionState.draft) {
-      setPinceauMessage("Enregistrez ou abandonnez d'abord les corrections en attente.");
-      return;
-    }
-    const planche = sheetId;
-    setPinceauMessage("Enregistrement et recalcul du niveau…");
-    fileModeles.current = fileModeles.current.then(async () => {
-      try {
-        const enregistre = await thermiqueApi.saveStudy(token, planche, { operations, motif, valider: false });
-        queryClient.setQueryData<Study>(studyQueryKey(planche), enregistre);
-        setPinceauMessage(succes);
-      } catch (echec) {
-        setPinceauMessage(echec instanceof Error ? echec.message : "Le geste n'a pas été enregistré.");
-      }
-    });
-  };
-  const copierComposition = (element: StudyReleveElement) => {
-    setModeleAPoser(null);
-    setPinceauMessage(null);
-    setPinceau({ composition: compositionDe(element), source: refDeElement(element), poses: 0, retrace: false });
   };
   const poserModele = (modele: { nom: string; largeur_cm: number; hauteur_m: number }) => {
     const designe = shownStudy ? trouverElement(shownStudy.content, elementsState.selected) : null;
@@ -937,61 +921,6 @@ export function WorkspacePage() {
               </button>
             </div>
           )}
-          {pinceau && (
-            <div className="th-poser-hauteur" role="status">
-              <span>
-                Composition <strong>{pinceau.composition.libelle}</strong> :{" "}
-                {pinceau.retrace === false
-                  ? "cliquez les parois à qui la donner"
-                  : pinceau.retrace === null
-                    ? "cliquez le DÉBUT du mur à retracer, sur la façade"
-                    : "cliquez maintenant la FIN du mur à retracer"}
-                {pinceau.poses > 0 && ` (${pinceau.poses} donnée${pinceau.poses > 1 ? "s" : ""})`}.
-                {pinceauMessage && <small className="th-poser-hauteur__message"> {pinceauMessage}</small>}
-              </span>
-              {pinceau.retrace === false ? (
-                <button
-                  type="button"
-                  className="po2-button po2-button--ghost"
-                  title="Deux clics le long de la façade : tout ce qui est entre les deux devient un mur propre de cette composition ; les angles et les fenêtres restent."
-                  onClick={() => {
-                    setPinceauMessage(null);
-                    setPinceau({ ...pinceau, retrace: null });
-                  }}
-                >
-                  Retracer un mur
-                </button>
-              ) : (
-                <button type="button" className="th-link" onClick={() => setPinceau({ ...pinceau, retrace: false })}>
-                  Annuler le retracé
-                </button>
-              )}
-              {shownStudy &&
-                pinceau.retrace === false &&
-                (() => {
-                  const memes = paroisDuComposant(shownStudy.content, pinceau.composition.composant, pinceau.source);
-                  return memes.length > 0 ? (
-                    <button
-                      type="button"
-                      className="po2-button po2-button--ghost"
-                      onClick={() => {
-                        enregistrerGestes(
-                          memes.map((ref) => correctionDuPinceau(ref, pinceau.composition)),
-                          "pinceau_composition",
-                          `Composition donnée aux ${memes.length} parois ${pinceau.composition.composant}.`,
-                        );
-                        setPinceau({ ...pinceau, poses: pinceau.poses + memes.length });
-                      }}
-                    >
-                      Appliquer aux {memes.length} parois {pinceau.composition.composant}
-                    </button>
-                  ) : null;
-                })()}
-              <button type="button" className="po2-button po2-button--primary" onClick={() => setPinceau(null)}>
-                Terminé
-              </button>
-            </div>
-          )}
           {modeleAPoser && (
             <div className="th-poser-hauteur" role="status">
               <span>
@@ -1030,13 +959,13 @@ export function WorkspacePage() {
               tool={
                 editionState.draft
                   ? "edition"
-                  : calage || cadreVue || (pinceau && pinceau.retrace !== false)
+                  : calage || cadreVue
                     ? "calage"
-                    : hauteurAPoser || modeleAPoser || pinceau
+                    : hauteurAPoser || modeleAPoser
                       ? "pan"
                       : tool
               }
-              points={cadreVue?.premier ? [cadreVue.premier] : pinceau?.retrace ? [pinceau.retrace] : points}
+              points={cadreVue?.premier ? [cadreVue.premier] : points}
               segments={editionState.draft ? [] : sheetSegments(sheet, tool, points)}
               onAddPoint={(point, event) => {
                 if (editionState.handlers.onAddPoint(point)) return;
@@ -1046,21 +975,6 @@ export function WorkspacePage() {
                 }
                 if (calage) {
                   cliquerCalage(point, event.altKey);
-                  return;
-                }
-                // D240 : retracer un mur, un clic au début, un clic à la fin le long de la façade.
-                if (pinceau && pinceau.retrace !== false && shownStudy) {
-                  if (pinceau.retrace === null) {
-                    setPinceau({ ...pinceau, retrace: point });
-                    return;
-                  }
-                  const geste = retracerEntre(shownStudy.content, pinceau.retrace, point, pinceau.composition);
-                  setPinceau({ ...pinceau, retrace: false });
-                  if (!geste) {
-                    setPinceauMessage("La façade de ce niveau ne se retrouve pas : recalculez le niveau.");
-                    return;
-                  }
-                  enregistrerGestes([geste], "mur_retrace", `Mur retracé en ${pinceau.composition.libelle}.`);
                   return;
                 }
                 setPoints((current) => (current.length >= 2 ? [point] : [...current, point]));
@@ -1074,34 +988,6 @@ export function WorkspacePage() {
                     enfiler(local.id, hauteurAPoser.valeur);
                     setHauteurAPoser({ ...hauteurAPoser, poses: [...hauteurAPoser.poses, local.id] });
                   }
-                  return;
-                }
-                // Pinceau de composition : chaque paroi cliquée la reçoit (D239).
-                if (pinceau && shownStudy) {
-                  const vise = viserSurLePlan(
-                    {
-                      ...shownStudy.content,
-                      enveloppe: {
-                        ...shownStudy.content.enveloppe,
-                        liaisons: [],
-                        objets: (shownStudy.content.enveloppe.objets ?? []).filter((shape) => shape.category !== "menuiserie_exterieure"),
-                      },
-                    },
-                    shownStudy.content.locaux,
-                    point,
-                    { element: PRISE_ELEMENT_PAROIS_PX / pixelsPerPt, pont: 0 },
-                  );
-                  const element = vise ? trouverElement(shownStudy.content, vise.ref) : null;
-                  if (!element || element.type !== "paroi") {
-                    setPinceauMessage("Cliquez sur le trait d'une paroi.");
-                    return;
-                  }
-                  enregistrerGestes(
-                    [correctionDuPinceau(refDeElement(element), pinceau.composition)],
-                    "pinceau_composition",
-                    `Composition ${pinceau.composition.libelle} donnée à la paroi.`,
-                  );
-                  setPinceau({ ...pinceau, poses: pinceau.poses + 1 });
                   return;
                 }
                 // Modèle de menuiserie : chaque menuiserie cliquée le reçoit (D220).
@@ -1175,7 +1061,11 @@ export function WorkspacePage() {
                                   liaisons: [],
                                   // D227 : à l'étape des parois, seuls les murs s'attrapent ; à celle des
                                   // menuiseries, seules les menuiseries.
-                                  objets: (shownStudy.content.enveloppe.objets ?? []).filter(
+                                  // D242 : à l'étape des parois, on vise la ligne de métré du mur.
+                                  objets: (vue.famille === "parois"
+                                    ? formesEtapeParois(shownStudy.content)
+                                    : shownStudy.content.enveloppe.objets ?? []
+                                  ).filter(
                                     (shape) =>
                                       !vue.famille || (shape.category === "menuiserie_exterieure") === (vue.famille === "menuiseries"),
                                   ),
@@ -1405,7 +1295,10 @@ export function WorkspacePage() {
                           <StudyMetrics
                             rooms={shownStudy.content.locaux}
                             selected={selectedRoom}
-                            shapes={shownStudy.content.enveloppe.objets ?? []}
+                            shapes={
+                              // D242 : à l'étape des parois, un mur = sa ligne de métré, plus ses couches une à une.
+                              vue.famille === "parois" ? formesEtapeParois(shownStudy.content) : shownStudy.content.enveloppe.objets ?? []
+                            }
                             bridges={shownStudy.content.enveloppe.liaisons ?? []}
                             show={metricsAffiches}
                             toScreen={toScreen}
@@ -1595,7 +1488,6 @@ export function WorkspacePage() {
                       menuiseries={menuiseries.data}
                       sheetId={sheetId}
                       onMesurerBaie={vuesDuProjet.length ? () => ouvrirLaFenetre("menuiserie") : undefined}
-                      onCopierComposition={etape === "enveloppe" ? copierComposition : undefined}
                       onChoisirModele={(element, nom) =>
                         // D226 : un modèle de la bibliothèque, posé sur toute la baie (D224).
                         affecterModele(baieDeLElement(shownStudy.content, element), nom)

@@ -203,7 +203,11 @@ export function parcours(
   const locaux = content.locaux.length;
   const valides = study ? validatedRoomCount(study) : 0;
   const sansHauteur = locauxSansHauteur(content, hauteurs).length;
-  const parois = avancement(paroisDuNiveau(content).filter((element) => element.type !== "menuiserie"));
+  // D243 : chaque mur passe devant le thermicien, qui valide sa composition (régime exigeant, comme les ponts).
+  const parois = avancement(
+    paroisDuNiveau(content).filter((element) => element.type === "paroi"),
+    true,
+  );
   const menuiseries = avancementMenuiseries(content);
   // Les ponts se jugent un par un, sans exception : voir `avancement`.
   const ponts = avancement(pontsDuNiveau(content), true);
@@ -225,8 +229,8 @@ export function parcours(
       titre: "Parois",
       reste:
         parois.restants === 0
-          ? `${parois.total} relevées${parois.ecartes > 0 ? `, ${pluriel(parois.ecartes, "écartée")}` : ""}`
-          : `${pluriel(parois.restants, "paroi")} à vérifier`,
+          ? `${pluriel(parois.total - parois.ecartes, "mur")} validés${parois.ecartes > 0 ? `, ${pluriel(parois.ecartes, "supprimé")}` : ""}`
+          : `${pluriel(parois.restants, "mur")} à valider sur ${parois.total - parois.ecartes}`,
       etat: parois.restants === 0 ? "fait" : "en_cours",
       panneau: "fiche",
       calques: { metres: true, ponts: false, elements: true, toutesCotes: false },

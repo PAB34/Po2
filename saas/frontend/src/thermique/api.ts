@@ -122,6 +122,15 @@ export type StudyEnvelopeShape = {
   points_pdf?: PdfPoint[];
   source_parcours?: { troncon?: string; debut_m?: number; fin_m?: number; piece?: string | null; composant?: string | null };
 };
+/** La ligne de métré d'un mur (D242) : sa face intérieure, sa longueur et son épaisseur. */
+export type LigneMetre = {
+  points_pdf?: PdfPoint[];
+  source_parcours: { troncon: string; debut_m: number; fin_m: number; piece?: string | null; composant?: string | null };
+  composant: string;
+  epaisseur_cm: number;
+  epaisseur_fin_cm: number;
+  longueur_m: number;
+};
 /**
  * Un élément tel qu'il a été relevé sur l'enveloppe. C'est **la** donnée qui fait foi : les formes
  * dessinées en sont régénérées à chaque recalcul, donc toute correction s'écrit ici (D99).
@@ -360,6 +369,8 @@ export type StudyContent = {
     releve_brut: { elements: StudyReleveElement[]; catalogue: unknown[]; observations: string[] };
     /** Tracé reprojeté des éléments relevés, pour les dessiner sur le plan (D75). */
     objets?: StudyEnvelopeShape[];
+    /** Une ligne de métré par mur, sa face intérieure, qui porte sa composition (D242). */
+    lignes_metre?: LigneMetre[];
     /** Liaisons du relevé avec leur position sur la feuille : les ponts thermiques (D74). */
     liaisons?: StudyBridge[];
     raccords: unknown[];

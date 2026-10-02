@@ -805,6 +805,7 @@ def reprojeter(brut: dict[str, Any], manifeste: dict[str, Any], analyse: dict[st
                 round((y150 - ma["crop_box_px"][1]) * 1000 / ma["height_px"], 3)]
 
     objets: list[dict[str, Any]] = []
+    lignes_metre: list[dict[str, Any]] = []
     compteurs: dict[str, int] = {}
     parois: dict[str, dict[str, Any]] = {}
     menuiseries: dict[str, dict[str, Any]] = {}
@@ -854,6 +855,16 @@ def reprojeter(brut: dict[str, Any], manifeste: dict[str, Any], analyse: dict[st
                     element, f"{composant} · {role_couche(couches, rang)} {couche['epaisseur_cm']:g} cm".strip(" ·"))
                 if couche.get("presume"):
                     objets[-1]["review_required"] = True
+            # D242 : la ligne de métré du mur, sa face intérieure, qui porte sa composition. Elle est le mur à
+            # l'étape des parois ; les couches dessinées une à une n'y apparaissent plus.
+            lignes_metre.append({
+                "points": [feuille(_point(troncon, a, inte, px_par_m)), feuille(_point(troncon, b, inte_fin, px_par_m))],
+                "source_parcours": {k: element.get(k) for k in ("troncon", "debut_m", "fin_m", "type", "composant", "piece")},
+                "composant": composant,
+                "epaisseur_cm": round(ext - inte, 1),
+                "epaisseur_fin_cm": round(ext_fin - inte_fin, 1),
+                "longueur_m": round(longueur, 3),
+            })
             fiche = parois.setdefault(libelle, {"composition": element["couches"], "epaisseur_cm": round(ext - inte, 1),
                                                 "lineaire_m": 0.0, "troncons": set(), "pieces": set()})
             fiche["lineaire_m"] += longueur
@@ -892,7 +903,8 @@ def reprojeter(brut: dict[str, Any], manifeste: dict[str, Any], analyse: dict[st
         ],
         "liaisons": liaisons,
     }
-    return {"objets": objets, "bibliotheque": bibliotheque, "observations": brut.get("observations", [])}
+    return {"objets": objets, "lignes_metre": lignes_metre, "bibliotheque": bibliotheque,
+            "observations": brut.get("observations", [])}
 
 
 CATEGORIES_REMPLACEES = {"mur_exterieur", "isolation", "doublage", "menuiserie_exterieure"}

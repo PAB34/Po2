@@ -98,6 +98,10 @@ def test_reprojection_et_bibliotheque():
     # le doublage présumé est côté pièce, sous le nu intérieur dessiné (y > 200 px au nord)
     ys = [y * 1000 / 1000 for _, y in releve["objets"][3]["points"]]
     assert all(200 - 0.5 <= y <= 200 + 0.02 * PX_PAR_M for y in ys)
+    # D242 : une seule ligne de métré pour le mur, sur sa face intérieure (y = 200 px au nord), 2 m de long.
+    [ligne] = releve["lignes_metre"]
+    assert ligne["source_parcours"]["type"] == "paroi" and ligne["epaisseur_cm"] == 48 and ligne["longueur_m"] == 2
+    assert all(math.isclose(y, 200, abs_tol=0.5) for _, y in ligne["points"])
 
 
 def test_doublage_presume_seulement_sur_un_voile_nu_et_hors_elements_exclus():

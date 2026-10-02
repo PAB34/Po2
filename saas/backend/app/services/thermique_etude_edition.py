@@ -534,6 +534,8 @@ def reconstruire(contenu: dict[str, Any]) -> dict[str, Any]:
     resultat["enveloppe"]["demandes"] = demandes
     # Le tracé des éléments revient dans le fichier (D75) : sans lui, rien n'est dessinable sur le plan.
     resultat["enveloppe"]["objets"] = copy.deepcopy(releve.get("objets", []))
+    # D242 : une ligne de métré par mur, sa face intérieure, qui porte sa composition.
+    resultat["enveloppe"]["lignes_metre"] = copy.deepcopy(releve.get("lignes_metre", []))
     # Les ponts thermiques portent leur position, pour être montrés là où ils sont (D74). Le relevé
     # complet est passé ici, et non `brut` : une liaison écartée reste dessinée en grisé (D113).
     resultat["enveloppe"]["liaisons"] = calage.liaisons_localisees(
