@@ -57,6 +57,29 @@ contour du local d'un côté, le mur de l'autre.
 - Un mur partagé par deux locaux (cloison) doit garder **une** composition pour ses deux faces.
 - L'épaisseur du mur reste utile (dimensions extérieures, ponts) : elle vient de la composition.
 
+## Impact sur l'analyse des plans par l'IA et les algorithmes (question du 2026-10-02)
+
+| Étape de la chaîne actuelle | Avec l'option C |
+|---|---|
+| Inventaire des composants et des pièces (`thermicien-plan`) | **Inchangé, et plus central** : les contours des locaux deviennent la base de tout |
+| Recalage des pièces sur les murs (D26, algorithme) | **Inchangé**, et c'est lui qui donne la précision des côtés |
+| Nature des locaux (consigne courte) | Inchangé |
+| Parcours de la façade (`thermicien-enveloppe`) | **Gardé, mais il ne fournit plus la géométrie** : ses lectures (composition, menuiseries) deviennent des propositions rattachées aux côtés (rattachement à 90 cm déjà en place). Ses mesures fausses (10 % des nus à plus de 11 à 21 cm) ne déforment plus le métré : l'IA n'a plus qu'à reconnaître, ce qu'elle fait bien |
+| Découpage pièce par pièce, réunion des morceaux à 6 cm, lignes de métré, raccord des angles | **Deviennent inutiles** : un côté appartient déjà à son local, et le contour est déjà la face intérieure. Des étapes et leurs erreurs en moins |
+| Guide de façade (claustra suivi, dents de scie coupées) | Ses erreurs ne touchent plus que des propositions, plus le métré |
+| Contrôle par l'image | Inchangé |
+| Études existantes (R+1) | **Rien n'est perdu** : les côtés se calculent déjà depuis les contours, et les compositions corrigées passent aux côtés par le rattachement existant |
+| Essai cloud du R+2 | Son résultat reste lisible (même format) |
+| Report entre niveaux (D233–D237) | Plus simple : on reporte des contours et leurs compositions |
+
+À terme, l'agent de façade pourrait même faire **le tour de chaque local** au lieu de longer un guide calculé.
+C'était l'essai « local par local » du 2026-09-22, écarté alors parce que la géométrie venait de la façade. Avec la
+détection par l'exemple pour les menuiseries et une composition par type de mur (5 à 10 types par projet), une
+grande partie du parcours de façade par l'IA pourrait être remplacée par vos clics, à mesurer avant de décider.
+
+**Point de vigilance** : la qualité des contours devient critique. Un mauvais inventaire des pièces (R+2 en Opus 4.7 :
+8 pièces) dégrade tout, mais c'est déjà le cas aujourd'hui.
+
 ## Décisions proposées
 
 - **D255** — Option C : la géométrie de référence est le contour des locaux ; un mur = une composition affectée à
