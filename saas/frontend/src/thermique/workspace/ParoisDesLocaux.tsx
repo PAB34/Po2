@@ -54,6 +54,16 @@ export function ParoisDesLocaux({
           </g>
         );
       })}
+      {/* D264 : les coupures posées, clic droit dessus pour les retirer. */}
+      {(content.coupures_parois ?? []).map((coupure, rang) => {
+        if (!coupure.point_pdf) return null;
+        const [x, y] = toScreen(coupure.point_pdf);
+        return (
+          <circle key={`coupure-${rang}`} className="th-coupure-paroi" cx={x} cy={y} r={5}>
+            <title>Coupure de paroi : clic droit pour la retirer</title>
+          </circle>
+        );
+      })}
     </g>
   );
 }

@@ -3563,6 +3563,11 @@ circle.th-seg--measure {
   stroke: #2563eb;
   stroke-opacity: 0.6;
 }
+.th-coupure-paroi {
+  fill: #fff;
+  stroke: #1f2937;
+  stroke-width: 2px;
+}
 .th-paroi-local__halo {
   stroke: #0ea5e9;
   stroke-opacity: 0.35;

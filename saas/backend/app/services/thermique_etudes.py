@@ -350,6 +350,11 @@ def convertir_contours(contenu: dict[str, Any], transform: list[Any], width: flo
             [_inverser_transform(transform, x * width / 1000, y * height / 1000) for x, y in zone]
             for zone in couverture.get("zones_non_affectees", [])
         ]
+    # D264 : les coupures de parois se dessinent sur le plan, donc en points PDF.
+    for coupure in contenu.get("coupures_parois", []):
+        point = coupure.get("point")
+        if isinstance(point, list) and len(point) == 2:
+            coupure["point_pdf"] = _inverser_transform(transform, float(point[0]) * width / 1000, float(point[1]) * height / 1000)
     enveloppe_etude = contenu.get("enveloppe")
     if isinstance(enveloppe_etude, dict):
         # Tracé des éléments (D75) et position des liaisons (D74) : dessinés sur le plan, donc en points PDF.

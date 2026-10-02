@@ -30,18 +30,37 @@ def _segment_m(trace: list[list[float]], manifeste: dict[str, Any]) -> tuple[tup
     return (x0 * mx, y0 * my), (x1 * mx, y1 * my)
 
 
-def correspond(trace_a: list[list[float]], trace_b: list[list[float]], manifeste: dict[str, Any]) -> bool:
-    """Deux tracés de paroi désignent-ils la même paroi : milieux proches et directions parallèles ?"""
-    (a0, a1), (b0, b1) = _segment_m(trace_a, manifeste), _segment_m(trace_b, manifeste)
-    milieu_a = ((a0[0] + a1[0]) / 2, (a0[1] + a1[1]) / 2)
-    milieu_b = ((b0[0] + b1[0]) / 2, (b0[1] + b1[1]) / 2)
-    if math.dist(milieu_a, milieu_b) > CORRESPONDANCE_M:
-        return False
+def _parallele(a0: tuple[float, float], a1: tuple[float, float], b0: tuple[float, float], b1: tuple[float, float]) -> bool:
     ua, ub = (a1[0] - a0[0], a1[1] - a0[1]), (b1[0] - b0[0], b1[1] - b0[1])
     na, nb = math.hypot(*ua), math.hypot(*ub)
     if na == 0 or nb == 0:
         return False
     return abs(ua[0] * ub[0] + ua[1] * ub[1]) / (na * nb) >= PARALLELE_COS
+
+
+def _distance_au_segment(p: tuple[float, float], a: tuple[float, float], b: tuple[float, float]) -> float:
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    longueur2 = dx * dx + dy * dy
+    t = 0.0 if longueur2 == 0 else max(0.0, min(1.0, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / longueur2))
+    return math.dist(p, (a[0] + t * dx, a[1] + t * dy))
+
+
+def correspond(trace_a: list[list[float]], trace_b: list[list[float]], manifeste: dict[str, Any]) -> bool:
+    """Deux tracés de paroi désignent-ils la même paroi : milieux proches et directions parallèles ?"""
+    (a0, a1), (b0, b1) = _segment_m(trace_a, manifeste), _segment_m(trace_b, manifeste)
+    milieu_a = ((a0[0] + a1[0]) / 2, (a0[1] + a1[1]) / 2)
+    milieu_b = ((b0[0] + b1[0]) / 2, (b0[1] + b1[1]) / 2)
+    return math.dist(milieu_a, milieu_b) <= CORRESPONDANCE_M and _parallele(a0, a1, b0, b1)
+
+
+def couverture(trace_composition: list[list[float]], trace_paroi: list[list[float]], manifeste: dict[str, Any]) -> float | None:
+    """D265 : la composition couvre-t-elle cette paroi ? Oui si le milieu de la paroi est à moins de 30 cm de son
+    tracé, parallèle. Rend l'écart entre les deux milieux (la plus proche l'emporte), sinon None."""
+    (c0, c1), (p0, p1) = _segment_m(trace_composition, manifeste), _segment_m(trace_paroi, manifeste)
+    milieu = ((p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2)
+    if _distance_au_segment(milieu, c0, c1) > CORRESPONDANCE_M or not _parallele(c0, c1, p0, p1):
+        return None
+    return math.dist(milieu, ((c0[0] + c1[0]) / 2, (c0[1] + c1[1]) / 2))
 
 
 def _trace(valeur: Any) -> list[list[float]]:
@@ -88,7 +107,61 @@ def affecter(locaux: list[dict[str, Any]], compositions: list[dict[str, Any]], m
     for local in locaux:
         candidates = par_local.get(local.get("id"), [])
         for paroi in (local.get("fiche") or {}).get("parois", []):
-            trouvee = next((c for c in candidates if correspond(c["trace"], paroi["trace"], manifeste)), None)
+            couvrantes = [(ecart, rang) for rang, c in enumerate(candidates)
+                          if (ecart := couverture(c["trace"], paroi["trace"], manifeste)) is not None]
+            trouvee = candidates[min(couvrantes)[1]] if couvrantes else None
             paroi["composition"] = (
                 {k: trouvee[k] for k in ("id", "composant", "couches", "epaisseur_cm")} if trouvee else None
             )
+
+
+# ---------------------------------------------------------------------------------------------------------
+# D264 : couper une paroi par des points, quand sa composition change en cours de côté.
+
+COUPURE_DOUBLON_M = 0.10
+
+
+def _local_existe(contenu: dict[str, Any], local: str) -> None:
+    if not any(o.get("id") == local and o.get("category") == "piece" for o in contenu["analyse"].get("objects", [])):
+        raise ThermiqueError("Le local de cette paroi est introuvable.")
+
+
+def _point(valeur: Any) -> list[float]:
+    if not isinstance(valeur, (list, tuple)) or len(valeur) != 2:
+        raise ThermiqueError("Le point de coupure est invalide.")
+    x, y = float(valeur[0]), float(valeur[1])
+    if not 0 <= x <= 1000 or not 0 <= y <= 1000:
+        raise ThermiqueError("Le point de coupure sort de la feuille.")
+    return [round(x, 3), round(y, 3)]
+
+
+def _ecart_m(a: list[float], b: list[float], manifeste: dict[str, Any]) -> float:
+    mx, my = _metres(manifeste)
+    return math.hypot((a[0] - b[0]) * mx, (a[1] - b[1]) * my)
+
+
+def couper(contenu: dict[str, Any], operation: dict[str, Any]) -> dict[str, Any]:
+    """Pose une coupure sur une paroi d'un local (D264) ; la paroi se coupe au recalcul."""
+    local = str(operation.get("local") or "")
+    _local_existe(contenu, local)
+    point = _point(operation.get("point"))
+    manifeste = contenu["enveloppe"]["manifeste"]
+    coupures = contenu.setdefault("coupures_parois", [])
+    existante = next((c for c in coupures if c["local"] == local and _ecart_m(c["point"], point, manifeste) <= COUPURE_DOUBLON_M), None)
+    if existante:
+        return existante
+    coupure = {"id": uuid.uuid4().hex[:12], "local": local, "point": point}
+    coupures.append(coupure)
+    return coupure
+
+
+def recoller(contenu: dict[str, Any], operation: dict[str, Any]) -> None:
+    """Retire la coupure la plus proche du point, à moins de 30 cm (D264)."""
+    local = str(operation.get("local") or "")
+    point = _point(operation.get("point"))
+    manifeste = contenu["enveloppe"]["manifeste"]
+    coupures = contenu.get("coupures_parois", [])
+    proches = sorted((_ecart_m(c["point"], point, manifeste), rang) for rang, c in enumerate(coupures) if c["local"] == local)
+    if not proches or proches[0][0] > CORRESPONDANCE_M:
+        raise ThermiqueError("Aucune coupure de paroi à cet endroit.")
+    del coupures[proches[0][1]]

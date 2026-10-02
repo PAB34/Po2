@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { StudyContent, StudyParoiLocal, StudyRoom } from "../api";
 import { appliquerEnLocal } from "./elementsLocal";
 import { FicheParoi, ParoisDesLocaux } from "./ParoisDesLocaux";
-import { avancementParois, gesteComposition, paroiVisee, paroisSemblables, trouverParoi } from "./paroisLocaux";
+import { avancementParois, coupureProche, gesteComposition, paroiVisee, paroisSemblables, trouverParoi } from "./paroisLocaux";
 
 const P1 = { composant: "P1", couches: [{ nature: "mur", epaisseur_cm: 20 }, { nature: "isolant", epaisseur_cm: 12 }], epaisseur_cm: 32 };
 
@@ -90,5 +90,32 @@ describe("une paroi vitrée se traite aux menuiseries", () => {
     );
     expect(plan).toContain("is-vitree");
     expect(plan).toContain("is-vide");
+  });
+});
+
+describe("couper une paroi par des points (D264 à D266)", () => {
+  const compose = paroi(0, { trace: [[0, 0], [400, 0]], trace_pdf: [[0, 0], [40, 0]], longueur_m: 40, composition: { id: "c1", ...P1 } });
+  const content = etude([local("L1", "Hall", [compose, paroi(1, { trace: [[400, 0], [400, 300]], trace_pdf: [[40, 0], [40, 30]] })])]);
+
+  it("la paroi se coupe aussitôt en deux morceaux de même composition, renumérotés", () => {
+    const apres = appliquerEnLocal(content, { type: "cote_couper", local: "L1", point_pdf: [10, 0.4] });
+    const parois = apres.locaux[0].fiche.parois!;
+    expect(parois.map((p) => [p.rang, p.longueur_m])).toEqual([[0, 10], [1, 30], [2, 4]]);
+    expect(parois[0].trace).toEqual([[0, 0], [100, 0]]);
+    expect(parois[1].composition?.id).toBe("c1");
+    expect(apres.coupures_parois).toHaveLength(1);
+    expect(coupureProche(apres, [10.5, 0], 1)).toEqual({ local: "L1", point_pdf: [10, 0.4] });
+    const plan = renderToStaticMarkup(
+      <svg>
+        <ParoisDesLocaux content={apres} choisie={null} toScreen={(p) => [p[0] * 4, p[1] * 4]} />
+      </svg>,
+    );
+    expect(plan).toContain("th-coupure-paroi");
+  });
+
+  it("retirer la coupure l'enlève tout de suite ; la paroi se réunit au recalcul", () => {
+    const coupe = appliquerEnLocal(content, { type: "cote_couper", local: "L1", point_pdf: [10, 0] });
+    const recolle = appliquerEnLocal(coupe, { type: "cote_recoller", local: "L1", point_pdf: [10.2, 0] });
+    expect(recolle.coupures_parois).toEqual([]);
   });
 });

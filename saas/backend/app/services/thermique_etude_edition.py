@@ -52,6 +52,9 @@ OPERATIONS = (
     "paroi_couper",
     # Option C (D255, D261) : la composition validee d'une paroi d'un local.
     "paroi_composer",
+    # D264 : une paroi de local coupée par un point (composition qui change en cours de côté), ou recollée.
+    "cote_couper",
+    "cote_recoller",
 )
 OPERATIONS_ELEMENT = tuple(nom for nom in OPERATIONS if nom.startswith("element_"))
 # Un contour édité est simplifié sous cette tolérance, en unités du repère 0..1000 (~5 cm).
@@ -269,6 +272,10 @@ def appliquer(contenu: dict[str, Any], operations: list[dict[str, Any]]) -> dict
             couper_paroi(resultat, operation)
         elif operation["type"] == "paroi_composer":
             parois_locaux.composer(resultat, operation)
+        elif operation["type"] == "cote_couper":
+            parois_locaux.couper(resultat, operation)
+        elif operation["type"] == "cote_recoller":
+            parois_locaux.recoller(resultat, operation)
         elif operation["type"] == "modifier":
             _modifier(resultat["analyse"], operation)
         elif operation["type"] == "couper":
@@ -644,7 +651,13 @@ def reconstruire(contenu: dict[str, Any]) -> dict[str, Any]:
         for fiche in pieces.synthese_pieces(coupe, manifeste)
     ]
     # Le nord vient de la planche, posé par le thermicien (D85). Absent, les orientations restent « à caler ».
-    fiches = fiches_locaux.fiches(analyse, manifeste, coupe, syntheses, resultat.get("nord_deg"))
+    # D264 : les coupures de parois posées par le thermicien, par nom de local (les fiches se font par nom).
+    noms_par_id = {str(objet.get("id") or ""): nom for objet, nom in _noms_locaux(analyse)}
+    coupures: dict[str, list[list[float]]] = {}
+    for coupure in resultat.get("coupures_parois", []):
+        if coupure.get("local") in noms_par_id:
+            coupures.setdefault(noms_par_id[coupure["local"]], []).append(coupure["point"])
+    fiches = fiches_locaux.fiches(analyse, manifeste, coupe, syntheses, resultat.get("nord_deg"), coupures)
     demandes = pieces.demandes_etude(syntheses)
     limites = geo.limites_des_locaux(analyse, manifeste)
 

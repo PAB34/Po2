@@ -154,3 +154,41 @@ def test_une_paroi_devant_une_menuiserie_sans_mur_est_vitree():
     nord = _paroi_nord(edition.reconstruire(contenu))
     assert nord["vitree"] is True and nord["proposition"] is None
     assert _paroi_nord(edition.reconstruire(_etude()))["vitree"] is False
+
+
+def _parois_nord(contenu: dict) -> list[dict]:
+    bureau = next(local for local in contenu["locaux"] if local["nom"] == "Bureau")
+    return sorted((p for p in bureau["fiche"]["parois"] if abs(p["trace"][0][1] - 5) < 1 and abs(p["trace"][1][1] - 5) < 1),
+                  key=lambda p: min(p["trace"][0][0], p["trace"][1][0]))
+
+
+def test_couper_une_paroi_composee_garde_la_composition_sur_ses_deux_morceaux():
+    """D264, D265 : la coupure fait deux parois ; la composition de la paroi entière les couvre toutes les deux,
+    puis valider un morceau ne change que lui ; retirer la coupure redonne une seule paroi."""
+    nord = _paroi_nord(edition.reconstruire(_etude()))
+    compose = edition.appliquer(_etude(), [{"type": "paroi_composer", "local": "piece-001", "trace": nord["trace"],
+                                            "composant": "P1", "couches": [{"nature": "mur", "epaisseur_cm": 20}]}])
+    coupe = edition.appliquer(compose, [{"type": "cote_couper", "local": "piece-001", "point": [250.0, 5.3]}])
+    morceaux = _parois_nord(coupe)
+    assert [m["longueur_m"] for m in morceaux] == [pytest.approx(25.0, abs=0.01)] * 2
+    assert all(m["composition"]["epaisseur_cm"] == 20 for m in morceaux)
+
+    vitrage = edition.appliquer(coupe, [{"type": "paroi_composer", "local": "piece-001", "trace": morceaux[1]["trace"],
+                                         "composant": "M-rideau", "couches": [{"nature": "autre", "epaisseur_cm": 6}]}])
+    gauche, droite = _parois_nord(vitrage)
+    assert (gauche["composition"]["epaisseur_cm"], droite["composition"]["epaisseur_cm"]) == (20, 6)
+
+    recolle = edition.appliquer(coupe, [{"type": "cote_recoller", "local": "piece-001", "point": [251.0, 5.0]}])
+    assert len(_parois_nord(recolle)) == 1
+    with pytest.raises(ThermiqueError, match="Aucune coupure"):
+        edition.appliquer(recolle, [{"type": "cote_recoller", "local": "piece-001", "point": [251.0, 5.0]}])
+
+
+def test_la_coupure_passe_le_schema_et_un_point_loin_de_la_paroi_ne_coupe_rien():
+    from app.schemas.thermique import EtudeEnregistrement
+
+    corps = {"operations": [{"type": "cote_couper", "local": "piece-001", "point_pdf": [10.0, 20.0]}], "motif": "elements", "valider": False}
+    geste = EtudeEnregistrement.model_validate(corps).operations[0].model_dump(exclude_none=True)
+    assert geste["point_pdf"] == [10.0, 20.0] and geste["local"] == "piece-001"
+    loin = edition.appliquer(_etude(), [{"type": "cote_couper", "local": "piece-001", "point": [250.0, 60.0]}])
+    assert len(_parois_nord(loin)) == 1

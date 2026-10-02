@@ -125,7 +125,8 @@ def _sonder(point: tuple[float, float], normale: tuple[float, float], px_par_m: 
 
 
 def fiches(analyse: dict[str, Any], manifeste: dict[str, Any], brut: dict[str, Any] | None = None,
-           synthese: list[dict[str, Any]] | None = None, nord_deg: float | None = None) -> list[dict[str, Any]]:
+           synthese: list[dict[str, Any]] | None = None, nord_deg: float | None = None,
+           coupures: dict[str, list[list[float]]] | None = None) -> list[dict[str, Any]]:
     """Une fiche par local : côtés (adjacence, épaisseur, orientation, déperditif), enveloppe rattachée."""
     largeur, hauteur = manifeste["page_px"]
     px_par_m = manifeste["px_par_m"]
@@ -234,18 +235,46 @@ def fiches(analyse: dict[str, Any], manifeste: dict[str, Any], brut: dict[str, A
             "liaison_plancher_m": synthese_local.get("liaison_plancher_m", 0.0),
             "a_completer": ["plancher bas", "plancher haut", "hauteur sous plafond (coupes)"],
             "alertes": alertes,
-            "parois": _parois(sondages, enveloppe_par_local.get(nom, []), nature, largeur, hauteur, px_par_m, nord_deg),
+            "parois": _parois(sondages, enveloppe_par_local.get(nom, []), nature, largeur, hauteur, px_par_m, nord_deg,
+                              (coupures or {}).get(nom)),
         })
     return resultat
 
 
+COUPURE_M = 0.30
+
+
+def _decouper(p0: tuple[float, float], p1: tuple[float, float], coupures: list[tuple[float, float]],
+              px_par_m: float) -> list[tuple[tuple[float, float], tuple[float, float]]]:
+    """D264 : la portion p0-p1 coupée aux points posés par le thermicien (à moins de 30 cm de la portion)."""
+    dx, dy = p1[0] - p0[0], p1[1] - p0[1]
+    longueur2 = dx * dx + dy * dy
+    if longueur2 == 0:
+        return [(p0, p1)]
+    pas_min = COTE_MIN_M * px_par_m / math.sqrt(longueur2)
+    parts = []
+    for cx, cy in coupures:
+        t = ((cx - p0[0]) * dx + (cy - p0[1]) * dy) / longueur2
+        pied = (p0[0] + t * dx, p0[1] + t * dy)
+        if pas_min <= t <= 1 - pas_min and math.dist(pied, (cx, cy)) <= COUPURE_M * px_par_m:
+            parts.append(t)
+    bornes = [0.0] + sorted(set(round(t, 6) for t in parts)) + [1.0]
+    morceaux = []
+    for t0, t1 in zip(bornes, bornes[1:]):
+        if t1 - t0 >= pas_min / 2:
+            morceaux.append(((p0[0] + t0 * dx, p0[1] + t0 * dy), (p0[0] + t1 * dx, p0[1] + t1 * dy)))
+    return morceaux or [(p0, p1)]
+
+
 def _parois(sondages: list[dict[str, Any]], releve: list[dict[str, Any]], nature: str, largeur: float, hauteur: float,
-            px_par_m: float, nord_deg: float | None) -> list[dict[str, Any]]:
-    """Les parois d'un local (D260) : une par arête du contour et par nature de ce qu'il y a derrière.
+            px_par_m: float, nord_deg: float | None, coupures: list[list[float]] | None = None) -> list[dict[str, Any]]:
+    """Les parois d'un local (D260) : une par arête du contour et par nature de ce qu'il y a derrière, coupées aux
+    points posés par le thermicien (D264).
 
     Le tracé est la portion droite de l'arête (face intérieure, dimensions intérieures). La proposition vient du
     mur relevé par l'IA le plus proche (moins de 90 cm) : sa composition, à valider par le thermicien.
     """
+    points_coupure = [(x * largeur / 1000, y * hauteur / 1000) for x, y in (coupures or [])]
     groupes: list[list[dict[str, Any]]] = []
     for s in sondages:
         dernier = groupes[-1][-1] if groupes else None
@@ -258,40 +287,50 @@ def _parois(sondages: list[dict[str, Any]], releve: list[dict[str, Any]], nature
     for groupe in groupes:
         premier, dernier = groupe[0], groupe[-1]
         a, b = premier["a"], premier["b"]
-        p0 = (a[0] + (b[0] - a[0]) * premier["t0"], a[1] + (b[1] - a[1]) * premier["t0"])
-        p1 = (a[0] + (b[0] - a[0]) * dernier["t1"], a[1] + (b[1] - a[1]) * dernier["t1"])
-        longueur = math.dist(p0, p1) / px_par_m
-        if longueur < COTE_MIN_M:
-            continue
-        milieu = Point((p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2)
-        proches = sorted((m["_face"].distance(milieu), rang) for rang, m in enumerate(murs))
-        proposition = None
-        # Sans mur relevé à moins de 90 cm mais devant une menuiserie : la paroi est vitrée, elle se traite à
-        # l'étape Menuiseries (R+1 : 33 parois, 75 m de murs-rideaux et baies).
-        vitres = sorted(e["_face"].distance(milieu) for e in releve if e.get("type") == "menuiserie")
-        vitree = (not proches or proches[0][0] > RATTACHEMENT_M * px_par_m) and bool(vitres) and vitres[0] <= RATTACHEMENT_M * px_par_m
-        if proches and proches[0][0] <= RATTACHEMENT_M * px_par_m:
-            mur = murs[proches[0][1]]
-            proposition = {
-                "composant": mur.get("composant") or None,
-                "couches": [{"nature": c.get("nature"), "epaisseur_cm": c.get("epaisseur_cm")} for c in (mur.get("couches") or [])
-                            if c.get("nature") and c.get("epaisseur_cm")],
-                "epaisseur_cm": round(float(mur["nu_exterieur_cm"]) - float(mur["nu_interieur_cm"]), 1),
-            }
-        epaisseurs = sorted(s["epaisseur"] for s in groupe)
-        parois.append({
-            "rang": len(parois),
-            "adjacence": premier["adjacence"],
-            "voisin": premier["voisin"],
-            "deperditif": premier["adjacence"] in DEPERDITIFS and nature not in LOCAUX_HORS_VOLUME,
-            "longueur_m": round(longueur, 2),
-            "epaisseur_cm": round(epaisseurs[len(epaisseurs) // 2]),
-            "orientation": orientation(groupe[len(groupe) // 2]["normale"], nord_deg),
-            "trace": [[round(x * 1000 / largeur, 3), round(y * 1000 / hauteur, 3)] for x, y in (p0, p1)],
-            "proposition": proposition,
-            "vitree": vitree,
-        })
+        debut = (a[0] + (b[0] - a[0]) * premier["t0"], a[1] + (b[1] - a[1]) * premier["t0"])
+        fin = (a[0] + (b[0] - a[0]) * dernier["t1"], a[1] + (b[1] - a[1]) * dernier["t1"])
+        for p0, p1 in _decouper(debut, fin, points_coupure, px_par_m):
+            paroi = _paroi(p0, p1, groupe, murs, releve, nature, largeur, hauteur, px_par_m, nord_deg)
+            if paroi:
+                parois.append({**paroi, "rang": len(parois)})
     return parois
+
+
+def _paroi(p0: tuple[float, float], p1: tuple[float, float], groupe: list[dict[str, Any]], murs: list[dict[str, Any]],
+           releve: list[dict[str, Any]], nature: str, largeur: float, hauteur: float, px_par_m: float,
+           nord_deg: float | None) -> dict[str, Any] | None:
+    """Une paroi : son tracé, ce qu'il y a derrière, et la proposition du relevé le plus proche de son milieu."""
+    premier = groupe[0]
+    longueur = math.dist(p0, p1) / px_par_m
+    if longueur < COTE_MIN_M:
+        return None
+    milieu = Point((p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2)
+    proches = sorted((m["_face"].distance(milieu), rang) for rang, m in enumerate(murs))
+    proposition = None
+    # Sans mur relevé à moins de 90 cm mais devant une menuiserie : la paroi est vitrée, elle se traite à
+    # l'étape Menuiseries (R+1 : 33 parois, 75 m de murs-rideaux et baies).
+    vitres = sorted(e["_face"].distance(milieu) for e in releve if e.get("type") == "menuiserie")
+    vitree = (not proches or proches[0][0] > RATTACHEMENT_M * px_par_m) and bool(vitres) and vitres[0] <= RATTACHEMENT_M * px_par_m
+    if proches and proches[0][0] <= RATTACHEMENT_M * px_par_m:
+        mur = murs[proches[0][1]]
+        proposition = {
+            "composant": mur.get("composant") or None,
+            "couches": [{"nature": c.get("nature"), "epaisseur_cm": c.get("epaisseur_cm")} for c in (mur.get("couches") or [])
+                        if c.get("nature") and c.get("epaisseur_cm")],
+            "epaisseur_cm": round(float(mur["nu_exterieur_cm"]) - float(mur["nu_interieur_cm"]), 1),
+        }
+    epaisseurs = sorted(s["epaisseur"] for s in groupe)
+    return {
+        "adjacence": premier["adjacence"],
+        "voisin": premier["voisin"],
+        "deperditif": premier["adjacence"] in DEPERDITIFS and nature not in LOCAUX_HORS_VOLUME,
+        "longueur_m": round(longueur, 2),
+        "epaisseur_cm": round(epaisseurs[len(epaisseurs) // 2]),
+        "orientation": orientation(groupe[len(groupe) // 2]["normale"], nord_deg),
+        "trace": [[round(x * 1000 / largeur, 3), round(y * 1000 / hauteur, 3)] for x, y in (p0, p1)],
+        "proposition": proposition,
+        "vitree": vitree,
+    }
 
 
 def _regrouper(sondages: list[dict[str, Any]]) -> list[dict[str, Any]]:

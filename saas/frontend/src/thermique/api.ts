@@ -385,6 +385,8 @@ export type StudyRoom = {
   demandes: { piece: string; objet: string; motif: string }[];
 };
 export type StudyContent = {
+  /** D264 : coupures de parois posées par le thermicien. */
+  coupures_parois?: CoupureParoi[];
   format: "thermique.etude_niveau";
   format_version: number;
   niveau: string;
@@ -499,7 +501,12 @@ export type StudyOperation =
   /** Un point ajouté sur la ligne d'un mur : deux morceaux qui partagent ce sommet (D247). */
   | { type: "paroi_couper"; element: StudyElementRef; abscisse_m: number }
   /** La composition validée d'une paroi d'un local (option C, D261). */
-  | { type: "paroi_composer"; local: string; trace: [number, number][]; composant: string | null; couches: StudyCouche[] };
+  | { type: "paroi_composer"; local: string; trace: [number, number][]; composant: string | null; couches: StudyCouche[] }
+  /** D264 : une paroi de local coupée à ce point (composition qui change en cours de côté), ou recollée. */
+  | { type: "cote_couper"; local: string; point_pdf: PdfPoint }
+  | { type: "cote_recoller"; local: string; point_pdf: PdfPoint };
+/** Une coupure de paroi posée par le thermicien (D264). */
+export type CoupureParoi = { id: string; local: string; point: [number, number]; point_pdf?: PdfPoint };
 
 /** La composition d'une paroi de référence, copiée au pinceau (D239). */
 export type CompositionCopiee = {

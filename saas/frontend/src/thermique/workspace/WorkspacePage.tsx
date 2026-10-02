@@ -55,7 +55,7 @@ import {
 } from "./murs";
 import { PoigneesDuMur, TraceDuMur } from "./PoigneesDuMur";
 import { FicheParoi, ListeParoisDuLocal, ParoisDesLocaux } from "./ParoisDesLocaux";
-import { gesteComposition, paroiVisee, trouverParoi, type ParoiRef } from "./paroisLocaux";
+import { coupureProche, gesteComposition, paroiVisee, trouverParoi, type ParoiRef } from "./paroisLocaux";
 import { cibleEditable } from "./elementsHistory";
 import { peutAnnulerEditionAvecEchap } from "./edition";
 import { hauteursQueryKey, NATURE_LABELS, otherLocalNatures, roomAt, sortedStudyRooms, studyQueryKey } from "./study";
@@ -1278,6 +1278,40 @@ export function WorkspacePage() {
                             elementsState.ajouterPont(point, type);
                           },
                         }));
+                      }
+                      // D264 : à l'étape Parois, le clic droit coupe une paroi de local, ou retire une coupure.
+                      if (etape === "enveloppe" && shownStudy) {
+                        const occupe = elementsState.busy ? "Un enregistrement est en cours." : undefined;
+                        const coupure = coupureProche(shownStudy.content, point, PRISE_POIGNEE_PX / pixelsPerPt);
+                        if (coupure) {
+                          return [
+                            {
+                              cle: "recoller-paroi",
+                              label: "Retirer cette coupure",
+                              disabled: Boolean(occupe),
+                              title: occupe,
+                              faire: () => {
+                                setParoiChoisie(null);
+                                elementsState.gesteImmediat([{ type: "cote_recoller", local: coupure.local, point_pdf: coupure.point_pdf }]);
+                              },
+                            },
+                          ];
+                        }
+                        const visee = paroiVisee(shownStudy.content, point, PRISE_ELEMENT_PAROIS_PX / pixelsPerPt);
+                        if (visee) {
+                          return [
+                            {
+                              cle: "couper-paroi",
+                              label: "Couper la paroi ici",
+                              disabled: Boolean(occupe),
+                              title: occupe,
+                              faire: () => {
+                                setParoiChoisie(null);
+                                elementsState.gesteImmediat([{ type: "cote_couper", local: visee.local, point_pdf: point }]);
+                              },
+                            },
+                          ];
+                        }
                       }
                       // D250, D247 : à l'étape des parois, le clic droit crée un mur ou ajoute un point sur un mur.
                       const actionsMurs: PlanAction[] = [];

@@ -130,6 +130,22 @@ elles : **75 opaques avec une composition proposée** (P1 ×53, P-L5-1 ×13, P4 
 posées sur les parois (surfaces déduites) ; surfaces et premier tableau des déperditions ; contour précis
 (aimant entre locaux voisins, cloison commune).
 
+## Lot C-2 — couper une paroi par des points (2026-10-02)
+
+- **D264 — Coupure.** À l'étape Parois, clic droit sur une paroi, puis « Couper la paroi ici ». La coupure est rangée à part
+  (`coupures_parois` : local et point de la feuille). À chaque recalcul, la paroi qui passe à moins de 30 cm du
+  point est coupée en deux. Chaque morceau a sa propre proposition (relevé le plus proche de **son** milieu) et peut être
+  marqué vitré. Clic droit près d'une coupure, puis « Retirer cette coupure ».
+- **D265 — Composition héritée.** Une composition validée vaut pour toute paroi du même local dont le milieu est
+  à moins de 30 cm de **son tracé** (et non plus seulement de son milieu), parallèle ; la plus proche l'emporte.
+  Couper une paroi composée laisse donc ses deux morceaux composés ; valider l'un des deux ne change que lui.
+- **D266 — Tout de suite à l'écran.** La paroi se coupe aussitôt dans l'écran (même composition, même état) ;
+  le serveur recalcule ensuite les propositions de chaque morceau.
+
+**Fait le 2026-10-02.** Gestes serveur `cote_couper` et `cote_recoller` (point en PDF converti par le serveur) ;
+coupures dessinées en ronds blancs. Essai sur une copie du R+1 : paroi de 8,92 m du Pôle multimédia coupée en son
+milieu → deux parois de 4,46 m, chacune avec sa propre proposition.
+
 ## Questions
 
 1. **Option** : C vous convient-elle, ou préférez-vous A ou B ?
