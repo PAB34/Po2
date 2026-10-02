@@ -71,6 +71,31 @@ consignes figées, mauvais modèle par l'alias `opus`.
 
 La file + relais reste en secours (avec le modèle corrigé) ; l'Agent SDK est écarté (clé d'API).
 
+## Ce que change le dépôt par les clients (précision du thermicien, 2026-10-02)
+
+« À terme, je demanderai aux clients de déposer toutes les pièces, écrites et graphiques, directement sur la
+plateforme. »
+
+1. **Le site devient la maison de chaque étude** : pièces du client, conventions, livrables, validations. Le poste
+   n'est plus qu'un endroit où Claude travaille. Le « dossier d'étude local » de D276 devient un **dossier d'étude
+   sur la plateforme**, dont le poste peut garder une copie de travail.
+2. **Le serveur MCP publié (solution 1) devient la bonne cible**, et non une option : les pièces sont sur le
+   serveur, Claude doit les lire là où elles sont, depuis le poste comme depuis le navigateur. Le serveur local
+   (solution 2) ne reste qu'une étape de mise au point.
+3. **L'étape 1 du guide (cadrage et inventaire) se fait sur ce que le client a déposé** : la plateforme peut tenir
+   la liste des pièces attendues (plans de tous les niveaux, coupes, façades, plan masse, CCTP, carnet de
+   menuiseries…), cocher ce qui est arrivé et réclamer au client ce qui manque.
+4. **Pièces écrites** : CCTP, notices et carnets de menuiseries (PDF, tableurs) rejoignent les plans. L'outil
+   `planches` devient `pieces` (graphiques et écrites), et l'outil `plan_image` se double d'une lecture des pièces
+   écrites.
+5. **Ce qu'il faudra côté site** : un espace de dépôt pour chaque client (comptes externes : voir l'ADR 013),
+   les droits (le client dépose et consulte, le thermicien travaille), et l'information du client sur le
+   traitement de ses pièces par une IA.
+6. **Confidentialité, à regarder de près avant d'ouvrir aux clients** : les pièces lues par Claude passent par
+   Anthropic. Avec un abonnement claude.ai, vérifier le réglage d'utilisation des conversations pour
+   l'entraînement, et le mentionner dans vos conditions. Une offre ouverte à d'autres bureaux d'études passera
+   probablement par l'API, sous les conditions commerciales d'Anthropic (voir l'Agent SDK, solution 12).
+
 ## Questions
 
 1. **Serveur MCP de la plateforme** comme colonne vertébrale : d'accord ?
@@ -80,7 +105,9 @@ La file + relais reste en secours (avec le modèle corrigé) ; l'Agent SDK est �
    d'accès que **vous** créez sur le site et déposez dans un fichier local (je n'y touche pas), ou (b) attendre
    la version publiée avec OAuth (vous vous connectez une fois depuis claude.ai) ?
 4. **Confidentialité** : avec un connecteur, des images de plans passent par Anthropic, comme aujourd'hui dans le
-   navigateur. Acceptable pour vos projets clients ?
+   navigateur. Acceptable pour vos projets clients ? Faudra-t-il le leur dire au dépôt de leurs pièces ?
+5. **Dépôt par les clients** : on le prévoit dès la conception du serveur MCP (pièces écrites et graphiques, liste
+   des pièces attendues), mais on ne construit l'espace client qu'après le pilote R+1 ?
 
 ## Sources
 
