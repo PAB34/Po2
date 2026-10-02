@@ -24,7 +24,14 @@ do_not_auto_read:
 
 ### ▶️ REPRENDRE ICI
 
-**BOUSSOLE (2026-10-02) : `docs/thermique/bilan-et-plan-2026-10-02.md`** — bilan forces/faiblesses et plan
+**🧭 GUIDE DE RÉFÉRENCE (2026-10-02, À GARDER PRÉCIEUSEMENT) : `docs/thermique/guide-etude-thermique-14-etapes.md`**
+— voulu par le thermicien comme guide pour **reprendre toute la plateforme** : objectif **assistant IA à la
+réalisation d'études thermiques, en local avec Claude** (14 étapes, une étape + un plan par mission, conventions
+écrites, « hypothèses et doutes », validation à chaque étape). Correspondance avec l'existant et ordre de reprise :
+`docs/thermique/refondation-assistant-ia-local-decisions.md` (D275–D280, 5 questions). Méthode d'analyse :
+`docs/thermique/analyse-par-missions-decisions.md` (D271–D274).
+
+Ancienne boussole, remplacée par le guide : `docs/thermique/bilan-et-plan-2026-10-02.md` — bilan forces/faiblesses et plan
 d'objectifs dans l'ordre : (1) R+1 parfait [lot B murs : 3 questions ouvertes dans
 `mur-ligne-de-metre-decisions.md` ; coupes et élévations ; recette souris], (2) interface allégée étape par
 étape + nettoyage des fonctions retirées, (3) bibliothèques fiables, (4) autres niveaux par report sans IA,
