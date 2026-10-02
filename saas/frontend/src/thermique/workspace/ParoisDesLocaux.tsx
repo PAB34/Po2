@@ -131,6 +131,9 @@ export function FicheParoi({
             S'il y a bien un mur opaque, composez-le ci-dessous.
           </p>
         )}
+        {paroi.composition?.reprise && (
+          <p className="th-muted">Composition reprise du mur que vous aviez déjà validé dans le relevé.</p>
+        )}
         {!paroi.composition && paroi.proposition && (
           <p className="th-muted">Proposition tirée du relevé de l'IA : vérifiez les couches, puis validez.</p>
         )}

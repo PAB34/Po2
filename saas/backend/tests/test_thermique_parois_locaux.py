@@ -215,3 +215,12 @@ def test_une_menuiserie_est_posee_sur_la_paroi_qu_elle_longe():
     droite = _parois_nord(tout_vitre)[1]
     assert droite["longueur_m"] == pytest.approx(10.0, abs=0.01) and droite["vitree"] is True
     assert droite["menuiseries"][0]["largeur_m"] == pytest.approx(10.0, abs=0.01)
+
+
+def test_une_composition_deja_validee_sur_le_mur_du_releve_est_reprise_comme_validee():
+    """Le travail fait avant l'option C (D243 : composition validée mur par mur) n'est pas perdu."""
+    contenu = _etude()
+    contenu["enveloppe"]["releve_brut"]["elements"][0]["corrige"] = True
+    nord = _paroi_nord(edition.reconstruire(contenu))
+    assert nord["composition"]["reprise"] is True and nord["composition"]["composant"] == "P1"
+    assert _paroi_nord(edition.reconstruire(_etude()))["composition"] is None  # simple lecture de l'IA : proposition

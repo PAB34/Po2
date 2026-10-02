@@ -625,6 +625,11 @@ def exposer_menuiseries(releve_brut: dict[str, Any], manifeste: dict[str, Any], 
         )
 
 
+# Version du calcul des parois des locaux (option C) : une étude calculée par une version plus ancienne est
+# recalculée une fois à sa lecture. 3 = reprise des compositions déjà validées sur les murs du relevé.
+PAROIS_VERSION = 3
+
+
 def reconstruire(contenu: dict[str, Any]) -> dict[str, Any]:
     """Recalcule le rattachement, les raccords, la synthèse, les fiches et la couverture (D62).
 
@@ -685,6 +690,7 @@ def reconstruire(contenu: dict[str, Any]) -> dict[str, Any]:
     # D261 : chaque paroi d'un local retrouve la composition validee qui lui correspond.
     parois_locaux.affecter(locaux, resultat.get("compositions_parois", []), manifeste)
     resultat["locaux"] = locaux
+    resultat["parois_version"] = PAROIS_VERSION
     resultat["enveloppe"]["catalogue"] = copy.deepcopy(bibliotheque.get("composants", []))
     resultat["enveloppe"]["synthese_pieces"] = syntheses
     resultat["enveloppe"]["fiches_locaux"] = fiches

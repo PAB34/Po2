@@ -110,9 +110,16 @@ def affecter(locaux: list[dict[str, Any]], compositions: list[dict[str, Any]], m
             couvrantes = [(ecart, rang) for rang, c in enumerate(candidates)
                           if (ecart := couverture(c["trace"], paroi["trace"], manifeste)) is not None]
             trouvee = candidates[min(couvrantes)[1]] if couvrantes else None
-            paroi["composition"] = (
-                {k: trouvee[k] for k in ("id", "composant", "couches", "epaisseur_cm")} if trouvee else None
-            )
+            proposition = paroi.get("proposition") or {}
+            if trouvee:
+                paroi["composition"] = {k: trouvee[k] for k in ("id", "composant", "couches", "epaisseur_cm")}
+            elif proposition.get("validee") and proposition.get("couches"):
+                # Le travail déjà fait sur les murs du relevé n'est pas perdu : une composition validée là y est
+                # reprise comme validée (option C, « rien n'est perdu »). La valider ici la remplace.
+                paroi["composition"] = {"id": "releve", "reprise": True,
+                                        **{k: proposition[k] for k in ("composant", "couches", "epaisseur_cm")}}
+            else:
+                paroi["composition"] = None
 
 
 # ---------------------------------------------------------------------------------------------------------

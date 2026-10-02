@@ -318,6 +318,8 @@ def _paroi(p0: tuple[float, float], p1: tuple[float, float], groupe: list[dict[s
             "couches": [{"nature": c.get("nature"), "epaisseur_cm": c.get("epaisseur_cm")} for c in (mur.get("couches") or [])
                         if c.get("nature") and c.get("epaisseur_cm")],
             "epaisseur_cm": round(float(mur["nu_exterieur_cm"]) - float(mur["nu_interieur_cm"]), 1),
+            # Composition déjà validée par le thermicien sur le mur du relevé (D243) : elle est reprise telle quelle.
+            "validee": bool(mur.get("corrige") or mur.get("confirme")),
         }
     epaisseurs = sorted(s["epaisseur"] for s in groupe)
     # D267, D268 : les menuiseries qui longent la paroi ; couverte à 90 % ou plus, la paroi est vitrée.

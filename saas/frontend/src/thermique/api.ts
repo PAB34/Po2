@@ -239,7 +239,8 @@ export type StudyParoiLocal = {
   trace: [number, number][];
   trace_pdf?: PdfPoint[];
   proposition: CompositionParoi | null;
-  composition: (CompositionParoi & { id: string }) | null;
+  /** Validée par le thermicien ; `reprise` : reprise d'un mur du relevé dont la composition était déjà validée. */
+  composition: (CompositionParoi & { id: string; reprise?: boolean }) | null;
   /** Devant une menuiserie relevée, sans mur : la paroi est vitrée et se traite à l'étape Menuiseries. */
   vitree?: boolean;
   /** D267 : les menuiseries du relevé posées sur cette paroi. */

@@ -173,3 +173,15 @@ describe("menuiseries posées sur les parois et surfaces (D267 à D270)", () => 
     expect(plan.match(/th-paroi-local__baie/g)).toHaveLength(2);
   });
 });
+
+describe("le travail déjà fait est repris", () => {
+  it("une composition validée sur le mur du relevé compte comme validée et le dit", () => {
+    const reprise = paroi(0, { composition: { id: "releve", reprise: true, ...P1 } });
+    const content = etude([local("L1", "Bureau", [reprise])]);
+    expect(avancementParois(content)).toEqual({ total: 1, restants: 0 });
+    const fiche = renderToStaticMarkup(
+      <FicheParoi content={content} room={content.locaux[0]} paroi={reprise} busy={false} onValider={() => undefined} onRetour={() => undefined} />,
+    );
+    expect(fiche).toContain("reprise du mur que vous aviez déjà validé");
+  });
+});

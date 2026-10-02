@@ -507,13 +507,8 @@ def _reunir_les_menuiseries_une_fois(db: Session, sheet: ThermiqueSheet, etude: 
         if "enveloppe" not in contenu:
             return
         # Recalcul unique aussi pour une étude d'avant les lignes de métré (D242, 2026-10-02).
-        # … et d'avant les parois des locaux (D260, option C, 2026-10-02).
-        # … et d'avant les menuiseries posées sur les parois (D267).
-        parois_presentes = all(
-            "parois" in (local.get("fiche") or {})
-            and all("menuiseries" in paroi for paroi in local["fiche"]["parois"])
-            for local in contenu.get("locaux", [])
-        )
+        # … et d'avant la dernière version du calcul des parois des locaux (option C, D260 à D270).
+        parois_presentes = contenu.get("parois_version") == edition.PAROIS_VERSION
         if contenu.get(MENUISERIES_REUNIES) and "lignes_metre" in contenu["enveloppe"] and parois_presentes:
             return
         transform, largeur, hauteur = _repere_de_la_planche(sheet, contenu)
