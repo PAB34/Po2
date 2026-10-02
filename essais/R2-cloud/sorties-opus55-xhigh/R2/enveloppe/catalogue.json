@@ -38,25 +38,24 @@
    {
     "nature": "mur",
     "epaisseur_cm": 20,
-    "indice": "voile gris extérieur épais au-dessus du 0"
+    "indice": "voile extérieur gris de 16 à 20 cm sous le nu"
    },
    {
     "nature": "isolant",
     "epaisseur_cm": 12,
-    "indice": "alvéoles hexagonales de 0 à -12"
+    "indice": "rangée d'alvéoles hexagonales"
    },
    {
     "nature": "mur",
     "epaisseur_cm": 22,
-    "indice": "voile gris intérieur, trait noir à -34"
+    "indice": "voile intérieur gris bordé d'un trait noir épais"
    }
   ],
-  "regle": "Comme P1 mais nu extérieur vers +20 et épaisseur totale d'environ 54 cm ; alvéoles juste sous le 0 ; se trouve après la fin du mur-rideau de la façade est",
+  "regle": "Correction de la règle : bande grise de 50 à 54 cm bordée de deux traits noirs épais, avec une rangée d'alvéoles à 16-20 cm sous le nu extérieur. Elle est plus épaisse que P1 (44 cm, alvéoles à 12 cm). On la voit au mur est derrière la terrasse de lecture, à l'angle sud-est, et autour du patio de la petite terrasse. Son nu extérieur est sur le guide (0 à -3) ou décalé jusqu'à +20.",
   "premiere_vue": {
-   "troncon": "T14",
-   "debut_m": 60.15,
-   "fin_m": 60.95,
-   "autre_niveau": true
+   "troncon": "T36",
+   "debut_m": 85.51,
+   "fin_m": 86.0
   }
  },
  {
@@ -296,20 +295,19 @@
    {
     "nature": "vitrage",
     "epaisseur_cm": 4,
-    "indice": "double trait fin continu"
+    "indice": "double trait fin"
    },
    {
     "nature": "cadre",
     "epaisseur_cm": 5,
-    "indice": "petits dormants carrés à chaque tableau"
+    "indice": "petits dormants carrés"
    }
   ],
-  "regle": "Double trait fin avec de petits dormants carrés régulièrement répartis ; un vantail ouvre vers la terrasse (arc). Ce n'est pas M1 : pas de trait parallèle à -25/-33 ni de poteaux, et ce n'est pas M3 : la baie n'est pas prise entre des abouts de P1 en redans.",
+  "regle": "Correction de la règle : double trait fin avec de petits dormants carrés aux extrémités, parfois aussi intermédiaires ; un vantail peut ouvrir vers la terrasse (arc), mais l'arc peut manquer. Au patio de la petite terrasse, la baie est posée entre -17 et -27 sous le guide, entre un about P2 et des coins vitrés L6. Ce n'est pas M1 : pas de trait parallèle à -25/-33 ni de poteaux. Ce n'est pas M3 : la baie n'est pas prise entre des abouts de P1 en redans.",
   "premiere_vue": {
-   "troncon": "T22",
-   "debut_m": 75.72,
-   "fin_m": 78.37,
-   "autre_niveau": true
+   "troncon": "T34",
+   "debut_m": 80.53,
+   "fin_m": 83.58
   }
  },
  {
@@ -531,6 +529,25 @@
    "troncon": "T17",
    "debut_m": 44.82,
    "fin_m": 46.61
+  }
+ },
+ {
+  "id": "X9",
+  "nom": "Massif béton d'angle creux en U (angle sud-est de la terrasse de lecture)",
+  "genre": "element_exterieur",
+  "decision": "exclu",
+  "couches": [
+   {
+    "nature": "mur",
+    "epaisseur_cm": 42,
+    "indice": "traverse et jambes grises pleines de 42 à 45 cm"
+   }
+  ],
+  "regle": "Grand massif gris cerné de noir épais, hachuré de diagonales fines, en U creux. La traverse va de +14 à -28 sur 1,9 m le long du guide. Deux jambes de 42 cm descendent au-delà de -90, dont une en biais. Il se prolonge par un retour en L d'environ 1 m (bras 0/-45) sur le côté suivant. Il se trouve à l'angle de rive de la terrasse, juste avant le claustra X5. Il diffère de X6, rectangle plein d'environ 1 m, par sa forme creuse en U/L et sa longueur. Ce n'est pas P3 : il est hors du volume chauffé.",
+  "premiere_vue": {
+   "troncon": "T26",
+   "debut_m": 63.17,
+   "fin_m": 65.1
   }
  }
 ]
