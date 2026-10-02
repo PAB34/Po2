@@ -6,3 +6,4 @@ Relevé dans la trace `subagents/agent-*.jsonl` de chaque appel.
 |---|---|---|---|---|
 | Passe globale | thermicien-plan | claude-fable-5-1 | xhigh | 1524 s |
 | Locaux | thermicien-plan | claude-fable-5-1 | xhigh | 142 s |
+| Lot 1 | thermicien-enveloppe | claude-fable-5-1 | xhigh | 1217 s |
