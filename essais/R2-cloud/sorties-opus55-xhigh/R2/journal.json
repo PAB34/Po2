@@ -55,6 +55,12 @@
    "etat": "en attente",
    "detail": "agent thermicien-enveloppe ; réponse attendue dans reponse-lot-1.json",
    "date": "2026-10-02 08:32:32"
+  },
+  {
+   "etape": "lot-1",
+   "etat": "en attente",
+   "detail": "agent thermicien-enveloppe ; réponse attendue dans reponse-lot-1.json",
+   "date": "2026-10-02 08:32:46"
   }
  ]
 }
