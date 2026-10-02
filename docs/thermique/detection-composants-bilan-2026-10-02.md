@@ -38,8 +38,24 @@ erreurs viennent de l'amont : guide qui coupe une dent de scie, pièce qui n'att
 d'un seul tenant (D22).
 
 Puis le **R+2 en automatique** (méthodes 3 et 4 sans session ouverte, 10-01) : **23, 25 puis 36 objets** contre
-130 au R+1, et 21 incohérences. L'essai A/B a écarté la piste « consignes mal transmises » ; **la cause exacte
-de l'écart avec le R+1 n'est pas identifiée**. Étude R+2 à ne pas prendre pour base.
+130 au R+1, et 21 incohérences. L'essai A/B a écarté la piste « consignes mal transmises ». Étude R+2 à ne pas prendre pour base.
+
+**Cause trouvée le 2026-10-02 : ce n'était pas le même modèle.** Le R+2 a bien suivi **toute** la chaîne (journal :
+passe globale, recalage, locaux, catalogue du R+1, guide, 6 lots, restitution). Mais tout s'est joué dès la
+première étape : **25 objets, dont 8 pièces** (contre 130 et 22 au R+1), et le reste en a hérité (5 pièces
+recalées sur 8, aucune circulation).
+
+| | R+1 (09-21 → 09-23, dans la session) | R+2, RDC, SS1 (10-01, mode automatique) |
+|---|---|---|
+| Modèle réellement utilisé (relevé dans les traces) | **claude-opus-5** | **claude-opus-4-7** |
+| Texte produit par lecture | 20 000 à 48 000 jetons | 14 500 à 35 000 jetons |
+
+Le mode automatique demande le modèle par son alias `opus`. La commande `claude` installée sur le poste le
+traduit en **Opus 4.7**, un modèle plus ancien. C'est un **remplacement silencieux de modèle**, contraire à la règle
+du thermicien. Les agents du R+1, lancés depuis la session, tournaient sur Opus 5.
+
+Correctif à faire avant toute nouvelle passe : nommer le modèle exact, sans alias, et **arrêter** l'étude si la trace
+d'un appel montre un autre modèle.
 
 ## 2. Ce qui a marché
 
@@ -65,7 +81,8 @@ de l'écart avec le R+1 n'est pas identifiée**. Étude R+2 à ne pas prendre po
 5. **Les règles de forme ne se transposent pas** : chaque seuil réglé sur un plan casse sur le suivant.
 6. **Le découpage du relevé est celui de la façade, pas celui du mur** : morceaux de menuiseries et de murs, d'où
    la fusion à 6 cm, et des murs impossibles à reprendre proprement (votre demande de ce jour).
-7. **Sans session ouverte, le résultat s'effondre** (R+2) et le coût est élevé.
+7. **Le mode automatique a tourné sur un modèle plus ancien** (Opus 4.7 au lieu d'Opus 5), sans que personne ne
+   le voie : c'est l'explication probable de l'effondrement du R+2.
 
 ## 4. La leçon
 
