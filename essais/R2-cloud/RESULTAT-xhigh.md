@@ -14,16 +14,16 @@ Branche poussée : `claude/essai-r2-xhigh-0er7sn` (branche imposée à cette ses
 | Pièces (passe globale) | 8 | 9 | 13 | 14 | 22 |
 | Locaux finaux | 8 | 9 | 13 | 15 | 24 |
 | · dont circulations | 0 | 0 | 0 | 0 | 5 |
-| · non chauffés / gaines / extérieurs | n.d. | 1 / 6 / 1 | 1 / 8 / 1 | voir `locaux.reponse.json` | n.d. |
+| · non chauffés / gaines / extérieurs | n.d. | 1 / 6 / 1 | 1 / 8 / 1 | 1 / 7 / 1 (6 chauffés) | n.d. |
 | Pièces recalées / espaces libres | 5/8 / 0 | 5/9 / 0 | **12/13** / 0 | 9/14 / 1 | n.d. |
 | Guide : tronçons / périmètre | 99 / 154,6 m | 58 (53 T + 5 U) / 139,2 m | 91 (72 T + 19 U) / 150,0 m | 104 (69 T + 35 U) / 156,1 m | n.d. |
 | Lots de l'enveloppe | 6 | 4 | 6 | 6 | n.d. |
-| Composants du catalogue à la fin | 25 | 29 | 43 | 38 après le lot 5 (lot 6 en cours) | 23 |
-| Incohérences du fichier d'étude | 21 | **11** | 16 | en cours | n.d. |
+| Composants du catalogue à la fin | 25 | 29 | 43 | 40 | 23 |
+| Incohérences du fichier d'étude | 21 | **11** | 16 | **13** | n.d. |
 | Incidents | 5 | 0 | 0 | lot 3 : `max_output_tokens` (JSON complet récupéré, pas de relance) | — |
-| Durée totale des agents | n.d. | 14,6 min | 1 h 50 | 3 h 33 (lots 1-5) | n.d. |
-| Durée de la chaîne | n.d. | 21 min | 2 h 08 | ≈ 4 h | n.d. |
-| **Coût estimé (tarif API)** | n.d. (pas de trace) | n.d. (pas de trace) | **≈ 14,8 $** | **≈ 43,0 $** (lots 1-5) | n.d. |
+| Durée totale des agents | n.d. | 14,6 min | 1 h 50 | 3 h 51 | n.d. |
+| Durée de la chaîne | n.d. | 21 min | 2 h 08 | ≈ 4 h 15 | n.d. |
+| **Coût estimé (tarif API)** | n.d. (pas de trace) | n.d. (pas de trace) | **≈ 14,8 $** | **≈ 48,6 $** | n.d. |
 
 ## Coût : méthode et tarifs retenus
 
@@ -43,7 +43,7 @@ Toutes les écritures de cache des traces sont en 5 min.
 | Chaîne | Entrée | Écriture cache | Lecture cache | Sortie | Coût |
 |---|---|---|---|---|---|
 | Opus 5.5 xhigh (8 appels) | 68 | 510 490 | 498 764 | 608 169 | 14,82 $ |
-| Fable 5.1 xhigh (7 appels, lot 6 non compté) | 224 | 873 173 | 461 311 | 631 865 | 42,97 $ |
+| Fable 5.1 xhigh (8 appels) | 234 | 975 993 | 564 756 | 715 988 | 48,57 $ |
 
 ## Lecture
 
@@ -53,8 +53,9 @@ Toutes les écritures de cache des traces sont en 5 min.
 - **Mais les incohérences remontent (11 → 16 en Opus)**. Le guide fait passer l'enveloppe est sur la rive de la
   terrasse de lecture : la façade vitrée réelle est hors des bandes (signalé par les agents dès le lot 1), d'où
   les écarts contour / façade de 5.3 Roman noir et de 5.2. 93 m² d'intérieur restent sans local (plateau ouvert).
-- **Fable 5.1 xhigh** ne lit pas mieux le plan (55 objets) et coûte environ 3 fois plus, pour une chaîne deux
-  fois plus longue ; un lot a dépassé la limite de 64 000 jetons de sortie.
+- **Fable 5.1 xhigh** lit moins d'objets (55) mais finit avec 13 incohérences (aucun recouvrement de locaux,
+  95,6 % d'emprise couverte, 5 locaux à recaler, 1 hors emprise). Il coûte environ 3,3 fois plus qu'Opus xhigh
+  pour une chaîne deux fois plus longue ; un lot a dépassé la limite de 64 000 jetons de sortie.
 - La qualité du R+1 (130 objets, 22 pièces) n'est pas retrouvée : le R+2 est un plateau ouvert, le nombre de
   pièces ne se compare pas directement.
 - Pour la suite, le levier est le **guide de l'enveloppe** (détours sur claustras, terrasses, bulles d'axe),
