@@ -1,0 +1,12 @@
+{
+ "niveau": "R2",
+ "source": "/home/user/Po2/essais/R2-cloud/PC05-FRONT-NIVEAU2.pdf",
+ "etapes": [
+  {
+   "etape": "passe-globale",
+   "etat": "en attente",
+   "detail": "agent thermicien-plan ; réponse attendue dans passe-globale.reponse.json",
+   "date": "2026-10-02 08:06:05"
+  }
+ ]
+}

@@ -3,6 +3,7 @@ name: thermicien-enveloppe
 description: Longe l'enveloppe extérieure d'un étage sur des bandes raster redressées et graduées, et relève la composition des parois, les menuiseries, poteaux et liaisons pour la bibliothèque de composants du thermicien.
 tools: Read
 model: opus
+effort: xhigh
 permissionMode: dontAsk
 maxTurns: 30
 ---

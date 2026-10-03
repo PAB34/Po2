@@ -1,0 +1,98 @@
+{
+ "type": "object",
+ "additionalProperties": false,
+ "properties": {
+  "objects": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+     "category": {
+      "type": "string",
+      "enum": [
+       "mur_exterieur",
+       "refend",
+       "cloison",
+       "isolation",
+       "doublage",
+       "menuiserie_exterieure",
+       "menuiserie_interieure",
+       "terrasse",
+       "balcon",
+       "poteau",
+       "garde_corps",
+       "piece",
+       "indetermine"
+      ]
+     },
+     "subtype": {
+      "type": "string"
+     },
+     "geometry_type": {
+      "type": "string",
+      "enum": [
+       "polyline",
+       "polygon",
+       "bbox"
+      ]
+     },
+     "points": {
+      "type": "array",
+      "items": {
+       "type": "array",
+       "items": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1000
+       },
+       "minItems": 2,
+       "maxItems": 2
+      },
+      "minItems": 2
+     },
+     "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+     },
+     "evidence": {
+      "type": "string"
+     },
+     "review_required": {
+      "type": "boolean"
+     },
+     "local": {
+      "type": "string",
+      "enum": [
+       "chauffe",
+       "circulation",
+       "non_chauffe",
+       "gaine_technique",
+       "exterieur"
+      ]
+     }
+    },
+    "required": [
+     "category",
+     "subtype",
+     "geometry_type",
+     "points",
+     "confidence",
+     "evidence",
+     "review_required"
+    ]
+   }
+  },
+  "observations": {
+   "type": "array",
+   "items": {
+    "type": "string"
+   }
+  }
+ },
+ "required": [
+  "objects",
+  "observations"
+ ]
+}
